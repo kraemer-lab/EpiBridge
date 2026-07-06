@@ -25,10 +25,17 @@ if [ ! -f .env ]; then
   REDIS_PASSWORD=$(openssl rand -base64 32 | tr -d '\n')
   SECRET_KEY=$(openssl rand -base64 64 | tr -d '\n')
 
-  sed -i.bak "s/POSTGRES_PASSWORD=__GENERATED__/POSTGRES_PASSWORD=$POSTGRES_PASSWORD/" .env
-  sed -i.bak "s/REDIS_PASSWORD=__GENERATED__/REDIS_PASSWORD=$REDIS_PASSWORD/" .env
-  sed -i.bak "s/SECRET_KEY=__GENERATED__/SECRET_KEY=$SECRET_KEY/" .env
-  rm -f .env.bak
+  python3 -c "
+import os
+path = '.env'
+with open(path) as f:
+    c = f.read()
+c = c.replace('POSTGRES_PASSWORD=__GENERATED__', 'POSTGRES_PASSWORD=$POSTGRES_PASSWORD')
+c = c.replace('REDIS_PASSWORD=__GENERATED__', 'REDIS_PASSWORD=$REDIS_PASSWORD')
+c = c.replace('SECRET_KEY=__GENERATED__', 'SECRET_KEY=$SECRET_KEY')
+with open(path, 'w') as f:
+    f.write(c)
+"
   chmod 600 .env
   echo ".env created"
 fi
