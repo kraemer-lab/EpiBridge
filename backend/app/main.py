@@ -1,4 +1,3 @@
-import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -26,42 +25,32 @@ async def lifespan(app: FastAPI):
         Base.metadata.create_all(bind=engine)
 
     if settings.auto_register_resources:
-        manifest_dir = settings.resource_manifest_dir
-        if not manifest_dir:
-            manifest_dir = os.path.join(
-                os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                "..",
-                "examples",
-                "resources",
+        manifest_path = Path(settings.resource_manifest_dir)
+        if not manifest_path.is_dir():
+            raise RuntimeError(
+                f"Resource manifest directory not found: {manifest_path}. "
+                "Set RESOURCE_MANIFEST_DIR env var to a valid directory."
             )
-
-        manifest_path = Path(manifest_dir)
-        if manifest_path.is_dir():
-            entries = load_directory(manifest_path)
-            db: Session = SessionLocal()
-            try:
-                register_from_manifest(db, entries)
-            finally:
-                db.close()
+        entries = load_directory(manifest_path)
+        db: Session = SessionLocal()
+        try:
+            register_from_manifest(db, entries)
+        finally:
+            db.close()
 
     if settings.auto_register_environments:
-        env_manifest_dir = settings.environment_manifest_dir
-        if not env_manifest_dir:
-            env_manifest_dir = os.path.join(
-                os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                "..",
-                "examples",
-                "environments",
+        env_manifest_path = Path(settings.environment_manifest_dir)
+        if not env_manifest_path.is_dir():
+            raise RuntimeError(
+                f"Environment manifest directory not found: {env_manifest_path}. "
+                "Set ENVIRONMENT_MANIFEST_DIR env var to a valid directory."
             )
-
-        env_manifest_path = Path(env_manifest_dir)
-        if env_manifest_path.is_dir():
-            env_entries = load_environment_directory(env_manifest_path)
-            db: Session = SessionLocal()
-            try:
-                register_environments(db, env_entries)
-            finally:
-                db.close()
+        env_entries = load_environment_directory(env_manifest_path)
+        db: Session = SessionLocal()
+        try:
+            register_environments(db, env_entries)
+        finally:
+            db.close()
 
     yield
 

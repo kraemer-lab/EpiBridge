@@ -3,13 +3,15 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { DataResource, AnalysisBundle, getProjectBundle, getProjectResources, updateProjectBundle } from "@/lib/api";
-
-const RUNTIMES = [
-  { label: "Python 3.13", value: "python-3.13" },
-  { label: "R 4.5", value: "r-4.5" },
-  { label: "Julia 1.11", value: "julia-1.11" },
-];
+import {
+  DataResource,
+  ExecutionEnvironment,
+  AnalysisBundle,
+  getProjectBundle,
+  getProjectResources,
+  updateProjectBundle,
+  getExecutionEnvironments,
+} from "@/lib/api";
 
 export default function EditAnalysisPage() {
   const params = useParams();
@@ -18,10 +20,11 @@ export default function EditAnalysisPage() {
   const bundleId = params.bundle_id as string;
 
   const [resources, setResources] = useState<DataResource[]>([]);
+  const [environments, setEnvironments] = useState<ExecutionEnvironment[]>([]);
   const [bundle, setBundle] = useState<AnalysisBundle | null>(null);
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState("");
-  const [runtime, setRuntime] = useState(RUNTIMES[0].value);
+  const [selectedEnvId, setSelectedEnvId] = useState("");
   const [version, setVersion] = useState("");
   const [description, setDescription] = useState("");
   const [entrypoint, setEntrypoint] = useState("");
@@ -34,17 +37,23 @@ export default function EditAnalysisPage() {
     Promise.all([
       getProjectBundle(projectId, bundleId),
       getProjectResources(projectId),
+      getExecutionEnvironments(),
     ])
-      .then(([b, res]) => {
+      .then(([b, res, envs]) => {
         setBundle(b);
         setName(b.name);
-        setRuntime(b.runtime);
         setVersion(b.version);
         setDescription(b.description);
         setEntrypoint(b.entrypoint);
         setSelectedResources(b.resource_identifiers);
         setOutputsStr(b.outputs.join(", "));
         setResources(res);
+        setEnvironments(envs);
+        if (b.execution_environment_id) {
+          setSelectedEnvId(b.execution_environment_id);
+        } else if (envs.length > 0) {
+          setSelectedEnvId(envs[0].id);
+        }
       })
       .catch(() => setFieldErrors({ form: "Failed to load analysis bundle." }))
       .finally(() => setLoading(false));
@@ -72,7 +81,7 @@ export default function EditAnalysisPage() {
     try {
       await updateProjectBundle(projectId, bundleId, {
         name: name.trim(),
-        runtime,
+        execution_environment_id: selectedEnvId || undefined,
         version: version.trim(),
         entrypoint: entrypoint.trim(),
         description: description.trim(),
@@ -135,11 +144,11 @@ export default function EditAnalysisPage() {
 
         <div style={{ marginBottom: "var(--spacing-md)" }}>
           <label style={{ display: "block", fontWeight: 600, marginBottom: "var(--spacing-xs)", fontSize: "0.9rem" }}>
-            Runtime <span style={{ color: "#e65100" }}>*</span>
+            Execution Environment
           </label>
           <select
-            value={runtime}
-            onChange={(e) => setRuntime(e.target.value)}
+            value={selectedEnvId}
+            onChange={(e) => setSelectedEnvId(e.target.value)}
             style={{
               width: "100%",
               padding: "var(--spacing-sm) var(--spacing-md)",
@@ -149,8 +158,10 @@ export default function EditAnalysisPage() {
               background: "var(--color-bg)",
             }}
           >
-            {RUNTIMES.map((r) => (
-              <option key={r.value} value={r.value}>{r.label}</option>
+            {environments.map((env) => (
+              <option key={env.id} value={env.id}>
+                {env.name} ({env.runtime})
+              </option>
             ))}
           </select>
         </div>

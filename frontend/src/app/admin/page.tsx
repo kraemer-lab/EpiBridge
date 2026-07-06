@@ -18,36 +18,6 @@ export default function AdminPage() {
 
   return (
     <>
-      <h1 className="page-title">Admin</h1>
-
-      <nav style={{ display: "flex", gap: "var(--spacing-md)", marginBottom: "var(--spacing-lg)", borderBottom: "1px solid var(--color-border)", paddingBottom: "var(--spacing-sm)" }}>
-        <Link
-          href="/admin"
-          style={{
-            color: "var(--color-primary)",
-            fontWeight: 600,
-            fontSize: "0.9rem",
-            textDecoration: "none",
-            paddingBottom: "var(--spacing-sm)",
-            borderBottom: "2px solid var(--color-primary)",
-          }}
-        >
-          Data Resources
-        </Link>
-        <Link
-          href="/admin/bundles"
-          style={{
-            color: "var(--color-text-secondary)",
-            fontWeight: 500,
-            fontSize: "0.9rem",
-            textDecoration: "none",
-            paddingBottom: "var(--spacing-sm)",
-          }}
-        >
-          Analysis Bundles
-        </Link>
-      </nav>
-
       <h2 style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: "var(--spacing-md)" }}>
         Data Resources
       </h2>

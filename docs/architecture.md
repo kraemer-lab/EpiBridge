@@ -87,7 +87,7 @@ DockerExecutor launches ephemeral container
         ├── /analysis  (analysis bundle, via put_archive)
         ├── /data      (authorised resources, read-only bind mounts)
         ├── /work      (temporary writable storage)
-        └── /output    (writable, shared volume)
+        └── /output    (writable, container-local)
         │
         ▼
 Container executes analysis
@@ -368,13 +368,27 @@ That remains the deployment's responsibility.
 ### Development Startup
 
 During development, when `auto_register_resources=True` (default), the
-application automatically loads manifests from `examples/resources/` on
-startup. This means `make dev` presents a small catalogue of available
-Data Resources without requiring manual setup.
+application automatically loads manifests from the directory specified
+by the `RESOURCE_MANIFEST_DIR` environment variable. Docker Compose sets
+this to point at `examples/resources/` for local development. Production
+deployments configure it explicitly.
 
 The registration process is idempotent: running it multiple times produces
 the same result. Resources are identified by `identifier`, so manifest
 updates are applied in-place rather than creating duplicates.
+
+### Manifest directory configuration
+
+The application does not assume repository-relative paths. Deployment
+provides manifest locations through the `RESOURCE_MANIFEST_DIR` and
+`ENVIRONMENT_MANIFEST_DIR` environment variables. The application fails
+at startup if `AUTO_REGISTER_*` is enabled and the configured directory
+does not exist.
+
+During development, docker-compose sets these variables and mounts the
+repository's `examples/resources/` and `examples/environments/` directories
+at the expected paths. Production deployments should configure the
+variables directly without relying on volume mounts.
 
 ### Resource Manifests
 
@@ -630,11 +644,23 @@ will be added in a future milestone.
 
 ### Storage
 
-Output files are written to a shared filesystem volume:
+Output files are written to the execution container's local `/output`
+directory during analysis. After execution completes, the worker
+retrieves them via the Docker API (`get_archive`) and persists them to
+a shared filesystem volume:
 
 ```
 /outputs/{execution_request_id}/{filename}
 ```
+
+This makes the worker the controlled import stage for all execution
+artefacts. It creates a natural place for future validation:
+
+* file size and count limits
+* approved filename patterns and extensions
+* checksum generation
+* antivirus scanning
+* approval workflow gates
 
 The backend serves files from this volume via the download endpoint.
 No data resource access is involved — outputs are result artefacts.
@@ -671,11 +697,18 @@ Worker
   ├── Create container (network_disabled, non-root, no-host-paths)
   │     put_archive(analysis_dir → /analysis)
   │     bind mounts for data resources
-  │     bind mount for /output
   │
   ├── Run with timeout
   │     ↓
-  ├── Success: enumerate /output → register Output records → Completed
+  ├── Retrieve /output from container (get_archive)
+  │     strip output/ tar prefix, preserve subdirectories
+  │     ↓
+  ├── Recursively walk extracted files
+  │     register each file by relative path
+  │     ↓
+  ├── Persist to shared Output Store
+  │     ↓
+  ├── Transition to Completed
   │
   └── Failure: capture stderr → Failed
 ```

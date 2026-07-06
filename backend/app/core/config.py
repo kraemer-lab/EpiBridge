@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     output_dir: str = "/tmp/epibridge-outputs"
     analysis_bundle_root: str = ""
     data_root: str = "/read-only-data"
+    host_data_root: str = ""
 
     @property
     def database_url(self) -> str:

@@ -7,6 +7,7 @@ import docker
 from docker.errors import ImageNotFound
 
 from app.execution.base import ExecutionResult, Executor
+from app.execution.util import parse_exit_code
 
 NONROOT_USER = "nobody"
 WORKDIR = "/work"
@@ -15,8 +16,19 @@ OUTPUT_TARGET = "/output"
 
 
 class DockerExecutor(Executor):
-    def __init__(self, client: docker.DockerClient | None = None):
+    def __init__(
+        self,
+        client: docker.DockerClient | None = None,
+        mount_remap: dict[str, str] | None = None,
+    ):
         self._client = client or docker.from_env()
+        self._mount_remap = mount_remap or {}
+
+    def _remap_source(self, source: str) -> str:
+        for prefix, replacement in self._mount_remap.items():
+            if source.startswith(prefix):
+                return replacement + source[len(prefix) :]
+        return source
 
     def run(
         self,
@@ -35,16 +47,12 @@ class DockerExecutor(Executor):
             self._client.images.pull(image)
 
         output_dir.mkdir(parents=True, exist_ok=True)
+        output_dir.chmod(0o777)
 
         volume_bindings = {}
         for source, target, read_only in mounts:
             mode = "ro" if read_only else "rw"
-            volume_bindings[source] = {"bind": target, "mode": mode}
-        volume_bindings[str(output_dir.resolve())] = {
-            "bind": OUTPUT_TARGET,
-            "mode": "rw",
-        }
-
+            volume_bindings[self._remap_source(source)] = {"bind": target, "mode": mode}
         container = self._client.containers.create(
             image,
             entrypoint=["python", f"{ANALYSIS_TARGET}/{entrypoint}"],
@@ -60,7 +68,8 @@ class DockerExecutor(Executor):
         container.start()
 
         try:
-            exit_code = container.wait(timeout=timeout)
+            wait_result = container.wait(timeout=timeout)
+            exit_code = parse_exit_code(wait_result)
         except docker.errors.TimeoutError:
             container.stop()
             container.remove()
@@ -113,4 +122,8 @@ class DockerExecutor(Executor):
             buf.write(chunk)
         buf.seek(0)
         with tarfile.open(fileobj=buf, mode="r") as tar:
+            prefix = OUTPUT_TARGET.strip("/") + "/"
+            for member in tar.getmembers():
+                if member.name.startswith(prefix):
+                    member.name = member.name[len(prefix) :]
             tar.extractall(path=str(output_dir))

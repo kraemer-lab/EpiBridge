@@ -1,3 +1,5 @@
+name: epibridge
+
 services:
 
   postgres:
@@ -43,18 +45,31 @@ services:
         condition: service_healthy
     env_file:
       - .env
+    environment:
+      RESOURCE_MANIFEST_DIR: /examples/resources
+      ENVIRONMENT_MANIFEST_DIR: /examples/environments
+      # Persistent output store shared between backend and worker.
+      # Execution containers write to their own local /output directory.
+      # The worker imports those outputs here after execution; the backend
+      # serves them from here via the download endpoint.
+      OUTPUT_DIR: /outputs
     volumes:
       - /var/lib/epibridge/outputs:/outputs:ro
       - /var/log/epibridge:/var/log/epibridge
       - ./examples/resources:/read-only-data:ro
+      # Development manifest directories for lifespan auto-registration.
+      # Production deployments should configure RESOURCE_MANIFEST_DIR
+      # and ENVIRONMENT_MANIFEST_DIR env vars directly instead.
+      - ./examples/resources:/examples/resources:ro
+      - ./examples/environments:/examples/environments:ro
     networks:
       - internal
       - frontend
 
   worker:
     build:
-      context: ./worker
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: worker/Dockerfile
     restart: unless-stopped
     depends_on:
       postgres:
@@ -63,6 +78,14 @@ services:
         condition: service_healthy
     env_file:
       - .env
+    environment:
+      # The worker runs in a container, so provider mount sources
+      # like /read-only-data/* are not visible to Docker Engine
+      # on the host. HOST_DATA_ROOT provides the host-side equivalent.
+      HOST_DATA_ROOT: /opt/epibridge/examples/resources
+      # Persistent output store — writes imported execution artefacts
+      # to the same volume the backend reads from.
+      OUTPUT_DIR: /outputs
     volumes:
       # Docker socket enables DockerExecutor — the only component
       # that communicates with Docker Engine to orchestrate analysis containers.
@@ -70,6 +93,7 @@ services:
       - /var/lib/epibridge/outputs:/outputs
       - /var/log/epibridge:/var/log/epibridge
       - ./examples/resources:/read-only-data:ro
+      - ./examples/analyses:/app/examples/analyses:ro
     networks:
       - internal
     group_add:

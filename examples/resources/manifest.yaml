@@ -12,7 +12,7 @@ resources:
     alias: mexico_dengue_2026
     provider: csv
     endpoint:
-      path: demo.csv
+      path: mexico_dengue_2026
     description: "Dengue surveillance data for Mexico, 2026"
     version: "1.0.0"
     status: active

@@ -110,7 +110,10 @@ def execute_request(db: Session, request: ExecutionRequest) -> None:
     data_mounts = resolve_data_mounts(bundle, db)
     timeout = request.timeout_seconds
 
-    executor = DockerExecutor()
+    mount_remap = {}
+    if settings.host_data_root:
+        mount_remap[settings.data_root] = settings.host_data_root
+    executor = DockerExecutor(mount_remap=mount_remap)
 
     transition_to(db, request, ExecutionRequestStatus.RUNNING)
 
@@ -141,15 +144,19 @@ def execute_request(db: Session, request: ExecutionRequest) -> None:
         )
         return
 
+    # The filename field represents the relative path within the execution
+    # output directory (e.g. "summary.csv", "figures/plot.png").
+    # This preserves structured output hierarchies without flattening.
     if output_dir.is_dir():
-        for fname in os.listdir(output_dir):
-            fpath = os.path.join(output_dir, fname)
-            if os.path.isfile(fpath):
-                from app.services.output_service import register_output
+        from app.services.output_service import register_output
 
-                register_output(db, request.id, fname, os.path.getsize(fpath))
+        for root, dirs, files in os.walk(output_dir):
+            for fname in files:
+                fpath = os.path.join(root, fname)
+                relative = os.path.relpath(fpath, output_dir)
+                register_output(db, request.id, relative, os.path.getsize(fpath))
                 logger.info(
-                    f"Registered output: {fname} ({os.path.getsize(fpath)} bytes)"
+                    f"Registered output: {relative} ({os.path.getsize(fpath)} bytes)"
                 )
 
     transition_to(db, request, ExecutionRequestStatus.COMPLETED)

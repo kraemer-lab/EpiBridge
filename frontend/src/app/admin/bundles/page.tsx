@@ -17,7 +17,9 @@ export default function AdminBundlesPage() {
 
   return (
     <>
-      <h1 className="page-title">Analysis Bundles</h1>
+      <h2 style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: "var(--spacing-md)" }}>
+        Analysis Bundles
+      </h2>
 
       {loading ? (
         <div className="card empty-state">Loading...</div>

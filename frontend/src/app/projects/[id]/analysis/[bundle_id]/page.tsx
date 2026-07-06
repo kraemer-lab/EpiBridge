@@ -1,18 +1,20 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { AnalysisBundle, getProjectBundle } from "@/lib/api";
+import { AnalysisBundle, getProjectBundle, createExecutionRequest } from "@/lib/api";
 
 export default function AnalysisDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const projectId = params.id as string;
   const bundleId = params.bundle_id as string;
 
   const [bundle, setBundle] = useState<AnalysisBundle | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [running, setRunning] = useState(false);
 
   useEffect(() => {
     getProjectBundle(projectId, bundleId)
@@ -20,6 +22,19 @@ export default function AnalysisDetailPage() {
       .catch(() => setError("Failed to load analysis bundle"))
       .finally(() => setLoading(false));
   }, [projectId, bundleId]);
+
+  const handleRun = async () => {
+    setRunning(true);
+    try {
+      await createExecutionRequest(projectId, {
+        analysis_bundle_id: bundleId,
+      });
+      router.push(`/projects/${projectId}/jobs`);
+    } catch {
+      setError("Failed to create execution request");
+      setRunning(false);
+    }
+  };
 
   if (loading) return <div className="card empty-state">Loading...</div>;
   if (error) return <div className="card empty-state">{error}</div>;
@@ -53,13 +68,18 @@ export default function AnalysisDetailPage() {
             {bundle.status.charAt(0).toUpperCase() + bundle.status.slice(1)}
           </span>
         </div>
-        <Link
-          href={`/projects/${projectId}/analysis/${bundleId}/edit`}
-          className="btn"
-          style={{ textDecoration: "none" }}
-        >
-          Edit
-        </Link>
+        <div style={{ display: "flex", gap: "var(--spacing-sm)" }}>
+          <button className="btn btn-primary" onClick={handleRun} disabled={running}>
+            {running ? "Submitting..." : "Run Analysis"}
+          </button>
+          <Link
+            href={`/projects/${projectId}/analysis/${bundleId}/edit`}
+            className="btn"
+            style={{ textDecoration: "none" }}
+          >
+            Edit
+          </Link>
+        </div>
       </div>
 
       <div className="card" style={{ maxWidth: "640px" }}>

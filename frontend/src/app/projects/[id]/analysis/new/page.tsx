@@ -3,13 +3,14 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { DataResource, AnalysisBundleCreate, getProjectResources, createProjectBundle } from "@/lib/api";
-
-const RUNTIMES = [
-  { label: "Python 3.13", value: "python-3.13" },
-  { label: "R 4.5", value: "r-4.5" },
-  { label: "Julia 1.11", value: "julia-1.11" },
-];
+import {
+  DataResource,
+  ExecutionEnvironment,
+  AnalysisBundleCreate,
+  getProjectResources,
+  createProjectBundle,
+  getExecutionEnvironments,
+} from "@/lib/api";
 
 export default function CreateAnalysisPage() {
   const params = useParams();
@@ -17,8 +18,9 @@ export default function CreateAnalysisPage() {
   const projectId = params.id as string;
 
   const [resources, setResources] = useState<DataResource[]>([]);
+  const [environments, setEnvironments] = useState<ExecutionEnvironment[]>([]);
   const [name, setName] = useState("");
-  const [runtime, setRuntime] = useState(RUNTIMES[0].value);
+  const [selectedEnvId, setSelectedEnvId] = useState("");
   const [version, setVersion] = useState("");
   const [description, setDescription] = useState("");
   const [entrypoint, setEntrypoint] = useState("");
@@ -31,6 +33,12 @@ export default function CreateAnalysisPage() {
     getProjectResources(projectId)
       .then(setResources)
       .catch(() => setResources([]));
+    getExecutionEnvironments()
+      .then((envs) => {
+        setEnvironments(envs);
+        if (envs.length > 0) setSelectedEnvId(envs[0].id);
+      })
+      .catch(() => {});
   }, [projectId]);
 
   const toggleResource = (id: string) => {
@@ -44,6 +52,7 @@ export default function CreateAnalysisPage() {
     if (!name.trim()) errors.name = "Name is required";
     if (!version.trim()) errors.version = "Version is required";
     if (!entrypoint.trim()) errors.entrypoint = "Entrypoint is required";
+    if (!selectedEnvId) errors.environment = "Execution environment is required";
     setFieldErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -53,7 +62,7 @@ export default function CreateAnalysisPage() {
 
     const data: AnalysisBundleCreate = {
       name: name.trim(),
-      runtime,
+      execution_environment_id: selectedEnvId,
       version: version.trim(),
       entrypoint: entrypoint.trim(),
       description: description.trim(),
@@ -118,24 +127,32 @@ export default function CreateAnalysisPage() {
 
         <div style={{ marginBottom: "var(--spacing-md)" }}>
           <label style={{ display: "block", fontWeight: 600, marginBottom: "var(--spacing-xs)", fontSize: "0.9rem" }}>
-            Runtime <span style={{ color: "#e65100" }}>*</span>
+            Execution Environment <span style={{ color: "#e65100" }}>*</span>
           </label>
           <select
-            value={runtime}
-            onChange={(e) => setRuntime(e.target.value)}
+            value={selectedEnvId}
+            onChange={(e) => setSelectedEnvId(e.target.value)}
             style={{
               width: "100%",
               padding: "var(--spacing-sm) var(--spacing-md)",
-              border: "1px solid var(--color-border)",
+              border: `1px solid ${fieldErrors.environment ? "#e65100" : "var(--color-border)"}`,
               borderRadius: "var(--radius-md)",
               fontSize: "0.9rem",
               background: "var(--color-bg)",
             }}
           >
-            {RUNTIMES.map((r) => (
-              <option key={r.value} value={r.value}>{r.label}</option>
+            <option value="">Select environment...</option>
+            {environments.map((env) => (
+              <option key={env.id} value={env.id}>
+                {env.name} ({env.runtime})
+              </option>
             ))}
           </select>
+          {fieldErrors.environment && (
+            <div style={{ color: "#e65100", fontSize: "0.8rem", marginTop: "var(--spacing-xs)" }}>
+              {fieldErrors.environment}
+            </div>
+          )}
         </div>
 
         <div style={{ marginBottom: "var(--spacing-md)" }}>

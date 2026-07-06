@@ -3,12 +3,9 @@ FROM python:3.11-slim
 WORKDIR /app
 
 # Install backend as a dependency so worker can import models, services, providers
-COPY ../backend /backend
+COPY backend /backend
 RUN pip install --no-cache-dir -e /backend
 
-COPY pyproject.toml .
-RUN pip install --no-cache-dir .
+COPY worker/worker /app/worker
 
-COPY . .
-
-CMD ["python", "-m", "app.main"]
+CMD ["python", "-m", "worker.main"]

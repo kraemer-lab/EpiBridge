@@ -6,7 +6,8 @@
 
 ```
 backend/         FastAPI scaffold (app entrypoint, health endpoint, SQLAlchemy,
-                 Alembic, config, Firebase auth stub, CLI seed-admin stub)
+                 Alembic, config, Firebase auth stub, CLI seed-admin/seed-demo)
+containers/      Base analysis Docker images (python-3.13-scientific)
 vm/              cloud-init.yaml, Caddyfile (HTTPS, HSTS, compression,
                  security headers, request size limits), runtime spec
 scripts/         bootstrap.sh, install.sh, upgrade.sh, backup.sh, restore.sh, healthcheck.sh
@@ -18,10 +19,9 @@ docs/            Architecture, security, API, vision docs
 ### Still needs creating
 
 ```
-frontend/        Next.js + React + TypeScript (nginx stub serving static HTML)
-worker/          Python job executor (stub — sleeps)
+frontend/        Next.js + React + TypeScript (game in progress)
+worker/          Python job executor (functional — polls Postgres)
 shared/          Shared schemas and types (not started)
-containers/      Base analysis Docker images (not started)
 examples/        Synthetic datasets + analysis templates (not started)
 ```
 
@@ -69,6 +69,13 @@ Once the core schema stabilises, Alembic will be reintroduced as a dedicated mil
 - All future schema changes will use Alembic migrations.
 - `AUTO_CREATE_SCHEMA` will be set to `false` in production-like environments.
 
+### Domain model boundary
+
+- **Institutional assets** (Data Resources, Execution Environments) are registered automatically via lifespan startup from YAML manifests.
+- **Researcher artefacts** (Projects, Analysis Bundles, Execution Requests) are created by users through the application.
+- **Demo workspace** is created by `seed-demo` CLI command — a development tool, not application startup logic.
+- **Manifest directories** (`RESOURCE_MANIFEST_DIR`, `ENVIRONMENT_MANIFEST_DIR`) are deployment configuration, not application defaults. Docker Compose sets them for development; production points them elsewhere.
+
 ### Developer commands
 
 The standard development workflow:
@@ -85,6 +92,7 @@ make test         # run tests
 - `pip install -e ".[dev]"` — install dependencies (including dev tools)
 - `uvicorn app.main:app --reload` — dev server (auto-creates schema on startup)
 - `python -m app.cli seed-admin` — seed admin user
+- `python -m app.cli seed-demo` — seed demo project + analysis bundle
 
 **Infrastructure** (from repo root):
 - `./scripts/bootstrap.sh` — single entry point (clone → install → verify)
@@ -110,6 +118,7 @@ make test         # run tests
 **Testing** (from repo root):
 - `make test` — run unit, integration, and smoke test suites (CI compatible)
 - `make dev-test` — run full suite inside the container via SSH (requires dev stack)
+- `make playwright` — run golden-path end-to-end test (requires full stack running)
 - `python -m pytest backend/tests/unit -v` — unit tests only
 - `python -m pytest backend/tests/integration -v` — integration tests (requires DB + Redis running)
 - `python -m pytest backend/tests/smoke -v` — smoke tests (requires full stack running)
@@ -122,10 +131,34 @@ make test         # run tests
 - `make dev-shell` — interactive VM shell (individual step)
 - `make dev-logs` — tail container logs (individual step)
 - `make clean` — factory reset (remove containers, volumes, VM, .env)
+- `make clean-db` — reset researcher artefacts (projects, bundles, requests, outputs) and re-seed demo workspace
 - `make dev-build SVC=frontend` — rebuild and restart a single service (fastest iteration)
 
 **VM / Dev environment** (see `vm/runtime.md`):
 - `scripts/orbstack.sh` — OrbStack-specific helpers (create, mount, ssh, ip)
+
+### Golden Path (end-to-end)
+
+The golden path is a single Playwright e2e test that proves the entire platform works from a researcher's perspective.
+
+```bash
+make dev           # bootstrap full stack (creates VM, installs, seeds demo workspace)
+make playwright    # run the golden-path e2e test
+```
+
+The test (in `frontend/e2e/golden-path.spec.ts`) validates:
+1. Opening EpiBridge
+2. Dev auth auto-login
+3. Navigating to the demo project
+4. Opening the Analysis tab
+5. Selecting the demo analysis bundle
+6. Clicking Run Analysis
+7. Waiting for PENDING → RUNNING → COMPLETED status transition
+8. Opening the Outputs tab
+9. Downloading `summary.csv`
+10. Verifying the file exists and is non-empty
+
+This is a system test — not UI, not API — covering frontend, backend, database, worker, Docker executor, provider abstraction, runtime contract, output registration, and download endpoint.
 
 ### Stack dependencies
 

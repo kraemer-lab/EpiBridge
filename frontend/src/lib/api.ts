@@ -39,6 +39,7 @@ export interface AnalysisBundle {
   id: string;
   project_id: string;
   created_by_id: string;
+  execution_environment_id: string;
   name: string;
   status: string;
   runtime: string;
@@ -54,9 +55,11 @@ export interface AnalysisBundle {
 
 export interface AnalysisBundleCreate {
   name: string;
-  runtime: string;
+  runtime?: string;
+  execution_environment_id: string;
   version: string;
   entrypoint: string;
+  source_path?: string;
   description?: string;
   resource_identifiers?: string[];
   outputs?: string[];
@@ -66,13 +69,53 @@ export interface AnalysisBundleCreate {
 
 export interface AnalysisBundleUpdate {
   name?: string;
-  runtime?: string;
+  execution_environment_id?: string;
   version?: string;
   entrypoint?: string;
   description?: string;
   resource_identifiers?: string[];
   outputs?: string[];
   parameters?: Record<string, unknown>;
+}
+
+export interface ExecutionRequest {
+  id: string;
+  project_id: string;
+  analysis_bundle_id: string;
+  name: string;
+  timeout_seconds: number;
+  parameter_overrides: Record<string, unknown>;
+  status: string;
+  requested_by_id: string;
+  analysis_name: string;
+  runtime: string;
+  resource_identifiers: string[];
+  parameters: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ExecutionRequestCreate {
+  analysis_bundle_id: string;
+  name?: string;
+  timeout_seconds?: number;
+  parameter_overrides?: Record<string, unknown>;
+}
+
+export interface Output {
+  id: string;
+  execution_request_id: string;
+  filename: string;
+  size: number;
+  status: string;
+  created_at: string;
+}
+
+export interface DashboardStats {
+  projects: number;
+  jobs: number;
+  outputs: number;
+  resources: number;
 }
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
@@ -157,11 +200,67 @@ export async function updateProjectBundle(
   });
 }
 
-export interface DashboardStats {
-  projects: number;
-  jobs: number;
-  outputs: number;
-  resources: number;
+export async function createExecutionRequest(
+  projectId: string,
+  data: ExecutionRequestCreate,
+): Promise<ExecutionRequest> {
+  return request<ExecutionRequest>(
+    `/api/projects/${projectId}/execution-requests`,
+    {
+      method: "POST",
+      body: JSON.stringify(data),
+    },
+  );
+}
+
+export async function getProjectExecutionRequests(
+  projectId: string,
+): Promise<ExecutionRequest[]> {
+  return request<ExecutionRequest[]>(
+    `/api/projects/${projectId}/execution-requests`,
+  );
+}
+
+export async function getProjectExecutionRequest(
+  projectId: string,
+  requestId: string,
+): Promise<ExecutionRequest> {
+  return request<ExecutionRequest>(
+    `/api/projects/${projectId}/execution-requests/${requestId}`,
+  );
+}
+
+export async function getExecutionRequestOutputs(
+  projectId: string,
+  requestId: string,
+): Promise<Output[]> {
+  return request<Output[]>(
+    `/api/projects/${projectId}/execution-requests/${requestId}/outputs`,
+  );
+}
+
+export function getOutputDownloadUrl(
+  projectId: string,
+  requestId: string,
+  outputId: string,
+): string {
+  return `/api/projects/${projectId}/execution-requests/${requestId}/outputs/${outputId}/download`;
+}
+
+export interface ExecutionEnvironment {
+  id: string;
+  identifier: string;
+  name: string;
+  runtime: string;
+  description: string;
+  status: string;
+  image_reference: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function getExecutionEnvironments(): Promise<ExecutionEnvironment[]> {
+  return request<ExecutionEnvironment[]>("/api/execution-environments");
 }
 
 export async function getDashboardStats(): Promise<DashboardStats> {

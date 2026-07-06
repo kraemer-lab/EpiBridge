@@ -4,7 +4,7 @@ VM_DIR  ?= /opt/epibridge
 SSH     ?= ssh $(VM_USER)@$(VM_HOST)
 PYTHON  ?= python3
 
-.PHONY: dev clean install up down upgrade backup restore dev-install dev-up dev-down dev-shell dev-logs dev-build test dev-test format lint fix
+.PHONY: dev clean clean-db install up down upgrade backup restore dev-install dev-up dev-down dev-shell dev-logs dev-build test dev-test format lint fix playwright
 
 install:
 	$(SSH) 'cd $(VM_DIR) && ./scripts/install.sh'
@@ -65,6 +65,9 @@ test:
 dev-test:
 	./scripts/orbstack.sh ssh 'cd $(VM_DIR) && docker compose exec -T backend python3 -m pytest tests/unit tests/integration tests/smoke -v --no-header -q --tb=short'
 
+playwright:
+	cd frontend && npx playwright test
+
 format:
 	cd backend && $(PYTHON) -m ruff format
 
@@ -74,6 +77,10 @@ lint:
 fix:
 	cd backend && $(PYTHON) -m ruff check --fix
 	cd backend && $(PYTHON) -m ruff format
+
+clean-db:
+	./scripts/orbstack.sh ssh 'cd $(VM_DIR) && docker compose exec -T postgres psql -U epibridge -c "DELETE FROM outputs; DELETE FROM execution_requests; DELETE FROM analysis_bundle_data_resources; DELETE FROM project_data_resources; DELETE FROM analysis_bundles; DELETE FROM projects;" && docker compose exec -T backend python -m app.cli seed-demo'
+	@echo "=== Researcher artefacts reset, demo workspace re-seeded ==="
 
 clean:
 	@echo "=== EpiBridge Clean ==="

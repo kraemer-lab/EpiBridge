@@ -93,6 +93,14 @@ echo "PostgreSQL is ready."
 echo "Seeding administrator account..."
 docker compose -f "$COMPOSE_FILE" exec -T backend python -m app.cli seed-admin
 
+# Build analysis container images
+echo "Building analysis container images..."
+docker build -t epibridge/python-3.13-scientific:latest containers/python-3.13-scientific/
+
+# Seed demo workspace
+echo "Seeding demo workspace..."
+docker compose -f "$COMPOSE_FILE" exec -T backend python -m app.cli seed-demo
+
 # Health check
 echo "Running health checks..."
 ./scripts/healthcheck.sh
