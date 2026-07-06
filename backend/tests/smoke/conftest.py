@@ -1,5 +1,5 @@
+import httpx2 as httpx
 import pytest
-import httpx
 
 
 @pytest.fixture(autouse=True, scope="session")
