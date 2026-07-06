@@ -6,7 +6,6 @@ from typing import Any
 @dataclass
 class Mount:
     source: str
-    target: str
     read_only: bool = True
 
 

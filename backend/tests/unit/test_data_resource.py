@@ -118,17 +118,27 @@ class TestCsvProvider:
         assert len(config.mounts) == 1
         mount = config.mounts[0]
         assert mount.source == "/read-only-data/demo.csv"
-        assert mount.target == "/data/input"
         assert mount.read_only is True
 
-        assert config.env["DATA_PATH"] == "/data/input/demo.csv"
+        assert config.env == {}
 
     def test_prepare_runtime_subdirectory(self):
         provider = CsvProvider()
         config = provider.prepare_runtime({"path": "study123/data.csv"})
 
         assert config.mounts[0].source == "/read-only-data/study123/data.csv"
-        assert config.env["DATA_PATH"] == "/data/input/data.csv"
+        assert config.env == {}
+
+    def test_executor_resolves_mount_target(self):
+        provider = CsvProvider()
+        config = provider.prepare_runtime({"path": "mexico_dengue_2026/dengue.csv"})
+
+        assert len(config.mounts) == 1
+        mount = config.mounts[0]
+        assert mount.source == "/read-only-data/mexico_dengue_2026/dengue.csv"
+        assert mount.read_only is True
+
+        assert config.env == {}
 
 
 class TestProviderRegistry:

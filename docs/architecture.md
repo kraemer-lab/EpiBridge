@@ -303,17 +303,20 @@ Providers describe runtime requirements in platform-agnostic terms (`Mount`,
 `RuntimeConfig`). An Executor (Docker, Kubernetes, Slurm, etc.) translates these into
 the corresponding infrastructure.
 
-### Runtime Contract
+### Three Identifiers
 
-EpiBridge never knows the physical host path of data resources. The deployment
-environment guarantees that configured resources are reachable at:
+Every Data Resource has three identifiers with distinct responsibilities:
 
-```
-/read-only-data
-```
+| Identifier | Purpose | Stability |
+|------------|---------|-----------|
+| `id` | Immutable internal UUID | Never changes |
+| `name` | Human-readable display name | May change |
+| `alias` | Filesystem-safe path segment for `/data/{alias}` | Stable once set |
 
-How resources arrive there (host directory mount, NFS, cloud storage, database
-connection) is entirely the deployment's responsibility.
+The analysis always uses the alias. Display names can be improved without
+breaking existing analyses. Initially the alias may be a slugified version of
+the name; a dedicated field will be introduced when long-lived analyses and
+multi-institution deployments require it.
 
 ### Project Association
 
@@ -321,6 +324,109 @@ A **Project** represents permission to analyse one or more Data Resources.
 Projects do not own resources — they reference them through a many-to-many
 relationship (`ProjectDataResource`). A single Data Resource may be associated
 with multiple projects over time.
+
+⸻
+
+## Runtime Architecture
+
+The system consists of three distinct environments.
+
+```
+Host
+  └── Trusted Runtime (VM)
+        └── Analysis Container
+```
+
+### Host
+
+Owns the physical data (e.g. `/srv/data/`). EpiBridge never knows host paths.
+
+### Trusted Runtime
+
+The deployment exposes institutional data resources at a well-known location:
+
+```
+/read-only-data
+```
+
+How resources arrive here (bind mount, NFS, cloud storage) is the deployment's
+responsibility — never EpiBridge's.
+
+### Analysis Container
+
+The container never receives access to `/read-only-data`. It receives a
+minimal execution view containing only authorised resources.
+
+The standard container contract:
+
+| Path      | Purpose                              |
+|-----------|--------------------------------------|
+| `/work`   | Writable temporary storage           |
+| `/data`   | Namespace of authorised resources    |
+| `/output` | Writable results directory           |
+
+#### /data — authorised namespace
+
+Each authorised resource appears at:
+
+```
+/data/{alias}
+```
+
+The Executor constructs this mount point from the provider's `RuntimeConfig`
+and the resource's alias. The provider describes *what* to expose (source path,
+type); the Executor decides *where* (`/data/{alias}`).
+
+#### Security boundary
+
+> The analysis container must never receive access to `/read-only-data`.
+
+The Executor enforces this by mounting only the authorised subset. A compromised
+container cannot enumerate or access unauthorised resources.
+
+⸻
+
+## Resource Manifests
+
+Data Resources are ultimately declared using YAML manifests. The administration
+UI is an operational convenience over this model, not the source of truth.
+
+```yaml
+resources:
+  - name: Mexico Dengue Surveillance 2026
+    provider: csv
+    endpoint:
+      path: mexico_dengue_2026/dengue.csv
+
+  - name: UK Biobank Phenotypes
+    provider: duckdb
+    endpoint:
+      path: ukbb/phenotypes.duckdb
+```
+
+Manifests will be introduced in a dedicated milestone once registration
+workflows are designed.
+
+⸻
+
+## Standard Interfaces
+
+Analyses use standard language interfaces. There is no EpiBridge runtime SDK
+and the analysis should not need to know that EpiBridge exists.
+
+```python
+# CSV — standard pandas
+pd.read_csv("/data/mexico_dengue_2026/dengue.csv")
+
+# DuckDB — standard duckdb
+duckdb.connect("/data/ukbb/phenotypes.duckdb")
+
+# PostgreSQL — standard sqlalchemy
+sqlalchemy.create_engine("postgresql://host/db")
+```
+
+The analysis receives references through well-known environment variables
+(such as `PGHOST`, `PGDATABASE`) or through the file paths under `/data/{alias}`.
 
 ⸻
 
@@ -495,31 +601,15 @@ Only approved outputs are returned.
 
 # Architectural Principles
 
-1. Move computation to the data.
-2. Never expose database access.
-3. Every analysis executes inside an isolated container.
-4. Human approval before execution.
-5. Human approval before outputs leave the environment.
-6. Complete audit trail.
-7. Portable deployment.
-8. Cloud-ready but cloud-independent.
-9. Modular services.
-10. Reproducible execution.
-
-## Domain Principles
-
-11. **Data Resource** = institutional asset; **Project** = permission to analyse
-    one or more institutional assets.
-12. No Docker references in the provider layer — the provider describes runtime
-    requirements in platform-agnostic terms; the executor implements them.
-13. `/read-only-data` is the runtime contract; the application never knows host paths.
-14. `endpoint` defines how the runtime reaches the resource, not generic configuration.
-15. `validate_endpoint()` validates the endpoint definition; `prepare_runtime()`
-    describes execution requirements.
-16. The deployment owns physical storage; EpiBridge owns the catalogue and execution
-    model.
-17. The application must never assume where underlying data physically resides — it
-    only understands Data Resources, Resource Providers, and Runtime Endpoints.
+1. EpiBridge does not own scientific data.
+2. Data Resources represent institutional assets.
+3. Projects represent permission to analyse one or more institutional assets.
+4. Providers validate endpoints and prepare execution views.
+5. The deployment owns physical storage.
+6. EpiBridge owns the catalogue and execution model.
+7. The runtime contract is `/read-only-data`, `/work`, `/data`, and `/output`.
+8. Analysis containers receive only authorised resources.
+9. Analyses use standard language interfaces rather than an EpiBridge SDK.
 
 ⸻
 # MVP Scope

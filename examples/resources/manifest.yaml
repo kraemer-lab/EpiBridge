@@ -1,0 +1,24 @@
+# EpiBridge Data Resource Manifest
+#
+# This file is a demonstration of the intended source-of-truth format
+# for declaring institutional data resources.
+#
+# Resource registration workflows (manual, CLI, scan, plugin, admin UI)
+# will be designed in a later milestone. Manifests are documented here
+# to establish the architectural direction before implementation.
+
+resources:
+  - name: Mexico Dengue Surveillance 2026
+    provider: csv
+    endpoint:
+      path: mexico_dengue_2026/dengue.csv
+
+  - name: UK Biobank Phenotypes
+    provider: duckdb
+    endpoint:
+      path: ukbb/phenotypes.duckdb
+
+  - name: ICU Admissions 2024
+    provider: csv
+    endpoint:
+      path: icu_2024/admissions.csv

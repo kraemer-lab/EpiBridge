@@ -15,8 +15,6 @@ class ExcelProvider(ResourceProvider):
 
     def prepare_runtime(self, endpoint: dict[str, Any]) -> RuntimeConfig:
         source = os.path.join(RUNTIME_ROOT, endpoint["path"])
-        data_path = os.path.join("/data/input", os.path.basename(endpoint["path"]))
         return RuntimeConfig(
-            mounts=[Mount(source=source, target="/data/input", read_only=True)],
-            env={"DATA_PATH": data_path},
+            mounts=[Mount(source=source, read_only=True)],
         )
