@@ -81,6 +81,18 @@ export function getProjects(): Promise<Project[]> {
   return request<Project[]>("/api/projects");
 }
 
+export function getProject(id: string): Promise<Project> {
+  return request<Project>(`/api/projects/${id}`);
+}
+
+export function getProjectResources(id: string): Promise<DataResource[]> {
+  return request<DataResource[]>(`/api/projects/${id}/resources`);
+}
+
+export function getProjectBundles(id: string): Promise<AnalysisBundle[]> {
+  return request<AnalysisBundle[]>(`/api/projects/${id}/bundles`);
+}
+
 export function createProject(data: ProjectCreate): Promise<Project> {
   return request<Project>("/api/projects", {
     method: "POST",

@@ -71,9 +71,7 @@ def get_bundle(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    bundle = (
-        db.query(AnalysisBundle).filter(AnalysisBundle.id == bundle_id).first()
-    )
+    bundle = db.query(AnalysisBundle).filter(AnalysisBundle.id == bundle_id).first()
     if bundle is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

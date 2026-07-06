@@ -1,53 +1,26 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
-import { DataResource, getAdminResources } from "@/lib/api";
+import { useParams } from "next/navigation";
+import { DataResource, getProjectResources } from "@/lib/api";
 
-export default function AdminPage() {
+export default function ProjectResourcesPage() {
+  const params = useParams();
+  const projectId = params.id as string;
+
   const [resources, setResources] = useState<DataResource[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    getAdminResources()
+    getProjectResources(projectId)
       .then(setResources)
       .catch(() => setError("Failed to load resources"))
       .finally(() => setLoading(false));
-  }, []);
+  }, [projectId]);
 
   return (
-    <>
-      <h1 className="page-title">Admin</h1>
-
-      <nav style={{ display: "flex", gap: "var(--spacing-md)", marginBottom: "var(--spacing-lg)", borderBottom: "1px solid var(--color-border)", paddingBottom: "var(--spacing-sm)" }}>
-        <Link
-          href="/admin"
-          style={{
-            color: "var(--color-primary)",
-            fontWeight: 600,
-            fontSize: "0.9rem",
-            textDecoration: "none",
-            paddingBottom: "var(--spacing-sm)",
-            borderBottom: "2px solid var(--color-primary)",
-          }}
-        >
-          Data Resources
-        </Link>
-        <Link
-          href="/admin/bundles"
-          style={{
-            color: "var(--color-text-secondary)",
-            fontWeight: 500,
-            fontSize: "0.9rem",
-            textDecoration: "none",
-            paddingBottom: "var(--spacing-sm)",
-          }}
-        >
-          Analysis Bundles
-        </Link>
-      </nav>
-
+    <div>
       <h2 style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: "var(--spacing-md)" }}>
         Data Resources
       </h2>
@@ -57,7 +30,7 @@ export default function AdminPage() {
       ) : error ? (
         <div className="card empty-state">{error}</div>
       ) : resources.length === 0 ? (
-        <div className="card empty-state">No resources registered.</div>
+        <div className="card empty-state">No resources available for this project.</div>
       ) : (
         <div className="card" style={{ padding: 0, overflow: "hidden" }}>
           <table className="table">
@@ -106,6 +79,6 @@ export default function AdminPage() {
           </table>
         </div>
       )}
-    </>
+    </div>
   );
 }

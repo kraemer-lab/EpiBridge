@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import Link from "next/link";
 import { Project, getProjects } from "@/lib/api";
 import ProjectDialog from "@/components/ProjectDialog";
 
@@ -47,7 +48,11 @@ export default function ProjectsPage() {
             <tbody>
               {projects.map((project) => (
                 <tr key={project.id}>
-                  <td style={{ fontWeight: 500 }}>{project.name}</td>
+                  <td style={{ fontWeight: 500 }}>
+                    <Link href={`/projects/${project.id}`} style={{ color: "var(--color-primary)", textDecoration: "none" }}>
+                      {project.name}
+                    </Link>
+                  </td>
                   <td style={{ color: "var(--color-text-secondary)" }}>
                     {project.description || "—"}
                   </td>

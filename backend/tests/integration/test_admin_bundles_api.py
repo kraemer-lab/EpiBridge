@@ -108,9 +108,7 @@ class TestAdminBundlesAPI:
         response = client.get(url)
         assert response.status_code == 404
 
-    def test_list_bundles_ordered_by_name(
-        self, client, admin_user, project, resource
-    ):
+    def test_list_bundles_ordered_by_name(self, client, admin_user, project, resource):
         for name in ["Zeta", "Alpha", "Beta"]:
             client.post(
                 f"/api/projects/{project.id}/bundles",

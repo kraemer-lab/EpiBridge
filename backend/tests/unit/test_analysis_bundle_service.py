@@ -111,9 +111,7 @@ class TestValidateResources:
         r2.identifier = "mex-dengue-2026"
         db.query.return_value.filter.return_value.all.return_value = [r1, r2]
 
-        result = validate_resources(
-            ["ukbb-phenotypes", "mex-dengue-2026"], db
-        )
+        result = validate_resources(["ukbb-phenotypes", "mex-dengue-2026"], db)
         assert len(result) == 2
 
     def test_missing_resource_raises(self):
@@ -123,9 +121,7 @@ class TestValidateResources:
         db.query.return_value.filter.return_value.all.return_value = [r1]
 
         with pytest.raises(ValueError, match="mex-dengue-2026"):
-            validate_resources(
-                ["ukbb-phenotypes", "mex-dengue-2026"], db
-            )
+            validate_resources(["ukbb-phenotypes", "mex-dengue-2026"], db)
 
     def test_empty_list_returns_empty(self):
         db = MagicMock()

@@ -1,6 +1,12 @@
+import uuid
+
 import pytest
 
 from app.core.config import settings
+from app.models.analysis_bundle import AnalysisBundle
+from app.models.data_resource import DataResource
+from app.models.project import Project
+from app.models.project_data_resource import ProjectDataResource
 from app.models.user import User, UserRole
 
 
@@ -15,6 +21,32 @@ def admin_user(db_session):
     db_session.commit()
     db_session.refresh(user)
     return user
+
+
+@pytest.fixture
+def project(db_session, admin_user):
+    p = Project(name="Test Project", description="A test", owner_id=admin_user.id)
+    db_session.add(p)
+    db_session.commit()
+    db_session.refresh(p)
+    return p
+
+
+@pytest.fixture
+def resource(db_session):
+    r = DataResource(
+        identifier="test-resource",
+        name="Test Resource",
+        alias="test_resource",
+        provider_type="csv",
+        endpoint={"path": "data.csv"},
+        version="1.0.0",
+        status="active",
+    )
+    db_session.add(r)
+    db_session.commit()
+    db_session.refresh(r)
+    return r
 
 
 def test_list_projects_empty(client, admin_user):
@@ -68,3 +100,93 @@ def test_projects_persist(client, admin_user):
 
     response2 = client.get("/api/projects")
     assert len(response2.json()) == 1
+
+
+class TestGetProject:
+    def test_get_project_by_id(self, client, project):
+        response = client.get(f"/api/projects/{project.id}")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["name"] == "Test Project"
+        assert data["description"] == "A test"
+        assert data["id"] == str(project.id)
+
+    def test_get_project_not_found(self, client, admin_user):
+        response = client.get(f"/api/projects/{uuid.uuid4()}")
+        assert response.status_code == 404
+
+
+class TestGetProjectResources:
+    def test_resources_empty(self, client, project):
+        response = client.get(f"/api/projects/{project.id}/resources")
+        assert response.status_code == 200
+        assert response.json() == []
+
+    def test_resources_with_data(self, client, project, resource, db_session):
+        link = ProjectDataResource(project_id=project.id, data_resource_id=resource.id)
+        db_session.add(link)
+        db_session.commit()
+
+        response = client.get(f"/api/projects/{project.id}/resources")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["identifier"] == "test-resource"
+        assert data[0]["name"] == "Test Resource"
+        assert data[0]["provider_type"] == "csv"
+
+    def test_resources_not_found(self, client, admin_user):
+        response = client.get(f"/api/projects/{uuid.uuid4()}/resources")
+        assert response.status_code == 404
+
+
+class TestGetProjectBundles:
+    def test_bundles_empty(self, client, project):
+        response = client.get(f"/api/projects/{project.id}/bundles")
+        assert response.status_code == 200
+        assert response.json() == []
+
+    def test_bundles_with_data(self, client, project, resource, db_session):
+        link = ProjectDataResource(project_id=project.id, data_resource_id=resource.id)
+        db_session.add(link)
+
+        bundle = AnalysisBundle(
+            project_id=project.id,
+            created_by_id=project.owner_id,
+            name="My Bundle",
+            runtime="python-3.13",
+            version="1.0.0",
+            entrypoint="run.py",
+        )
+        db_session.add(bundle)
+        db_session.commit()
+
+        response = client.get(f"/api/projects/{project.id}/bundles")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["name"] == "My Bundle"
+        assert data[0]["runtime"] == "python-3.13"
+
+    def test_bundles_ordered_by_name(self, client, project, db_session):
+        for name in ["Zeta", "Beta", "Alpha"]:
+            db_session.add(
+                AnalysisBundle(
+                    project_id=project.id,
+                    created_by_id=project.owner_id,
+                    name=name,
+                    runtime="python-3.13",
+                    version="1.0.0",
+                    entrypoint="run.py",
+                )
+            )
+        db_session.commit()
+
+        response = client.get(f"/api/projects/{project.id}/bundles")
+        data = response.json()
+        names = [b["name"] for b in data]
+        assert names == ["Alpha", "Beta", "Zeta"]
+
+    def test_bundles_not_found(self, client, admin_user):
+        response = client.get(f"/api/projects/{uuid.uuid4()}/bundles")
+        assert response.status_code == 404
