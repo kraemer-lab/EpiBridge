@@ -4,8 +4,14 @@ from sqlalchemy.orm import Session
 
 from app.models.analysis_bundle import AnalysisBundle, AnalysisBundleDataResource
 from app.models.data_resource import DataResource
+from app.models.execution_environment import ExecutionEnvironment
 
-REQUIRED_MANIFEST_FIELDS = {"name", "runtime", "version", "entrypoint"}
+REQUIRED_MANIFEST_FIELDS = {
+    "name",
+    "execution_environment_id",
+    "version",
+    "entrypoint",
+}
 
 
 def validate_manifest(data: dict) -> dict:
@@ -17,8 +23,14 @@ def validate_manifest(data: dict) -> dict:
     if not isinstance(data.get("name"), str) or not data["name"].strip():
         raise ValueError("'name' must be a non-empty string")
 
-    if not isinstance(data.get("runtime"), str) or not data["runtime"].strip():
-        raise ValueError("'runtime' must be a non-empty string")
+    ee_id = data.get("execution_environment_id")
+    if isinstance(ee_id, str):
+        try:
+            uuid.UUID(ee_id)
+        except ValueError:
+            raise ValueError("'execution_environment_id' must be a valid UUID")
+    elif not isinstance(ee_id, uuid.UUID):
+        raise ValueError("'execution_environment_id' must be a valid UUID")
 
     if not isinstance(data.get("version"), str) or not data["version"].strip():
         raise ValueError("'version' must be a non-empty string")
@@ -69,6 +81,19 @@ def validate_resources(
     return resources
 
 
+def validate_execution_environment(
+    execution_environment_id: uuid.UUID, db: Session
+) -> ExecutionEnvironment:
+    env = (
+        db.query(ExecutionEnvironment)
+        .filter(ExecutionEnvironment.id == execution_environment_id)
+        .first()
+    )
+    if env is None:
+        raise ValueError(f"Execution environment not found: {execution_environment_id}")
+    return env
+
+
 def create_bundle(
     db: Session,
     data: dict,
@@ -79,11 +104,16 @@ def create_bundle(
     validate_entrypoint(data["entrypoint"])
     resources = validate_resources(data.get("resource_identifiers", []), db)
 
+    ee_id = data["execution_environment_id"]
+    if isinstance(ee_id, str):
+        ee_id = uuid.UUID(ee_id)
+    validate_execution_environment(ee_id, db)
+
     bundle = AnalysisBundle(
         project_id=project_id,
         created_by_id=created_by_id,
+        execution_environment_id=ee_id,
         name=data["name"],
-        runtime=data["runtime"],
         version=data["version"],
         entrypoint=data["entrypoint"],
         description=data.get("description", ""),
@@ -112,6 +142,12 @@ def get_resource_identifiers(bundle: AnalysisBundle) -> list[str]:
     ]
 
 
+def get_environment_runtime(bundle: AnalysisBundle) -> str:
+    if bundle.execution_environment:
+        return bundle.execution_environment.runtime
+    return ""
+
+
 def update_bundle(db: Session, bundle_id: uuid.UUID, data: dict) -> AnalysisBundle:
     bundle = db.query(AnalysisBundle).filter(AnalysisBundle.id == bundle_id).first()
     if bundle is None:
@@ -124,13 +160,14 @@ def update_bundle(db: Session, bundle_id: uuid.UUID, data: dict) -> AnalysisBund
             raise ValueError("'name' must be a non-empty string")
         bundle.name = update_data["name"]
 
-    if "runtime" in update_data:
-        if (
-            not isinstance(update_data["runtime"], str)
-            or not update_data["runtime"].strip()
-        ):
-            raise ValueError("'runtime' must be a non-empty string")
-        bundle.runtime = update_data["runtime"]
+    if "execution_environment_id" in update_data:
+        ee_id = update_data["execution_environment_id"]
+        if isinstance(ee_id, str):
+            ee_id = uuid.UUID(ee_id)
+        if not isinstance(ee_id, uuid.UUID):
+            raise ValueError("'execution_environment_id' must be a valid UUID")
+        validate_execution_environment(ee_id, db)
+        bundle.execution_environment_id = ee_id
 
     if "version" in update_data:
         if (

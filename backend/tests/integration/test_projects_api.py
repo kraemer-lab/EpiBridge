@@ -5,6 +5,7 @@ import pytest
 from app.core.config import settings
 from app.models.analysis_bundle import AnalysisBundle
 from app.models.data_resource import DataResource
+from app.models.execution_environment import ExecutionEnvironment
 from app.models.project import Project
 from app.models.project_data_resource import ProjectDataResource
 from app.models.user import User, UserRole
@@ -47,6 +48,21 @@ def resource(db_session):
     db_session.commit()
     db_session.refresh(r)
     return r
+
+
+@pytest.fixture
+def execution_environment(db_session):
+    env = ExecutionEnvironment(
+        identifier="python-3.13-scientific",
+        name="Python 3.13 Scientific",
+        runtime="python-3.13",
+        description="Test environment",
+        status="active",
+    )
+    db_session.add(env)
+    db_session.commit()
+    db_session.refresh(env)
+    return env
 
 
 def test_list_projects_empty(client, admin_user):
@@ -146,15 +162,17 @@ class TestGetProjectBundles:
         assert response.status_code == 200
         assert response.json() == []
 
-    def test_bundles_with_data(self, client, project, resource, db_session):
+    def test_bundles_with_data(
+        self, client, project, resource, execution_environment, db_session
+    ):
         link = ProjectDataResource(project_id=project.id, data_resource_id=resource.id)
         db_session.add(link)
 
         bundle = AnalysisBundle(
             project_id=project.id,
             created_by_id=project.owner_id,
+            execution_environment_id=execution_environment.id,
             name="My Bundle",
-            runtime="python-3.13",
             version="1.0.0",
             entrypoint="run.py",
         )
@@ -167,15 +185,18 @@ class TestGetProjectBundles:
         assert len(data) == 1
         assert data[0]["name"] == "My Bundle"
         assert data[0]["runtime"] == "python-3.13"
+        assert data[0]["execution_environment_id"] == str(execution_environment.id)
 
-    def test_bundles_ordered_by_name(self, client, project, db_session):
+    def test_bundles_ordered_by_name(
+        self, client, project, execution_environment, db_session
+    ):
         for name in ["Zeta", "Beta", "Alpha"]:
             db_session.add(
                 AnalysisBundle(
                     project_id=project.id,
                     created_by_id=project.owner_id,
+                    execution_environment_id=execution_environment.id,
                     name=name,
-                    runtime="python-3.13",
                     version="1.0.0",
                     entrypoint="run.py",
                 )
@@ -193,12 +214,12 @@ class TestGetProjectBundles:
 
 
 class TestGetProjectBundle:
-    def test_get_bundle_by_id(self, client, project, db_session):
+    def test_get_bundle_by_id(self, client, project, execution_environment, db_session):
         bundle = AnalysisBundle(
             project_id=project.id,
             created_by_id=project.owner_id,
+            execution_environment_id=execution_environment.id,
             name="Detail Bundle",
-            runtime="python-3.13",
             version="1.0.0",
             entrypoint="run.py",
         )
@@ -213,17 +234,20 @@ class TestGetProjectBundle:
         assert data["status"] == "draft"
         assert data["runtime"] == "python-3.13"
         assert data["version"] == "1.0.0"
+        assert data["execution_environment_id"] == str(execution_environment.id)
 
     def test_get_bundle_not_found(self, client, project):
         response = client.get(f"/api/projects/{project.id}/bundles/{uuid.uuid4()}")
         assert response.status_code == 404
 
-    def test_get_bundle_wrong_project(self, client, admin_user, db_session):
+    def test_get_bundle_wrong_project(
+        self, client, admin_user, execution_environment, db_session
+    ):
         bundle = AnalysisBundle(
             project_id=uuid.uuid4(),
             created_by_id=admin_user.id,
+            execution_environment_id=execution_environment.id,
             name="Orphan",
-            runtime="python-3.13",
             version="1.0.0",
             entrypoint="run.py",
         )
@@ -235,12 +259,12 @@ class TestGetProjectBundle:
 
 
 class TestUpdateProjectBundle:
-    def test_update_metadata(self, client, project, db_session):
+    def test_update_metadata(self, client, project, execution_environment, db_session):
         bundle = AnalysisBundle(
             project_id=project.id,
             created_by_id=project.owner_id,
+            execution_environment_id=execution_environment.id,
             name="Original",
-            runtime="python-3.13",
             version="1.0.0",
             entrypoint="run.py",
         )
@@ -258,12 +282,12 @@ class TestUpdateProjectBundle:
         assert data["description"] == "New desc"
         assert data["runtime"] == "python-3.13"
 
-    def test_update_partial(self, client, project, db_session):
+    def test_update_partial(self, client, project, execution_environment, db_session):
         bundle = AnalysisBundle(
             project_id=project.id,
             created_by_id=project.owner_id,
+            execution_environment_id=execution_environment.id,
             name="Partial Test",
-            runtime="python-3.13",
             version="1.0.0",
             entrypoint="run.py",
             description="Original description",
@@ -283,12 +307,14 @@ class TestUpdateProjectBundle:
         assert data["description"] == "Only this changes"
         assert data["version"] == "1.0.0"
 
-    def test_update_resources(self, client, project, resource, db_session):
+    def test_update_resources(
+        self, client, project, resource, execution_environment, db_session
+    ):
         bundle = AnalysisBundle(
             project_id=project.id,
             created_by_id=project.owner_id,
+            execution_environment_id=execution_environment.id,
             name="Resource Bundle",
-            runtime="python-3.13",
             version="1.0.0",
             entrypoint="run.py",
         )
@@ -311,12 +337,14 @@ class TestUpdateProjectBundle:
         )
         assert response.status_code == 404
 
-    def test_update_invalid_data(self, client, project, db_session):
+    def test_update_invalid_data(
+        self, client, project, execution_environment, db_session
+    ):
         bundle = AnalysisBundle(
             project_id=project.id,
             created_by_id=project.owner_id,
+            execution_environment_id=execution_environment.id,
             name="Invalid Test",
-            runtime="python-3.13",
             version="1.0.0",
             entrypoint="run.py",
         )

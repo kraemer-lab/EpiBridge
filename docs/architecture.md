@@ -378,6 +378,66 @@ with multiple projects over time.
 
 ⸻
 
+## Execution Environments
+
+An **Execution Environment** is an institutional asset representing an approved
+runtime in which an analysis may execute. Like Data Resources, they are curated
+by the institution — researchers select from available environments rather than
+specifying arbitrary runtime strings.
+
+Execution Environments are not merely language versions. They represent curated
+environments with specific packages and tooling:
+
+* Python 3.13 Scientific (NumPy, SciPy, Pandas, scikit-learn)
+* Python 3.13 Machine Learning (PyTorch, TensorFlow, XGBoost)
+* R 4.5 Tidyverse (dplyr, ggplot2, tidyr)
+* R 4.5 Spatial (sf, terra, sp)
+* R 4.5 Bioconductor (DESeq2, limma, edgeR)
+
+### Environment Model
+
+```
+ExecutionEnvironment
+├── id              (UUID, auto-generated)
+├── identifier      (stable institutional identity)
+├── name            (human-readable display name)
+├── runtime         ("python-3.13", "r-4.5", etc.)
+├── description     (curated package summary)
+├── status          ("active", "deprecated")
+├── image_reference (Docker image tag, for future execution)
+├── created_at
+└── updated_at
+```
+
+### Registration
+
+Execution Environments are seeded from YAML manifests on startup, following
+the same pattern as Data Resources. The manifest is the source of truth; the
+database is a runtime index.
+
+```yaml
+environments:
+  - identifier: python-3.13-scientific
+    name: Python 3.13 Scientific
+    runtime: python-3.13
+    description: "NumPy, SciPy, Pandas, Matplotlib, scikit-learn"
+    status: active
+    image_reference: "epibridge/python-3.13-scientific:latest"
+```
+
+Registration is idempotent — running it multiple times produces the same
+result. Environments are identified by `identifier`, so manifest updates
+are applied in-place.
+
+### Future direction
+
+Eventually trusted users will submit Dockerfiles that build new Execution
+Environments. The `image_reference` field exists so this can be added
+without schema changes. Dockerfile upload and image building are not
+implemented in the current milestone.
+
+⸻
+
 ## Analysis Bundles
 
 An **Analysis Bundle** is a researcher-created artefact that describes an
@@ -385,7 +445,8 @@ analysis and its requirements. Researchers do not submit arbitrary scripts
 to the platform — they submit Analysis Bundles. The bundle captures:
 
 * the analysis metadata (name, version, description)
-* the required runtime environment (e.g. `python-3.13`, `r-4.5`)
+* a reference to an approved **Execution Environment** (the researcher selects
+  from the curated catalogue; they do not type a runtime string)
 * the entry point script
 * the Data Resources the analysis expects (declared by institutional identifier)
 * the expected outputs
@@ -398,19 +459,23 @@ created within a Project and owned by the researcher who created it.
 
 ```
 AnalysisBundle
-├── id              (UUID, auto-generated)
-├── project_id      (FK → Project)
-├── created_by_id   (FK → User)
+├── id                      (UUID, auto-generated)
+├── project_id              (FK → Project)
+├── created_by_id           (FK → User)
+├── execution_environment_id (FK → ExecutionEnvironment)
 ├── name
-├── runtime         ("python-3.13", "r-4.5", "julia-1.11")
 ├── version
 ├── entrypoint
 ├── description
-├── outputs         (JSON list of expected paths)
-├── parameters      (JSON, reserved for future use)
+├── outputs                 (JSON list of expected paths)
+├── parameters              (JSON, reserved for future use)
 ├── created_at
 └── updated_at
 ```
+
+The `runtime` field is resolved from the referenced ExecutionEnvironment at
+read time — it is not stored on the bundle. This ensures researchers only
+select approved environments and cannot specify arbitrary runtime strings.
 
 ### Relationship to Data Resources
 
@@ -452,9 +517,10 @@ execution context (which resources, which parameters, which user).
 
 ⸻
 
-## Runtime Architecture
+## Trust Boundaries
 
-The system consists of three distinct environments.
+EpiBridge defines three distinct trust boundaries, each with different
+privileges and responsibilities.
 
 ```
 Host
@@ -464,25 +530,39 @@ Host
 
 ### Host
 
-Owns the physical data (e.g. `/srv/data/`). EpiBridge never knows host paths.
+The host machine owns the physical or networked storage containing sensitive
+institutional data (e.g. `/srv/data/`). EpiBridge never knows host paths and
+never accesses host storage directly. The host is managed by institutional IT
+and is outside EpiBridge's operational scope.
 
-### Trusted Runtime
+### Trusted Runtime (VM)
 
-The deployment exposes institutional data resources at a well-known location:
+The deployment runs inside a restricted Linux virtual machine. This is the
+EpiBridge platform boundary. The VM contains:
 
-```
-/read-only-data
-```
+* All EpiBridge services (frontend, backend, database, worker)
+* Docker Engine
+* The Resource Registry (database index of registered data resources and
+  execution environments)
+* Institutional data resources exposed at a well-known location:
+  `/read-only-data`
 
-How resources arrive here (bind mount, NFS, cloud storage) is the deployment's
-responsibility — never EpiBridge's.
+How resources arrive at `/read-only-data` (bind mount, NFS, cloud storage)
+is the deployment's responsibility — never EpiBridge's.
 
 ### Analysis Container
 
-The container never receives access to `/read-only-data`. It receives a
-minimal execution view containing only authorised resources.
+The analysis container is the least-privileged environment. It is intentionally
+isolated from the Trusted Runtime.
 
-The standard container contract:
+The container must never receive:
+
+* `/read-only-data` — the full institutional data store
+* Host storage paths
+* The Resource Registry
+* Deployment configuration
+
+The container receives only:
 
 | Path      | Purpose                              |
 |-----------|--------------------------------------|
@@ -508,6 +588,57 @@ type); the Executor decides *where* (`/data/{alias}`).
 
 The Executor enforces this by mounting only the authorised subset. A compromised
 container cannot enumerate or access unauthorised resources.
+
+### Summary
+
+| Boundary | Contents | Privilege |
+|----------|----------|-----------|
+| Host | Physical storage, institutional IT | Most privileged |
+| Trusted Runtime (VM) | EpiBridge services, `/read-only-data`, Registry | Medium |
+| Analysis Container | `/work`, `/data/{alias}`, `/output` | Least privileged |
+
+This three-layer design ensures that even a fully compromised analysis container
+cannot access unauthorised data or infrastructure configuration.
+
+⸻
+
+## Institutional Infrastructure vs. Researcher Artefacts
+
+EpiBridge makes a clear distinction between two categories of entities.
+
+### Institutional Infrastructure (curated by the institution)
+
+* **Data Resources** — registered institutional data assets. The institution
+  owns and manages the underlying data; EpiBridge provides the catalogue and
+  access control.
+* **Execution Environments** — approved runtimes in which analyses execute.
+  The institution curates the available environments and their contents.
+
+These are seeded from YAML manifests on startup. The manifest is the source of
+truth; the database is a runtime index. Researchers do not create or modify
+institutional infrastructure during normal workflows.
+
+### Researcher Artefacts (created by researchers)
+
+* **Projects** — permission boundaries for analysing specific Data Resources.
+* **Analysis Bundles** — descriptions of analyses, referencing approved
+  Data Resources and Execution Environments.
+
+Researchers work exclusively with researcher artefacts. They select from
+available institutional infrastructure but do not define it.
+
+### Why this matters
+
+This separation of concerns means:
+
+1. Researchers never need to know where data physically resides or how it is
+   mounted.
+2. Researchers never need to know which container image is used or how the
+   runtime is constructed.
+3. The institution retains full control over what data is available and what
+   execution environments are approved.
+4. Security reviews focus on the infrastructure boundary, not individual
+   analyses.
 
 ⸻
 

@@ -15,12 +15,15 @@ from app.schemas.analysis_bundle import (
     AnalysisBundleUpdate,
 )
 from app.schemas.data_resource import DataResourceRead
+from app.schemas.execution_environment import ExecutionEnvironmentRead
 from app.schemas.project import ProjectCreate, ProjectRead
 from app.services.analysis_bundle_service import (
     create_bundle,
+    get_environment_runtime,
     get_resource_identifiers,
     update_bundle,
 )
+from app.services.execution_environment_service import list_environments
 from app.services.project_service import create_project, list_projects
 
 router = APIRouter()
@@ -47,9 +50,10 @@ def _bundle_to_read(bundle: AnalysisBundle) -> AnalysisBundleRead:
         id=bundle.id,
         project_id=bundle.project_id,
         created_by_id=bundle.created_by_id,
+        execution_environment_id=bundle.execution_environment_id,
         name=bundle.name,
         status=bundle.status,
-        runtime=bundle.runtime,
+        runtime=get_environment_runtime(bundle),
         version=bundle.version,
         entrypoint=bundle.entrypoint,
         description=bundle.description,
@@ -196,3 +200,14 @@ def post_project_bundle(
 
     bundle = create_bundle(db, data.model_dump(), project_id, current_user.id)
     return _bundle_to_read(bundle)
+
+
+@router.get(
+    "/execution-environments",
+    response_model=List[ExecutionEnvironmentRead],
+)
+def get_execution_environments(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return list_environments(db, status="active")

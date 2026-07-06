@@ -7,10 +7,15 @@ from app.auth.dependencies import get_current_user
 from app.db.session import get_db
 from app.models.analysis_bundle import AnalysisBundle
 from app.models.data_resource import DataResource
+from app.models.execution_environment import ExecutionEnvironment
 from app.models.user import User
 from app.schemas.analysis_bundle import AnalysisBundleRead
 from app.schemas.data_resource import DataResourceRead
-from app.services.analysis_bundle_service import get_resource_identifiers
+from app.schemas.execution_environment import ExecutionEnvironmentRead
+from app.services.analysis_bundle_service import (
+    get_environment_runtime,
+    get_resource_identifiers,
+)
 
 router = APIRouter()
 
@@ -38,6 +43,39 @@ def get_resource(
     return resource
 
 
+@router.get(
+    "/admin/execution-environments",
+    response_model=List[ExecutionEnvironmentRead],
+)
+def list_execution_environments(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return db.query(ExecutionEnvironment).order_by(ExecutionEnvironment.name).all()
+
+
+@router.get(
+    "/admin/execution-environments/{environment_id}",
+    response_model=ExecutionEnvironmentRead,
+)
+def get_execution_environment(
+    environment_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    env = (
+        db.query(ExecutionEnvironment)
+        .filter(ExecutionEnvironment.id == environment_id)
+        .first()
+    )
+    if env is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Execution environment not found",
+        )
+    return env
+
+
 @router.get("/admin/bundles", response_model=List[AnalysisBundleRead])
 def list_bundles(
     db: Session = Depends(get_db),
@@ -50,9 +88,10 @@ def list_bundles(
             id=b.id,
             project_id=b.project_id,
             created_by_id=b.created_by_id,
+            execution_environment_id=b.execution_environment_id,
             name=b.name,
             status=b.status,
-            runtime=b.runtime,
+            runtime=get_environment_runtime(b),
             version=b.version,
             entrypoint=b.entrypoint,
             description=b.description,
@@ -82,9 +121,10 @@ def get_bundle(
         id=bundle.id,
         project_id=bundle.project_id,
         created_by_id=bundle.created_by_id,
+        execution_environment_id=bundle.execution_environment_id,
         name=bundle.name,
         status=bundle.status,
-        runtime=bundle.runtime,
+        runtime=get_environment_runtime(bundle),
         version=bundle.version,
         entrypoint=bundle.entrypoint,
         description=bundle.description,

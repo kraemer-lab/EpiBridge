@@ -35,8 +35,22 @@ The backend validates the token and maps it to an internal user.
 ### Analysis Bundles
 
 * `POST /projects/{project_id}/bundles` — create a bundle within a project
+* `GET /projects/{project_id}/bundles` — list bundles in a project
+* `GET /projects/{project_id}/bundles/{id}` — get bundle details
+* `PUT /projects/{project_id}/bundles/{id}` — update a bundle
 * `GET /admin/bundles` — list all bundles (admin)
 * `GET /admin/bundles/{id}` — get bundle details (admin)
+
+### Execution Environments
+
+* `GET /execution-environments` — list available execution environments (researcher-facing, active only)
+* `GET /admin/execution-environments` — list all execution environments (admin)
+* `GET /admin/execution-environments/{id}` — get execution environment details (admin)
+
+### Data Resources
+
+* `GET /admin/resources` — list all data resources (admin)
+* `GET /admin/resources/{id}` — get data resource details (admin)
 
 ### Administration
 

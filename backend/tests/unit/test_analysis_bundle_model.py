@@ -2,6 +2,7 @@ import uuid
 
 from app.models.analysis_bundle import AnalysisBundle, AnalysisBundleDataResource
 from app.models.data_resource import DataResource
+from app.models.execution_environment import ExecutionEnvironment
 from app.models.project import Project
 
 
@@ -9,11 +10,12 @@ class TestAnalysisBundleModel:
     def test_create_bundle(self):
         project_id = uuid.uuid4()
         user_id = uuid.uuid4()
+        ee_id = uuid.uuid4()
         bundle = AnalysisBundle(
             project_id=project_id,
             created_by_id=user_id,
+            execution_environment_id=ee_id,
             name="Survival Analysis",
-            runtime="python-3.13",
             version="1.0.0",
             entrypoint="run.py",
             description="A survival analysis on UK Biobank data",
@@ -21,7 +23,7 @@ class TestAnalysisBundleModel:
             parameters={"threshold": 0.05},
         )
         assert bundle.name == "Survival Analysis"
-        assert bundle.runtime == "python-3.13"
+        assert bundle.execution_environment_id == ee_id
         assert bundle.version == "1.0.0"
         assert bundle.entrypoint == "run.py"
         assert bundle.description == "A survival analysis on UK Biobank data"
@@ -32,8 +34,8 @@ class TestAnalysisBundleModel:
         bundle = AnalysisBundle(
             project_id=uuid.uuid4(),
             created_by_id=uuid.uuid4(),
+            execution_environment_id=uuid.uuid4(),
             name="Minimal",
-            runtime="python-3.13",
             version="1.0.0",
             entrypoint="run.py",
             outputs=[],
@@ -42,12 +44,30 @@ class TestAnalysisBundleModel:
         assert bundle.outputs == []
         assert bundle.parameters == {}
 
+    def test_execution_environment_association(self):
+        env = ExecutionEnvironment(
+            identifier="python-3.13-scientific",
+            name="Python 3.13 Scientific",
+            runtime="python-3.13",
+        )
+        bundle = AnalysisBundle(
+            project_id=uuid.uuid4(),
+            created_by_id=uuid.uuid4(),
+            execution_environment_id=env.id or uuid.uuid4(),
+            name="Test Bundle",
+            version="1.0.0",
+            entrypoint="run.py",
+        )
+        bundle.execution_environment = env
+        assert bundle.execution_environment.name == "Python 3.13 Scientific"
+        assert bundle.execution_environment.runtime == "python-3.13"
+
     def test_data_resource_association(self):
         bundle = AnalysisBundle(
             project_id=uuid.uuid4(),
             created_by_id=uuid.uuid4(),
+            execution_environment_id=uuid.uuid4(),
             name="Test Bundle",
-            runtime="python-3.13",
             version="1.0.0",
             entrypoint="run.py",
         )
@@ -65,8 +85,8 @@ class TestAnalysisBundleModel:
         bundle = AnalysisBundle(
             project_id=uuid.uuid4(),
             created_by_id=uuid.uuid4(),
+            execution_environment_id=uuid.uuid4(),
             name="Multi Resource Bundle",
-            runtime="python-3.13",
             version="1.0.0",
             entrypoint="run.py",
         )
@@ -91,8 +111,8 @@ class TestAnalysisBundleModel:
         bundle = AnalysisBundle(
             project_id=uuid.uuid4(),
             created_by_id=uuid.uuid4(),
+            execution_environment_id=uuid.uuid4(),
             name="Project Bundle",
-            runtime="python-3.13",
             version="1.0.0",
             entrypoint="run.py",
         )

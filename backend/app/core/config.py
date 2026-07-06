@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     auto_create_schema: bool = True
     auto_register_resources: bool = True
     resource_manifest_dir: str = ""
+    auto_register_environments: bool = True
+    environment_manifest_dir: str = ""
 
     @property
     def database_url(self) -> str:

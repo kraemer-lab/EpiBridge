@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 class AnalysisBundleCreate(BaseModel):
     name: str
-    runtime: str
+    execution_environment_id: uuid.UUID
     version: str
     entrypoint: str
     description: str = ""
@@ -20,6 +20,7 @@ class AnalysisBundleRead(BaseModel):
     id: uuid.UUID
     project_id: uuid.UUID
     created_by_id: uuid.UUID
+    execution_environment_id: uuid.UUID
     name: str
     status: str
     runtime: str
@@ -37,7 +38,7 @@ class AnalysisBundleRead(BaseModel):
 
 class AnalysisBundleUpdate(BaseModel):
     name: str | None = None
-    runtime: str | None = None
+    execution_environment_id: uuid.UUID | None = None
     version: str | None = None
     entrypoint: str | None = None
     description: str | None = None

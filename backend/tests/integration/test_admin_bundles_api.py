@@ -4,6 +4,7 @@ import pytest
 
 from app.core.config import settings
 from app.models.data_resource import DataResource
+from app.models.execution_environment import ExecutionEnvironment
 from app.models.project import Project
 from app.models.user import User, UserRole
 
@@ -47,16 +48,33 @@ def resource(db_session):
     return r
 
 
+@pytest.fixture
+def execution_environment(db_session):
+    env = ExecutionEnvironment(
+        identifier="python-3.13-scientific",
+        name="Python 3.13 Scientific",
+        runtime="python-3.13",
+        description="Test environment",
+        status="active",
+    )
+    db_session.add(env)
+    db_session.commit()
+    db_session.refresh(env)
+    return env
+
+
 class TestAdminBundlesAPI:
     def test_list_bundles_empty(self, client, admin_user):
         response = client.get("/api/admin/bundles")
         assert response.status_code == 200
         assert response.json() == []
 
-    def test_list_bundles(self, client, admin_user, project, resource):
+    def test_list_bundles(
+        self, client, admin_user, project, resource, execution_environment
+    ):
         payload = {
             "name": "Survival Analysis",
-            "runtime": "python-3.13",
+            "execution_environment_id": str(execution_environment.id),
             "version": "1.0.0",
             "entrypoint": "run.py",
             "description": "A test",
@@ -75,15 +93,18 @@ class TestAdminBundlesAPI:
         assert len(data) == 1
         assert data[0]["name"] == "Survival Analysis"
         assert data[0]["runtime"] == "python-3.13"
+        assert data[0]["execution_environment_id"] == str(execution_environment.id)
         assert data[0]["version"] == "1.0.0"
         assert data[0]["entrypoint"] == "run.py"
         assert data[0]["resource_identifiers"] == ["test-resource"]
         assert data[0]["outputs"] == ["summary.csv"]
 
-    def test_get_bundle_by_id(self, client, admin_user, project, resource):
+    def test_get_bundle_by_id(
+        self, client, admin_user, project, resource, execution_environment
+    ):
         create_payload = {
             "name": "My Bundle",
-            "runtime": "r-4.5",
+            "execution_environment_id": str(execution_environment.id),
             "version": "2.0.0",
             "entrypoint": "analysis.R",
             "resource_identifiers": [],
@@ -99,7 +120,7 @@ class TestAdminBundlesAPI:
         assert response.status_code == 200
         data = response.json()
         assert data["name"] == "My Bundle"
-        assert data["runtime"] == "r-4.5"
+        assert data["runtime"] == "python-3.13"
         assert data["version"] == "2.0.0"
         assert data["entrypoint"] == "analysis.R"
 
@@ -108,13 +129,15 @@ class TestAdminBundlesAPI:
         response = client.get(url)
         assert response.status_code == 404
 
-    def test_list_bundles_ordered_by_name(self, client, admin_user, project, resource):
+    def test_list_bundles_ordered_by_name(
+        self, client, admin_user, project, resource, execution_environment
+    ):
         for name in ["Zeta", "Alpha", "Beta"]:
             client.post(
                 f"/api/projects/{project.id}/bundles",
                 json={
                     "name": name,
-                    "runtime": "python-3.13",
+                    "execution_environment_id": str(execution_environment.id),
                     "version": "1.0.0",
                     "entrypoint": "run.py",
                 },
@@ -126,7 +149,7 @@ class TestAdminBundlesAPI:
         assert names == sorted(names)
 
     def test_get_bundle_includes_resource_identifiers(
-        self, client, admin_user, project, db_session
+        self, client, admin_user, project, execution_environment, db_session
     ):
         r2 = DataResource(
             identifier="second-resource",
@@ -142,7 +165,7 @@ class TestAdminBundlesAPI:
 
         payload = {
             "name": "Multi Resource Bundle",
-            "runtime": "python-3.13",
+            "execution_environment_id": str(execution_environment.id),
             "version": "1.0.0",
             "entrypoint": "run.py",
             "resource_identifiers": ["test-resource", "second-resource"],

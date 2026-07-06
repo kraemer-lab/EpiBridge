@@ -7,13 +7,16 @@ from app.services.analysis_bundle_service import (
     create_bundle,
     update_bundle,
     validate_entrypoint,
+    validate_execution_environment,
     validate_manifest,
     validate_resources,
 )
 
+EE_ID = uuid.uuid4()
+
 VALID_MANIFEST = {
     "name": "Survival Analysis",
-    "runtime": "python-3.13",
+    "execution_environment_id": EE_ID,
     "version": "1.0.0",
     "entrypoint": "run.py",
     "description": "A test analysis",
@@ -30,13 +33,15 @@ class TestValidateManifest:
 
     def test_missing_required_field(self):
         data = VALID_MANIFEST.copy()
-        del data["runtime"]
-        with pytest.raises(ValueError, match="runtime"):
+        del data["execution_environment_id"]
+        with pytest.raises(ValueError, match="execution_environment_id"):
             validate_manifest(data)
 
     def test_missing_multiple_fields(self):
         data = {"name": "Foo"}
-        with pytest.raises(ValueError, match="entrypoint, runtime, version"):
+        with pytest.raises(
+            ValueError, match="entrypoint, execution_environment_id, version"
+        ):
             validate_manifest(data)
 
     def test_empty_name(self):
@@ -45,16 +50,22 @@ class TestValidateManifest:
         with pytest.raises(ValueError, match="name"):
             validate_manifest(data)
 
-    def test_empty_runtime(self):
+    def test_empty_version(self):
         data = VALID_MANIFEST.copy()
-        data["runtime"] = "   "
-        with pytest.raises(ValueError, match="runtime"):
+        data["version"] = "   "
+        with pytest.raises(ValueError, match="version"):
             validate_manifest(data)
 
     def test_empty_entrypoint(self):
         data = VALID_MANIFEST.copy()
         data["entrypoint"] = ""
         with pytest.raises(ValueError, match="entrypoint"):
+            validate_manifest(data)
+
+    def test_invalid_execution_environment_id(self):
+        data = VALID_MANIFEST.copy()
+        data["execution_environment_id"] = "not-a-uuid"
+        with pytest.raises(ValueError, match="execution_environment_id.*UUID"):
             validate_manifest(data)
 
     def test_resources_not_a_list(self):
@@ -78,7 +89,7 @@ class TestValidateManifest:
     def test_optional_fields_default(self):
         data = {
             "name": "Minimal",
-            "runtime": "python-3.13",
+            "execution_environment_id": EE_ID,
             "version": "1.0.0",
             "entrypoint": "run.py",
         }
@@ -138,9 +149,30 @@ class TestValidateResources:
             validate_resources(["nonexistent-resource"], db)
 
 
+class TestValidateExecutionEnvironment:
+    def test_environment_found(self):
+        db = MagicMock()
+        env = MagicMock()
+        env.id = uuid.uuid4()
+        db.query.return_value.filter.return_value.first.return_value = env
+
+        result = validate_execution_environment(EE_ID, db)
+        assert result is env
+
+    def test_environment_not_found(self):
+        db = MagicMock()
+        db.query.return_value.filter.return_value.first.return_value = None
+
+        with pytest.raises(ValueError, match="Execution environment not found"):
+            validate_execution_environment(uuid.uuid4(), db)
+
+
 class TestCreateBundle:
     @patch("app.services.analysis_bundle_service.validate_resources")
-    def test_creates_bundle_successfully(self, mock_validate_resources):
+    @patch("app.services.analysis_bundle_service.validate_execution_environment")
+    def test_creates_bundle_successfully(
+        self, mock_validate_ee, mock_validate_resources
+    ):
         db = MagicMock()
         project_id = uuid.uuid4()
         user_id = uuid.uuid4()
@@ -149,6 +181,7 @@ class TestCreateBundle:
         resource.id = uuid.uuid4()
         resource.identifier = "ukbb-phenotypes"
         mock_validate_resources.return_value = [resource]
+        mock_validate_ee.return_value = MagicMock()
 
         result = create_bundle(
             db,
@@ -159,8 +192,8 @@ class TestCreateBundle:
 
         assert result.project_id == project_id
         assert result.created_by_id == user_id
+        assert result.execution_environment_id == EE_ID
         assert result.name == "Survival Analysis"
-        assert result.runtime == "python-3.13"
         assert result.version == "1.0.0"
         assert result.entrypoint == "run.py"
         assert result.outputs == ["summary.csv"]
@@ -169,9 +202,13 @@ class TestCreateBundle:
         db.commit.assert_called_once()
 
     @patch("app.services.analysis_bundle_service.validate_resources")
-    def test_no_resources_creates_bundle(self, mock_validate_resources):
+    @patch("app.services.analysis_bundle_service.validate_execution_environment")
+    def test_no_resources_creates_bundle(
+        self, mock_validate_ee, mock_validate_resources
+    ):
         db = MagicMock()
         mock_validate_resources.return_value = []
+        mock_validate_ee.return_value = MagicMock()
 
         data = VALID_MANIFEST.copy()
         data["resource_identifiers"] = []
@@ -184,7 +221,7 @@ class TestCreateBundle:
     def test_invalid_manifest_raises(self, mock_validate_resources):
         db = MagicMock()
         data = {"name": "Incomplete"}
-        with pytest.raises(ValueError, match="runtime"):
+        with pytest.raises(ValueError, match="execution_environment_id"):
             create_bundle(db, data, uuid.uuid4(), uuid.uuid4())
         db.commit.assert_not_called()
 
@@ -201,16 +238,19 @@ class TestUpdateBundle:
         assert bundle.name == "New Name"
         db.commit.assert_called_once()
 
-    def test_update_all_fields(self):
+    @patch("app.services.analysis_bundle_service.validate_execution_environment")
+    def test_update_all_fields(self, mock_validate_ee):
         db = MagicMock()
         bundle = MagicMock()
         bundle.id = uuid.uuid4()
         bundle.data_resources = []
         db.query.return_value.filter.return_value.first.return_value = bundle
+        mock_validate_ee.return_value = MagicMock()
 
+        new_ee_id = uuid.uuid4()
         data = {
             "name": "Updated",
-            "runtime": "r-4.5",
+            "execution_environment_id": new_ee_id,
             "version": "2.0.0",
             "entrypoint": "analysis.R",
             "description": "Updated description",
@@ -221,7 +261,7 @@ class TestUpdateBundle:
         update_bundle(db, bundle.id, data)
 
         assert bundle.name == "Updated"
-        assert bundle.runtime == "r-4.5"
+        assert bundle.execution_environment_id == new_ee_id
         assert bundle.version == "2.0.0"
         assert bundle.entrypoint == "analysis.R"
         assert bundle.description == "Updated description"

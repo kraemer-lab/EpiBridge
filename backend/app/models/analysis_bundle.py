@@ -11,6 +11,7 @@ from app.db.base import Base
 
 if TYPE_CHECKING:
     from app.models.data_resource import DataResource
+    from app.models.execution_environment import ExecutionEnvironment
     from app.models.project import Project
     from app.models.user import User
 
@@ -27,9 +28,13 @@ class AnalysisBundle(Base):
     created_by_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
     )
+    execution_environment_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("execution_environments.id"),
+        nullable=False,
+    )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="draft")
-    runtime: Mapped[str] = mapped_column(String(50), nullable=False)
     version: Mapped[str] = mapped_column(String(50), nullable=False)
     entrypoint: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False, default="")
@@ -44,6 +49,7 @@ class AnalysisBundle(Base):
 
     project: Mapped["Project"] = relationship(backref="analysis_bundles")
     created_by: Mapped["User"] = relationship(backref="created_bundles")
+    execution_environment: Mapped["ExecutionEnvironment"] = relationship()
 
     data_resources: Mapped[list["DataResource"]] = relationship(
         secondary="analysis_bundle_data_resources",
