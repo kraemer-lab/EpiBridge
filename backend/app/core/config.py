@@ -21,6 +21,8 @@ class Settings(BaseSettings):
 
     domain: str = "localhost"
     admin_email: str = "admin@epibridge.local"
+    dev_auth: bool = True
+    auto_create_schema: bool = True
 
     @property
     def database_url(self) -> str:

@@ -89,10 +89,6 @@ until docker compose -f "$COMPOSE_FILE" exec -T postgres pg_isready -U epibridge
 done
 echo "PostgreSQL is ready."
 
-# Run migrations
-echo "Running database migrations..."
-docker compose -f "$COMPOSE_FILE" exec -T backend alembic upgrade head
-
 # Seed admin account
 echo "Seeding administrator account..."
 docker compose -f "$COMPOSE_FILE" exec -T backend python -m app.cli seed-admin

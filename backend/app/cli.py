@@ -1,17 +1,19 @@
 import sys
 
+from app.db.session import SessionLocal
+from app.services.user_service import get_or_create_admin
+
 
 def seed_admin():
+    db = SessionLocal()
     try:
-        from app.core.config import settings
+        user = get_or_create_admin(db)
+        print(f"seed-admin: Created/verified admin user: {user.email} (id={user.id})")
     except Exception as e:
-        print(f"seed-admin: ERROR — could not load config: {e}")
-        print("seed-admin: Ensure .env exists in the project root.")
+        print(f"seed-admin: ERROR — {e}")
         sys.exit(1)
-
-    print(f"seed-admin: ADMIN_EMAIL={settings.admin_email}")
-    print("seed-admin: SKIP — User model not yet implemented")
-    sys.exit(0)
+    finally:
+        db.close()
 
 
 def main():

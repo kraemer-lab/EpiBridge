@@ -5,6 +5,7 @@ import os
 os.environ.setdefault("POSTGRES_PASSWORD", "test-pw")
 os.environ.setdefault("REDIS_PASSWORD", "test-redis")
 os.environ.setdefault("SECRET_KEY", "test-key")
+os.environ.setdefault("DEV_AUTH", "true")
 
 import pytest
 from fastapi.testclient import TestClient

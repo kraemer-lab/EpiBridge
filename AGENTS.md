@@ -55,6 +55,20 @@ Single monorepo. Do not add top-level directories without justification.
 - Firebase Auth for auth, internal PostgreSQL for authorisation
 - Audit trail required for all actions
 
+### Temporary development policy (domain model iteration phase)
+
+While the core domain schema is still being discovered (Projects, Jobs, Outputs, etc.):
+
+- **SQLAlchemy models are the source of truth** for the database schema.
+- **No Alembic migrations are maintained.** Migration files are not generated or committed.
+- **Schema is auto-created** on backend startup via `Base.metadata.create_all()` when `AUTO_CREATE_SCHEMA=true` (default).
+- **Development databases are disposable.** Drop and recreate freely.
+
+Once the core schema stabilises, Alembic will be reintroduced as a dedicated milestone:
+- A single initial migration will be generated from the stable schema.
+- All future schema changes will use Alembic migrations.
+- `AUTO_CREATE_SCHEMA` will be set to `false` in production-like environments.
+
 ### Developer commands
 
 The standard development workflow:
@@ -69,8 +83,7 @@ make test         # run tests
 
 **Backend** (from `backend/`):
 - `pip install -e ".[dev]"` — install dependencies (including dev tools)
-- `uvicorn app.main:app --reload` — dev server
-- `alembic upgrade head` — run migrations
+- `uvicorn app.main:app --reload` — dev server (auto-creates schema on startup)
 - `python -m app.cli seed-admin` — seed admin user
 
 **Infrastructure** (from repo root):

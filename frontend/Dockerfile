@@ -1,4 +1,20 @@
-FROM nginx:alpine
+FROM node:20-alpine AS deps
+WORKDIR /app
+COPY package.json ./
+RUN npm install
 
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-COPY public/ /usr/share/nginx/html
+FROM node:20-alpine AS build
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+RUN npm run build
+
+FROM node:20-alpine AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+COPY --from=build /app/.next/standalone ./
+COPY --from=build /app/.next/static ./.next/static
+COPY --from=build /app/public ./public
+EXPOSE 3000
+CMD ["node", "server.js"]
