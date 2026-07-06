@@ -13,6 +13,7 @@ from app.schemas.analysis_bundle import AnalysisBundleRead
 from app.schemas.data_resource import DataResourceRead
 from app.schemas.execution_environment import ExecutionEnvironmentRead
 from app.schemas.execution_request import ExecutionRequestRead
+from app.schemas.output import OutputRead
 from app.services.analysis_bundle_service import (
     get_environment_runtime,
     get_resource_identifiers,
@@ -22,6 +23,7 @@ from app.services.execution_request_service import (
     list_execution_requests,
     request_to_read,
 )
+from app.services.output_service import list_outputs
 
 router = APIRouter()
 
@@ -96,6 +98,7 @@ def list_bundles(
             created_by_id=b.created_by_id,
             execution_environment_id=b.execution_environment_id,
             name=b.name,
+            source_path=b.source_path,
             status=b.status,
             runtime=get_environment_runtime(b),
             version=b.version,
@@ -129,6 +132,7 @@ def get_bundle(
         created_by_id=bundle.created_by_id,
         execution_environment_id=bundle.execution_environment_id,
         name=bundle.name,
+        source_path=bundle.source_path,
         status=bundle.status,
         runtime=get_environment_runtime(bundle),
         version=bundle.version,
@@ -167,3 +171,21 @@ def get_admin_execution_request(
             detail="Execution request not found",
         )
     return request_to_read(request)
+
+
+@router.get(
+    "/admin/execution-requests/{request_id}/outputs",
+    response_model=List[OutputRead],
+)
+def list_admin_execution_request_outputs(
+    request_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    request = get_execution_request(db, request_id)
+    if request is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Execution request not found",
+        )
+    return list_outputs(db, request.id)

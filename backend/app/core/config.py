@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     resource_manifest_dir: str = ""
     auto_register_environments: bool = True
     environment_manifest_dir: str = ""
+    output_dir: str = "/tmp/epibridge-outputs"
+    analysis_bundle_root: str = ""
+    data_root: str = "/read-only-data"
 
     @property
     def database_url(self) -> str:

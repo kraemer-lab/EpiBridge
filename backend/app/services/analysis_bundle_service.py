@@ -23,6 +23,9 @@ def validate_manifest(data: dict) -> dict:
     if not isinstance(data.get("name"), str) or not data["name"].strip():
         raise ValueError("'name' must be a non-empty string")
 
+    if "source_path" in data and not isinstance(data["source_path"], str):
+        raise ValueError("'source_path' must be a string")
+
     ee_id = data.get("execution_environment_id")
     if isinstance(ee_id, str):
         try:
@@ -116,6 +119,7 @@ def create_bundle(
         name=data["name"],
         version=data["version"],
         entrypoint=data["entrypoint"],
+        source_path=data.get("source_path", ""),
         description=data.get("description", ""),
         outputs=data.get("outputs", []),
         parameters=data.get("parameters", {}),
@@ -185,6 +189,11 @@ def update_bundle(db: Session, bundle_id: uuid.UUID, data: dict) -> AnalysisBund
             raise ValueError("'entrypoint' must be a non-empty string")
         validate_entrypoint(update_data["entrypoint"])
         bundle.entrypoint = update_data["entrypoint"]
+
+    if "source_path" in update_data:
+        if not isinstance(update_data["source_path"], str):
+            raise ValueError("'source_path' must be a string")
+        bundle.source_path = update_data["source_path"]
 
     if "description" in update_data:
         bundle.description = update_data["description"]

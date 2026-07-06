@@ -9,6 +9,7 @@ class AnalysisBundleCreate(BaseModel):
     execution_environment_id: uuid.UUID
     version: str
     entrypoint: str
+    source_path: str = ""
     description: str = ""
     resource_identifiers: list[str] = []
     outputs: list[str] = []
@@ -22,6 +23,7 @@ class AnalysisBundleRead(BaseModel):
     created_by_id: uuid.UUID
     execution_environment_id: uuid.UUID
     name: str
+    source_path: str
     status: str
     runtime: str
     version: str
@@ -41,6 +43,7 @@ class AnalysisBundleUpdate(BaseModel):
     execution_environment_id: uuid.UUID | None = None
     version: str | None = None
     entrypoint: str | None = None
+    source_path: str | None = None
     description: str | None = None
     resource_identifiers: list[str] | None = None
     outputs: list[str] | None = None

@@ -3,6 +3,7 @@ from app.models.analysis_bundle import AnalysisBundle, AnalysisBundleDataResourc
 from app.models.data_resource import DataResource
 from app.models.execution_environment import ExecutionEnvironment
 from app.models.execution_request import ExecutionRequest, ExecutionRequestStatus
+from app.models.output import Output
 from app.models.project import Project
 from app.models.project_data_resource import ProjectDataResource
 from app.models.user import User, UserRole
@@ -15,6 +16,7 @@ __all__ = [
     "ExecutionEnvironment",
     "ExecutionRequest",
     "ExecutionRequestStatus",
+    "Output",
     "Project",
     "ProjectDataResource",
     "User",

@@ -20,6 +20,7 @@ from app.schemas.execution_request import (
     ExecutionRequestCreate,
     ExecutionRequestRead,
 )
+from app.schemas.output import OutputRead
 from app.schemas.project import ProjectCreate, ProjectRead
 from app.services.analysis_bundle_service import (
     create_bundle,
@@ -33,6 +34,11 @@ from app.services.execution_request_service import (
     get_execution_request,
     list_execution_requests,
     request_to_read,
+)
+from app.services.output_service import (
+    get_output,
+    list_outputs,
+    stream_output,
 )
 from app.services.project_service import create_project, list_projects
 
@@ -62,6 +68,7 @@ def _bundle_to_read(bundle: AnalysisBundle) -> AnalysisBundleRead:
         created_by_id=bundle.created_by_id,
         execution_environment_id=bundle.execution_environment_id,
         name=bundle.name,
+        source_path=bundle.source_path,
         status=bundle.status,
         runtime=get_environment_runtime(bundle),
         version=bundle.version,
@@ -268,6 +275,79 @@ def get_project_execution_request(
             detail="Execution request not found",
         )
     return request_to_read(request)
+
+
+@router.get(
+    "/projects/{project_id}/execution-requests/{request_id}/outputs",
+    response_model=List[OutputRead],
+)
+def get_execution_request_outputs(
+    project_id: uuid.UUID,
+    request_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _get_owned_project(db, project_id, current_user.id)
+    request = get_execution_request(db, request_id)
+    if request is None or request.project_id != project_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Execution request not found",
+        )
+    return list_outputs(db, request_id)
+
+
+@router.get(
+    "/projects/{project_id}/execution-requests/{request_id}/outputs/{output_id}",
+    response_model=OutputRead,
+)
+def get_execution_request_output(
+    project_id: uuid.UUID,
+    request_id: uuid.UUID,
+    output_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _get_owned_project(db, project_id, current_user.id)
+    request = get_execution_request(db, request_id)
+    if request is None or request.project_id != project_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Execution request not found",
+        )
+    output = get_output(db, output_id)
+    if output is None or output.execution_request_id != request_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Output not found",
+        )
+    return output
+
+
+@router.get(
+    "/projects/{project_id}/execution-requests/{request_id}/outputs/{output_id}/download",
+)
+def download_execution_request_output(
+    project_id: uuid.UUID,
+    request_id: uuid.UUID,
+    output_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _get_owned_project(db, project_id, current_user.id)
+    request = get_execution_request(db, request_id)
+    if request is None or request.project_id != project_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Execution request not found",
+        )
+    output = get_output(db, output_id)
+    if output is None or output.execution_request_id != request_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Output not found",
+        )
+    return stream_output(request_id, output.filename)
 
 
 @router.get(

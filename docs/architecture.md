@@ -75,34 +75,43 @@ The platform itself never executes user code.
 
 Instead:
 
-User submits job
+```
+Researcher creates Execution Request (Pending)
         │
         ▼
-Worker service
+Worker polls Pending → Running
         │
         ▼
-Launch ephemeral Docker container
+DockerExecutor launches ephemeral container
+        │
+        ├── /analysis  (analysis bundle, via put_archive)
+        ├── /data      (authorised resources, read-only bind mounts)
+        ├── /work      (temporary writable storage)
+        └── /output    (writable, shared volume)
         │
         ▼
-Container reads dataset
+Container executes analysis
         │
         ▼
-Produces outputs
+Worker captures outputs
         │
         ▼
 Container destroyed
+        │
+        ▼
+Worker registers Output records
+        │
+        ▼
+Request → Completed or Failed
+```
 
-Each analysis executes inside an isolated container.
-
-Container security should include:
+Each analysis executes inside an isolated container with:
 
 * no internet access
 * non-root user
-* read-only dataset mount
+* read-only dataset mounts
 * temporary writable workspace
-* CPU limits
-* memory limits
-* execution timeout
+* configurable execution timeout (default 3600s, minimum 60s)
 * automatic cleanup after completion
 
 ⸻
@@ -569,7 +578,7 @@ relationships. This keeps a single source of truth.
 ```
 Pending
   ↓
-Running   ←── (future milestone — worker)
+Running   ←── (worker poll)
   ↓
 Completed
    or
@@ -577,9 +586,6 @@ Failed
    or
 Cancelled
 ```
-
-Only `Pending` is implemented in this milestone. The remaining transitions
-will be introduced with the worker.
 
 ### Relationship Diagram
 
@@ -591,12 +597,127 @@ Project
     │                              │
     └── ExecutionRequest ──────────┘
               │
-              └── (future: Job → Outputs)
+              ├── Outputs
+              │
+              └── (future: Jobs)
 ```
 
 The bundle provides the executable description; the Execution Request
 provides the execution intent (which bundle, which timeout, which
 parameter overrides).
+
+⸻
+
+## Outputs
+
+An **Output** represents a file produced by an execution. Outputs are
+registered by the worker after a successful execution.
+
+### Output Model
+
+```
+Output
+├── id                      (UUID, auto-generated)
+├── execution_request_id    (FK → ExecutionRequest)
+├── filename                ("summary.csv")
+├── size                    (bytes)
+├── status                  ("available")
+└── created_at
+```
+
+Outputs are immediately available for download. Approval workflows
+will be added in a future milestone.
+
+### Storage
+
+Output files are written to a shared filesystem volume:
+
+```
+/outputs/{execution_request_id}/{filename}
+```
+
+The backend serves files from this volume via the download endpoint.
+No data resource access is involved — outputs are result artefacts.
+
+⸻
+
+## Worker
+
+The **Worker** is a standalone service that polls for Pending Execution
+Requests and processes them sequentially. It is responsible for:
+
+1. Finding Pending Execution Requests
+2. Transitioning them to Running
+3. Resolving the Analysis Bundle and Execution Environment
+4. Constructing the execution container
+5. Executing the analysis
+6. Capturing outputs
+7. Registering Output records
+8. Transitioning to Completed or Failed
+
+### Worker Architecture
+
+```
+Worker
+  │
+  ├── Poll: db → Pending ExecutionRequest
+  │
+  ├── Resolve: bundle → analysis_dir, entrypoint, data_resources, env
+  │
+  ├── For each DataResource:
+  │     provider.prepare_runtime(endpoint) → Mount + env vars
+  │     combine with resource alias → /data/{alias}
+  │
+  ├── Create container (network_disabled, non-root, no-host-paths)
+  │     put_archive(analysis_dir → /analysis)
+  │     bind mounts for data resources
+  │     bind mount for /output
+  │
+  ├── Run with timeout
+  │     ↓
+  ├── Success: enumerate /output → register Output records → Completed
+  │
+  └── Failure: capture stderr → Failed
+```
+
+### Executor Abstraction
+
+The Worker delegates container management to an Executor interface:
+
+```
+Worker
+  └── Executor (interface)
+        └── run(image, analysis_dir, entrypoint, mounts, output_dir, timeout, env) → Result
+
+Implementation:
+  └── DockerExecutor (docker-py)
+        ├── put_archive for analysis files
+        ├── bind mounts for data resources
+        ├── network_disabled
+        ├── non-root user
+        └── timeout enforcement
+```
+
+The executor is domain-agnostic. It knows nothing about bundles,
+resources, or environments — it only knows how to run a container.
+
+### Analysis Delivery
+
+Analysis Bundle files are delivered into the container via Docker's
+`put_archive` API. The worker copies the bundle's source directory
+(identified by `source_path` on the bundle) into `/analysis` inside
+the container. This avoids host-path bind mount issues and keeps
+the abstraction clean.
+
+### Data Delivery
+
+Data Resources continue to use the existing Provider abstraction.
+The worker calls `provider.prepare_runtime(endpoint)` for each
+resource to obtain mount configurations and environment variables.
+These are passed to the Executor as bind mounts.
+
+This preserves the security boundary: the container never receives
+access to `/read-only-data` — only the specific authorised resources.
 
 ⸻
 

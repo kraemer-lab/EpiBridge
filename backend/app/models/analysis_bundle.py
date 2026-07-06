@@ -34,6 +34,7 @@ class AnalysisBundle(Base):
         nullable=False,
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    source_path: Mapped[str] = mapped_column(Text, nullable=False, default="")
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="draft")
     version: Mapped[str] = mapped_column(String(50), nullable=False)
     entrypoint: Mapped[str] = mapped_column(String(255), nullable=False)

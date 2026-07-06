@@ -21,16 +21,20 @@ The backend validates the token and maps it to an internal user.
 * Project details
 * Members
 
-### Jobs
+### Execution Requests
 
-* Submit analysis
-* View status
-* View logs
+* `POST /projects/{project_id}/execution-requests` — create an execution request
+* `GET /projects/{project_id}/execution-requests` — list execution requests in a project
+* `GET /projects/{project_id}/execution-requests/{id}` — get execution request details
+* `GET /admin/execution-requests` — list all execution requests (admin)
+* `GET /admin/execution-requests/{id}` — get execution request details (admin)
 
 ### Outputs
 
-* List outputs
-* Download approved outputs
+* `GET /projects/{project_id}/execution-requests/{id}/outputs` — list outputs for an execution request
+* `GET /projects/{project_id}/execution-requests/{id}/outputs/{output_id}` — get output metadata
+* `GET /projects/{project_id}/execution-requests/{id}/outputs/{output_id}/download` — download output file
+* `GET /admin/execution-requests/{id}/outputs` — list outputs for an execution request (admin)
 
 ### Analysis Bundles
 
