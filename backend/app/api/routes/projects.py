@@ -16,6 +16,10 @@ from app.schemas.analysis_bundle import (
 )
 from app.schemas.data_resource import DataResourceRead
 from app.schemas.execution_environment import ExecutionEnvironmentRead
+from app.schemas.execution_request import (
+    ExecutionRequestCreate,
+    ExecutionRequestRead,
+)
 from app.schemas.project import ProjectCreate, ProjectRead
 from app.services.analysis_bundle_service import (
     create_bundle,
@@ -24,6 +28,12 @@ from app.services.analysis_bundle_service import (
     update_bundle,
 )
 from app.services.execution_environment_service import list_environments
+from app.services.execution_request_service import (
+    create_execution_request,
+    get_execution_request,
+    list_execution_requests,
+    request_to_read,
+)
 from app.services.project_service import create_project, list_projects
 
 router = APIRouter()
@@ -200,6 +210,64 @@ def post_project_bundle(
 
     bundle = create_bundle(db, data.model_dump(), project_id, current_user.id)
     return _bundle_to_read(bundle)
+
+
+@router.post(
+    "/projects/{project_id}/execution-requests",
+    response_model=ExecutionRequestRead,
+    status_code=201,
+)
+def post_execution_request(
+    project_id: uuid.UUID,
+    data: ExecutionRequestCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _get_owned_project(db, project_id, current_user.id)
+    try:
+        request = create_execution_request(
+            db, data.model_dump(), project_id, current_user.id
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e),
+        )
+    return request_to_read(request)
+
+
+@router.get(
+    "/projects/{project_id}/execution-requests",
+    response_model=List[ExecutionRequestRead],
+)
+def get_project_execution_requests(
+    project_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _get_owned_project(db, project_id, current_user.id)
+    requests = list_execution_requests(db, project_id=project_id)
+    return [request_to_read(r) for r in requests]
+
+
+@router.get(
+    "/projects/{project_id}/execution-requests/{request_id}",
+    response_model=ExecutionRequestRead,
+)
+def get_project_execution_request(
+    project_id: uuid.UUID,
+    request_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _get_owned_project(db, project_id, current_user.id)
+    request = get_execution_request(db, request_id)
+    if request is None or request.project_id != project_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Execution request not found",
+        )
+    return request_to_read(request)
 
 
 @router.get(

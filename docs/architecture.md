@@ -495,25 +495,108 @@ At bundle creation time, the service validates that all declared resources
 exist in the system. This gives referential integrity and provides a natural
 place to extend access permissions in the future.
 
-### Relationship to future Jobs
+### Relationship to Execution Requests
 
-Jobs (next milestone) will bind an Analysis Bundle to a specific execution
-request against authorised Data Resources. The relationship will be:
+The Analysis Bundle is referenced by Execution Requests. An Execution Request
+represents the intent to run a specific bundle. Multiple requests may reference
+the same bundle (e.g., different parameter overrides or repeated runs).
 
 ```
 Project
-    ↓
-AnalysisBundle        DataResource
-    ↓                       ↓
-    └── Job ────────────────┘
-          ↓
-        Execution
-          ↓
-        Outputs
+    ├── AnalysisBundle ──── ExecutionEnvironment
+    │                           │
+    └── ExecutionRequest ───────┘
+              │
+              └── (future: Job → Outputs)
 ```
 
-The bundle provides the executable description; the Job provides the
-execution context (which resources, which parameters, which user).
+The bundle provides the executable description; the Execution Request
+captures when and how to run it.
+
+⸻
+
+## Execution Requests
+
+An **Execution Request** is the researcher-facing object representing the
+intention to run an analysis. It is created within a Project by selecting
+an existing Analysis Bundle.
+
+The Execution Request is a **researcher artefact**, not an infrastructure
+object. It is created by researchers and visible in the Project Workspace.
+
+### Distinction from Analysis Bundles
+
+| Concept | Role |
+|---------|------|
+| Analysis Bundle | *What* to run — the analysis description, script, and declared data needs |
+| Execution Request | *When* to run — an intent to execute a specific bundle with specific parameters |
+
+A single Analysis Bundle may be used to create many Execution Requests
+(e.g., "Baseline run", "Sensitivity analysis", "Bootstrap 1000").
+
+### Distinction from Jobs
+
+| Concept | Role |
+|---------|------|
+| Execution Request | User-facing. Created by researchers. Tracks the intention to execute. |
+| Job | Internal execution object. Created by the worker. Not visible to researchers directly. |
+
+Jobs will be introduced in a future milestone. The worker consumes Pending
+Execution Requests and transitions them through the execution lifecycle.
+
+### Request Model
+
+```
+ExecutionRequest
+├── id                      (UUID, auto-generated)
+├── project_id              (FK → Project)
+├── analysis_bundle_id      (FK → AnalysisBundle)
+├── name                    ("Baseline run", human-readable label)
+├── timeout_seconds         (default 3600, minimum 60)
+├── parameter_overrides     (JSON dict, reserved for future parameter overrides)
+├── status                  (enum: pending, running, completed, failed, cancelled)
+├── requested_by_id         (FK → User)
+├── created_at
+└── updated_at
+```
+
+The Execution Request derives Data Resources and the Execution Environment
+from the referenced Analysis Bundle — it does not duplicate those
+relationships. This keeps a single source of truth.
+
+### Status Lifecycle
+
+```
+Pending
+  ↓
+Running   ←── (future milestone — worker)
+  ↓
+Completed
+   or
+Failed
+   or
+Cancelled
+```
+
+Only `Pending` is implemented in this milestone. The remaining transitions
+will be introduced with the worker.
+
+### Relationship Diagram
+
+```
+Project
+    ├── AnalysisBundle ──── ExecutionEnvironment
+    │         │                    │
+    │         └── DataResources    │
+    │                              │
+    └── ExecutionRequest ──────────┘
+              │
+              └── (future: Job → Outputs)
+```
+
+The bundle provides the executable description; the Execution Request
+provides the execution intent (which bundle, which timeout, which
+parameter overrides).
 
 ⸻
 

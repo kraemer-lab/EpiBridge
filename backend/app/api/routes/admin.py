@@ -12,9 +12,15 @@ from app.models.user import User
 from app.schemas.analysis_bundle import AnalysisBundleRead
 from app.schemas.data_resource import DataResourceRead
 from app.schemas.execution_environment import ExecutionEnvironmentRead
+from app.schemas.execution_request import ExecutionRequestRead
 from app.services.analysis_bundle_service import (
     get_environment_runtime,
     get_resource_identifiers,
+)
+from app.services.execution_request_service import (
+    get_execution_request,
+    list_execution_requests,
+    request_to_read,
 )
 
 router = APIRouter()
@@ -134,3 +140,30 @@ def get_bundle(
         created_at=bundle.created_at,
         updated_at=bundle.updated_at,
     )
+
+
+@router.get("/admin/execution-requests", response_model=List[ExecutionRequestRead])
+def list_admin_execution_requests(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    requests = list_execution_requests(db)
+    return [request_to_read(r) for r in requests]
+
+
+@router.get(
+    "/admin/execution-requests/{request_id}",
+    response_model=ExecutionRequestRead,
+)
+def get_admin_execution_request(
+    request_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    request = get_execution_request(db, request_id)
+    if request is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Execution request not found",
+        )
+    return request_to_read(request)
