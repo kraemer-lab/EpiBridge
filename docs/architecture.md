@@ -303,20 +303,70 @@ Providers describe runtime requirements in platform-agnostic terms (`Mount`,
 `RuntimeConfig`). An Executor (Docker, Kubernetes, Slurm, etc.) translates these into
 the corresponding infrastructure.
 
-### Three Identifiers
+### Resource Identifiers
 
 Every Data Resource has three identifiers with distinct responsibilities:
 
-| Identifier | Purpose | Stability |
-|------------|---------|-----------|
-| `id` | Immutable internal UUID | Never changes |
-| `name` | Human-readable display name | May change |
-| `alias` | Filesystem-safe path segment for `/data/{alias}` | Stable once set |
+| Field | Purpose | Stability |
+|-------|---------|-----------|
+| `id` | Internal database UUID. Auto-generated. | Never changes |
+| `identifier` | Stable institutional identity used for registration and reconciliation. Defined in the manifest. | Stable once set |
+| `alias` | Stable runtime namespace used inside analysis containers (`/data/{alias}`). Defined in the manifest. | Stable once set |
 
-The analysis always uses the alias. Display names can be improved without
-breaking existing analyses. Initially the alias may be a slugified version of
-the name; a dedicated field will be introduced when long-lived analyses and
-multi-institution deployments require it.
+The analysis always uses the alias. Display names (`name`) can be improved
+without breaking existing analyses because the runtime contract references
+`/data/{alias}`, not `/data/{name}`.
+
+The registration service reconciles resources using `identifier` — it is the
+canonical key for matching manifest entries to database records. A resource
+may change its `alias` (via a manifest update) without becoming a different
+institutional resource, because `identifier` remains the stable identity.
+
+### Registration Process
+
+Data Resources are registered from YAML manifests. The database is a runtime
+index; the manifest is the source of truth.
+
+The registration workflow:
+
+```
+Load all manifests
+  ↓
+Validate all manifests (required fields, provider type, endpoint shape)
+  ↓
+If any manifest is invalid → abort startup
+  ↓
+Begin transaction
+  ↓
+For each entry:
+  Lookup DataResource by identifier
+    ├── Found → update name, alias, endpoint, version, status
+    └── Not found → create new record
+  ↓
+Commit (atomic — all or nothing)
+```
+
+Validation includes:
+- Required fields present: `identifier`, `name`, `alias`, `provider`, `endpoint`
+- Provider type exists in the registry
+- Provider's `validate_endpoint()` accepts the endpoint configuration
+- No duplicate identifiers across manifests
+
+Validation does NOT check that the underlying data resource currently exists.
+That remains the deployment's responsibility.
+
+### Development Startup
+
+During development, when `auto_register_resources=True` (default), the
+application automatically loads manifests from `examples/resources/` on
+startup. This means `make dev` presents a small catalogue of available
+Data Resources without requiring manual setup.
+
+The registration process is idempotent: running it multiple times produces
+the same result. Resources are identified by `identifier`, so manifest
+updates are applied in-place rather than creating duplicates.
+
+### Resource Manifests
 
 ### Project Association
 

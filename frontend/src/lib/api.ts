@@ -47,17 +47,44 @@ export function createProject(data: ProjectCreate): Promise<Project> {
   });
 }
 
+export interface DataResource {
+  id: string;
+  identifier: string;
+  name: string;
+  alias: string;
+  description: string;
+  provider_type: string;
+  endpoint: Record<string, unknown>;
+  version: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function getAdminResources(): Promise<DataResource[]> {
+  return request<DataResource[]>("/api/admin/resources");
+}
+
+export async function getAdminResource(id: string): Promise<DataResource> {
+  return request<DataResource>(`/api/admin/resources/${id}`);
+}
+
 export interface DashboardStats {
   projects: number;
   jobs: number;
   outputs: number;
+  resources: number;
 }
 
 export async function getDashboardStats(): Promise<DashboardStats> {
-  const projects = await getProjects();
+  const [projects, resources] = await Promise.all([
+    getProjects(),
+    getAdminResources().catch(() => [] as DataResource[]),
+  ]);
   return {
     projects: projects.length,
     jobs: 0,
     outputs: 0,
+    resources: resources.length,
   };
 }
