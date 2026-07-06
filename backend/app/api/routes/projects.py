@@ -9,12 +9,17 @@ from app.db.session import get_db
 from app.models.analysis_bundle import AnalysisBundle
 from app.models.project import Project
 from app.models.user import User
-from app.schemas.analysis_bundle import AnalysisBundleCreate, AnalysisBundleRead
+from app.schemas.analysis_bundle import (
+    AnalysisBundleCreate,
+    AnalysisBundleRead,
+    AnalysisBundleUpdate,
+)
 from app.schemas.data_resource import DataResourceRead
 from app.schemas.project import ProjectCreate, ProjectRead
 from app.services.analysis_bundle_service import (
     create_bundle,
     get_resource_identifiers,
+    update_bundle,
 )
 from app.services.project_service import create_project, list_projects
 
@@ -35,6 +40,25 @@ def _get_owned_project(
             detail="Project not found",
         )
     return project
+
+
+def _bundle_to_read(bundle: AnalysisBundle) -> AnalysisBundleRead:
+    return AnalysisBundleRead(
+        id=bundle.id,
+        project_id=bundle.project_id,
+        created_by_id=bundle.created_by_id,
+        name=bundle.name,
+        status=bundle.status,
+        runtime=bundle.runtime,
+        version=bundle.version,
+        entrypoint=bundle.entrypoint,
+        description=bundle.description,
+        resource_identifiers=get_resource_identifiers(bundle),
+        outputs=bundle.outputs,
+        parameters=bundle.parameters,
+        created_at=bundle.created_at,
+        updated_at=bundle.updated_at,
+    )
 
 
 @router.get("/projects", response_model=List[ProjectRead])
@@ -83,25 +107,69 @@ def get_project_bundles(
         .order_by(AnalysisBundle.name)
         .all()
     )
-    result = []
-    for b in bundles:
-        read = AnalysisBundleRead(
-            id=b.id,
-            project_id=b.project_id,
-            created_by_id=b.created_by_id,
-            name=b.name,
-            runtime=b.runtime,
-            version=b.version,
-            entrypoint=b.entrypoint,
-            description=b.description,
-            resource_identifiers=get_resource_identifiers(b),
-            outputs=b.outputs,
-            parameters=b.parameters,
-            created_at=b.created_at,
-            updated_at=b.updated_at,
+    return [_bundle_to_read(b) for b in bundles]
+
+
+@router.get(
+    "/projects/{project_id}/bundles/{bundle_id}",
+    response_model=AnalysisBundleRead,
+)
+def get_project_bundle(
+    project_id: uuid.UUID,
+    bundle_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _get_owned_project(db, project_id, current_user.id)
+    bundle = (
+        db.query(AnalysisBundle)
+        .filter(
+            AnalysisBundle.id == bundle_id,
+            AnalysisBundle.project_id == project_id,
         )
-        result.append(read)
-    return result
+        .first()
+    )
+    if bundle is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Analysis bundle not found",
+        )
+    return _bundle_to_read(bundle)
+
+
+@router.put(
+    "/projects/{project_id}/bundles/{bundle_id}",
+    response_model=AnalysisBundleRead,
+)
+def put_project_bundle(
+    project_id: uuid.UUID,
+    bundle_id: uuid.UUID,
+    data: AnalysisBundleUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _get_owned_project(db, project_id, current_user.id)
+    bundle = (
+        db.query(AnalysisBundle)
+        .filter(
+            AnalysisBundle.id == bundle_id,
+            AnalysisBundle.project_id == project_id,
+        )
+        .first()
+    )
+    if bundle is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Analysis bundle not found",
+        )
+    try:
+        updated = update_bundle(db, bundle_id, data.model_dump(exclude_none=True))
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e),
+        )
+    return _bundle_to_read(updated)
 
 
 @router.post("/projects", response_model=ProjectRead, status_code=201)
@@ -127,18 +195,4 @@ def post_project_bundle(
     _get_owned_project(db, project_id, current_user.id)
 
     bundle = create_bundle(db, data.model_dump(), project_id, current_user.id)
-    return AnalysisBundleRead(
-        id=bundle.id,
-        project_id=bundle.project_id,
-        created_by_id=bundle.created_by_id,
-        name=bundle.name,
-        runtime=bundle.runtime,
-        version=bundle.version,
-        entrypoint=bundle.entrypoint,
-        description=bundle.description,
-        resource_identifiers=get_resource_identifiers(bundle),
-        outputs=bundle.outputs,
-        parameters=bundle.parameters,
-        created_at=bundle.created_at,
-        updated_at=bundle.updated_at,
-    )
+    return _bundle_to_read(bundle)

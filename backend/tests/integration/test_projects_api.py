@@ -190,3 +190,142 @@ class TestGetProjectBundles:
     def test_bundles_not_found(self, client, admin_user):
         response = client.get(f"/api/projects/{uuid.uuid4()}/bundles")
         assert response.status_code == 404
+
+
+class TestGetProjectBundle:
+    def test_get_bundle_by_id(self, client, project, db_session):
+        bundle = AnalysisBundle(
+            project_id=project.id,
+            created_by_id=project.owner_id,
+            name="Detail Bundle",
+            runtime="python-3.13",
+            version="1.0.0",
+            entrypoint="run.py",
+        )
+        db_session.add(bundle)
+        db_session.commit()
+        db_session.refresh(bundle)
+
+        response = client.get(f"/api/projects/{project.id}/bundles/{bundle.id}")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["name"] == "Detail Bundle"
+        assert data["status"] == "draft"
+        assert data["runtime"] == "python-3.13"
+        assert data["version"] == "1.0.0"
+
+    def test_get_bundle_not_found(self, client, project):
+        response = client.get(f"/api/projects/{project.id}/bundles/{uuid.uuid4()}")
+        assert response.status_code == 404
+
+    def test_get_bundle_wrong_project(self, client, admin_user, db_session):
+        bundle = AnalysisBundle(
+            project_id=uuid.uuid4(),
+            created_by_id=admin_user.id,
+            name="Orphan",
+            runtime="python-3.13",
+            version="1.0.0",
+            entrypoint="run.py",
+        )
+        db_session.add(bundle)
+        db_session.commit()
+
+        response = client.get(f"/api/projects/{uuid.uuid4()}/bundles/{bundle.id}")
+        assert response.status_code == 404
+
+
+class TestUpdateProjectBundle:
+    def test_update_metadata(self, client, project, db_session):
+        bundle = AnalysisBundle(
+            project_id=project.id,
+            created_by_id=project.owner_id,
+            name="Original",
+            runtime="python-3.13",
+            version="1.0.0",
+            entrypoint="run.py",
+        )
+        db_session.add(bundle)
+        db_session.commit()
+        db_session.refresh(bundle)
+
+        response = client.put(
+            f"/api/projects/{project.id}/bundles/{bundle.id}",
+            json={"name": "Updated", "description": "New desc"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["name"] == "Updated"
+        assert data["description"] == "New desc"
+        assert data["runtime"] == "python-3.13"
+
+    def test_update_partial(self, client, project, db_session):
+        bundle = AnalysisBundle(
+            project_id=project.id,
+            created_by_id=project.owner_id,
+            name="Partial Test",
+            runtime="python-3.13",
+            version="1.0.0",
+            entrypoint="run.py",
+            description="Original description",
+        )
+        db_session.add(bundle)
+        db_session.commit()
+        db_session.refresh(bundle)
+
+        response = client.put(
+            f"/api/projects/{project.id}/bundles/{bundle.id}",
+            json={"description": "Only this changes"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["name"] == "Partial Test"
+        assert data["runtime"] == "python-3.13"
+        assert data["description"] == "Only this changes"
+        assert data["version"] == "1.0.0"
+
+    def test_update_resources(self, client, project, resource, db_session):
+        bundle = AnalysisBundle(
+            project_id=project.id,
+            created_by_id=project.owner_id,
+            name="Resource Bundle",
+            runtime="python-3.13",
+            version="1.0.0",
+            entrypoint="run.py",
+        )
+        db_session.add(bundle)
+        db_session.commit()
+        db_session.refresh(bundle)
+
+        response = client.put(
+            f"/api/projects/{project.id}/bundles/{bundle.id}",
+            json={"resource_identifiers": ["test-resource"]},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["resource_identifiers"] == ["test-resource"]
+
+    def test_update_not_found(self, client, project):
+        response = client.put(
+            f"/api/projects/{project.id}/bundles/{uuid.uuid4()}",
+            json={"name": "Nope"},
+        )
+        assert response.status_code == 404
+
+    def test_update_invalid_data(self, client, project, db_session):
+        bundle = AnalysisBundle(
+            project_id=project.id,
+            created_by_id=project.owner_id,
+            name="Invalid Test",
+            runtime="python-3.13",
+            version="1.0.0",
+            entrypoint="run.py",
+        )
+        db_session.add(bundle)
+        db_session.commit()
+        db_session.refresh(bundle)
+
+        response = client.put(
+            f"/api/projects/{project.id}/bundles/{bundle.id}",
+            json={"entrypoint": "path/to/file.py"},
+        )
+        assert response.status_code == 422

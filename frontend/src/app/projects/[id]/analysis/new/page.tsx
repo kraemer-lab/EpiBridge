@@ -1,0 +1,281 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
+import { DataResource, AnalysisBundleCreate, getProjectResources, createProjectBundle } from "@/lib/api";
+
+const RUNTIMES = [
+  { label: "Python 3.13", value: "python-3.13" },
+  { label: "R 4.5", value: "r-4.5" },
+  { label: "Julia 1.11", value: "julia-1.11" },
+];
+
+export default function CreateAnalysisPage() {
+  const params = useParams();
+  const router = useRouter();
+  const projectId = params.id as string;
+
+  const [resources, setResources] = useState<DataResource[]>([]);
+  const [name, setName] = useState("");
+  const [runtime, setRuntime] = useState(RUNTIMES[0].value);
+  const [version, setVersion] = useState("");
+  const [description, setDescription] = useState("");
+  const [entrypoint, setEntrypoint] = useState("");
+  const [selectedResources, setSelectedResources] = useState<string[]>([]);
+  const [outputsStr, setOutputsStr] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    getProjectResources(projectId)
+      .then(setResources)
+      .catch(() => setResources([]));
+  }, [projectId]);
+
+  const toggleResource = (id: string) => {
+    setSelectedResources((prev) =>
+      prev.includes(id) ? prev.filter((r) => r !== id) : [...prev, id],
+    );
+  };
+
+  const validate = (): boolean => {
+    const errors: Record<string, string> = {};
+    if (!name.trim()) errors.name = "Name is required";
+    if (!version.trim()) errors.version = "Version is required";
+    if (!entrypoint.trim()) errors.entrypoint = "Entrypoint is required";
+    setFieldErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleSubmit = async () => {
+    if (!validate()) return;
+
+    const data: AnalysisBundleCreate = {
+      name: name.trim(),
+      runtime,
+      version: version.trim(),
+      entrypoint: entrypoint.trim(),
+      description: description.trim(),
+      resource_identifiers: selectedResources,
+      outputs: outputsStr
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean),
+    };
+
+    setSaving(true);
+    try {
+      await createProjectBundle(projectId, data);
+      router.push(`/projects/${projectId}/analysis`);
+    } catch {
+      setFieldErrors({ form: "Failed to create analysis bundle." });
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div>
+      <Link
+        href={`/projects/${projectId}/analysis`}
+        style={{ color: "var(--color-text-secondary)", fontSize: "0.85rem", textDecoration: "none" }}
+      >
+        &larr; Back to Analysis
+      </Link>
+      <h2 style={{ fontSize: "1.1rem", fontWeight: 600, marginTop: "var(--spacing-md)", marginBottom: "var(--spacing-lg)" }}>
+        Create Analysis
+      </h2>
+
+      <div className="card" style={{ maxWidth: "640px" }}>
+        {fieldErrors.form && (
+          <div style={{ color: "#e65100", marginBottom: "var(--spacing-md)", fontSize: "0.9rem" }}>
+            {fieldErrors.form}
+          </div>
+        )}
+
+        <div style={{ marginBottom: "var(--spacing-md)" }}>
+          <label style={{ display: "block", fontWeight: 600, marginBottom: "var(--spacing-xs)", fontSize: "0.9rem" }}>
+            Name <span style={{ color: "#e65100" }}>*</span>
+          </label>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            style={{
+              width: "100%",
+              padding: "var(--spacing-sm) var(--spacing-md)",
+              border: `1px solid ${fieldErrors.name ? "#e65100" : "var(--color-border)"}`,
+              borderRadius: "var(--radius-md)",
+              fontSize: "0.9rem",
+            }}
+          />
+          {fieldErrors.name && (
+            <div style={{ color: "#e65100", fontSize: "0.8rem", marginTop: "var(--spacing-xs)" }}>
+              {fieldErrors.name}
+            </div>
+          )}
+        </div>
+
+        <div style={{ marginBottom: "var(--spacing-md)" }}>
+          <label style={{ display: "block", fontWeight: 600, marginBottom: "var(--spacing-xs)", fontSize: "0.9rem" }}>
+            Runtime <span style={{ color: "#e65100" }}>*</span>
+          </label>
+          <select
+            value={runtime}
+            onChange={(e) => setRuntime(e.target.value)}
+            style={{
+              width: "100%",
+              padding: "var(--spacing-sm) var(--spacing-md)",
+              border: "1px solid var(--color-border)",
+              borderRadius: "var(--radius-md)",
+              fontSize: "0.9rem",
+              background: "var(--color-bg)",
+            }}
+          >
+            {RUNTIMES.map((r) => (
+              <option key={r.value} value={r.value}>{r.label}</option>
+            ))}
+          </select>
+        </div>
+
+        <div style={{ marginBottom: "var(--spacing-md)" }}>
+          <label style={{ display: "block", fontWeight: 600, marginBottom: "var(--spacing-xs)", fontSize: "0.9rem" }}>
+            Version <span style={{ color: "#e65100" }}>*</span>
+          </label>
+          <input
+            type="text"
+            value={version}
+            onChange={(e) => setVersion(e.target.value)}
+            placeholder="1.0.0"
+            style={{
+              width: "100%",
+              padding: "var(--spacing-sm) var(--spacing-md)",
+              border: `1px solid ${fieldErrors.version ? "#e65100" : "var(--color-border)"}`,
+              borderRadius: "var(--radius-md)",
+              fontSize: "0.9rem",
+            }}
+          />
+          {fieldErrors.version && (
+            <div style={{ color: "#e65100", fontSize: "0.8rem", marginTop: "var(--spacing-xs)" }}>
+              {fieldErrors.version}
+            </div>
+          )}
+        </div>
+
+        <div style={{ marginBottom: "var(--spacing-md)" }}>
+          <label style={{ display: "block", fontWeight: 600, marginBottom: "var(--spacing-xs)", fontSize: "0.9rem" }}>
+            Description
+          </label>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={3}
+            style={{
+              width: "100%",
+              padding: "var(--spacing-sm) var(--spacing-md)",
+              border: "1px solid var(--color-border)",
+              borderRadius: "var(--radius-md)",
+              fontSize: "0.9rem",
+              resize: "vertical",
+            }}
+          />
+        </div>
+
+        <div style={{ marginBottom: "var(--spacing-md)" }}>
+          <label style={{ display: "block", fontWeight: 600, marginBottom: "var(--spacing-xs)", fontSize: "0.9rem" }}>
+            Entrypoint <span style={{ color: "#e65100" }}>*</span>
+          </label>
+          <input
+            type="text"
+            value={entrypoint}
+            onChange={(e) => setEntrypoint(e.target.value)}
+            placeholder="run.py"
+            style={{
+              width: "100%",
+              padding: "var(--spacing-sm) var(--spacing-md)",
+              border: `1px solid ${fieldErrors.entrypoint ? "#e65100" : "var(--color-border)"}`,
+              borderRadius: "var(--radius-md)",
+              fontSize: "0.9rem",
+            }}
+          />
+          {fieldErrors.entrypoint && (
+            <div style={{ color: "#e65100", fontSize: "0.8rem", marginTop: "var(--spacing-xs)" }}>
+              {fieldErrors.entrypoint}
+            </div>
+          )}
+        </div>
+
+        <div style={{ marginBottom: "var(--spacing-md)" }}>
+          <label style={{ display: "block", fontWeight: 600, marginBottom: "var(--spacing-xs)", fontSize: "0.9rem" }}>
+            Referenced Data Resources
+          </label>
+          {resources.length === 0 ? (
+            <div style={{ color: "var(--color-text-secondary)", fontSize: "0.85rem" }}>
+              No resources available for this project.
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: "var(--spacing-xs)" }}>
+              {resources.map((r) => (
+                <label
+                  key={r.id}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "var(--spacing-sm)",
+                    fontSize: "0.9rem",
+                    cursor: "pointer",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedResources.includes(r.identifier)}
+                    onChange={() => toggleResource(r.identifier)}
+                  />
+                  {r.name}
+                  <span style={{ color: "var(--color-text-secondary)", fontSize: "0.8rem" }}>
+                    ({r.identifier})
+                  </span>
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div style={{ marginBottom: "var(--spacing-lg)" }}>
+          <label style={{ display: "block", fontWeight: 600, marginBottom: "var(--spacing-xs)", fontSize: "0.9rem" }}>
+            Expected Outputs
+          </label>
+          <input
+            type="text"
+            value={outputsStr}
+            onChange={(e) => setOutputsStr(e.target.value)}
+            placeholder="summary.csv, figures/"
+            style={{
+              width: "100%",
+              padding: "var(--spacing-sm) var(--spacing-md)",
+              border: "1px solid var(--color-border)",
+              borderRadius: "var(--radius-md)",
+              fontSize: "0.9rem",
+            }}
+          />
+          <div style={{ color: "var(--color-text-secondary)", fontSize: "0.8rem", marginTop: "var(--spacing-xs)" }}>
+            Comma-separated list of expected output files or directories.
+          </div>
+        </div>
+
+        <div style={{ display: "flex", gap: "var(--spacing-md)" }}>
+          <button className="btn btn-primary" onClick={handleSubmit} disabled={saving}>
+            {saving ? "Saving..." : "Save"}
+          </button>
+          <Link
+            href={`/projects/${projectId}/analysis`}
+            className="btn"
+            style={{ textDecoration: "none" }}
+          >
+            Cancel
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useParams } from "next/navigation";
 import { AnalysisBundle, getProjectBundles } from "@/lib/api";
 
@@ -32,14 +33,9 @@ export default function ProjectAnalysisPage() {
         <h2 style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: 0 }}>
           Analysis Bundles
         </h2>
-        <button
-          className="btn"
-          style={{ opacity: 0.5, cursor: "not-allowed" }}
-          disabled
-          title="Bundle creation will be available in a future milestone"
-        >
+        <Link href={`/projects/${projectId}/analysis/new`} className="btn btn-primary">
           Create Analysis
-        </button>
+        </Link>
       </div>
 
       {loading ? (
@@ -48,7 +44,7 @@ export default function ProjectAnalysisPage() {
         <div className="card empty-state">{error}</div>
       ) : bundles.length === 0 ? (
         <div className="card empty-state">
-          No analysis bundles. Bundle creation will be available in a future milestone.
+          No analysis bundles. Create your first analysis to get started.
         </div>
       ) : (
         <div className="card" style={{ padding: 0, overflow: "hidden" }}>
@@ -59,13 +55,22 @@ export default function ProjectAnalysisPage() {
                 <th>Runtime</th>
                 <th>Version</th>
                 <th>Resources</th>
-                <th>Created</th>
+                <th>Updated</th>
+                <th>Status</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
               {bundles.map((b) => (
                 <tr key={b.id}>
-                  <td style={{ fontWeight: 500 }}>{b.name}</td>
+                  <td style={{ fontWeight: 500 }}>
+                    <Link
+                      href={`/projects/${projectId}/analysis/${b.id}`}
+                      style={{ color: "var(--color-primary)", textDecoration: "none" }}
+                    >
+                      {b.name}
+                    </Link>
+                  </td>
                   <td style={{ color: "var(--color-text-secondary)" }}>
                     {b.runtime}
                   </td>
@@ -78,7 +83,34 @@ export default function ProjectAnalysisPage() {
                       : "—"}
                   </td>
                   <td style={{ color: "var(--color-text-secondary)" }}>
-                    {new Date(b.created_at).toLocaleDateString()}
+                    {new Date(b.updated_at).toLocaleDateString()}
+                  </td>
+                  <td>
+                    <span
+                      style={{
+                        display: "inline-block",
+                        padding: "2px 8px",
+                        borderRadius: "4px",
+                        fontSize: "0.8rem",
+                        fontWeight: 600,
+                        background: "var(--color-surface)",
+                        color: "var(--color-text-secondary)",
+                      }}
+                    >
+                      {b.status.charAt(0).toUpperCase() + b.status.slice(1)}
+                    </span>
+                  </td>
+                  <td>
+                    <Link
+                      href={`/projects/${projectId}/analysis/${b.id}/edit`}
+                      style={{
+                        color: "var(--color-text-secondary)",
+                        fontSize: "0.85rem",
+                        textDecoration: "none",
+                      }}
+                    >
+                      Edit
+                    </Link>
                   </td>
                 </tr>
               ))}

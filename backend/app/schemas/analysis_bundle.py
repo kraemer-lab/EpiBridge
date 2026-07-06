@@ -13,6 +13,7 @@ class AnalysisBundleCreate(BaseModel):
     resource_identifiers: list[str] = []
     outputs: list[str] = []
     parameters: dict = {}
+    status: str = "draft"
 
 
 class AnalysisBundleRead(BaseModel):
@@ -20,6 +21,7 @@ class AnalysisBundleRead(BaseModel):
     project_id: uuid.UUID
     created_by_id: uuid.UUID
     name: str
+    status: str
     runtime: str
     version: str
     entrypoint: str
@@ -31,3 +33,14 @@ class AnalysisBundleRead(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class AnalysisBundleUpdate(BaseModel):
+    name: str | None = None
+    runtime: str | None = None
+    version: str | None = None
+    entrypoint: str | None = None
+    description: str | None = None
+    resource_identifiers: list[str] | None = None
+    outputs: list[str] | None = None
+    parameters: dict | None = None

@@ -5,6 +5,7 @@ import pytest
 
 from app.services.analysis_bundle_service import (
     create_bundle,
+    update_bundle,
     validate_entrypoint,
     validate_manifest,
     validate_resources,
@@ -186,3 +187,68 @@ class TestCreateBundle:
         with pytest.raises(ValueError, match="runtime"):
             create_bundle(db, data, uuid.uuid4(), uuid.uuid4())
         db.commit.assert_not_called()
+
+
+class TestUpdateBundle:
+    def test_update_name_only(self):
+        db = MagicMock()
+        bundle = MagicMock()
+        bundle.id = uuid.uuid4()
+        db.query.return_value.filter.return_value.first.return_value = bundle
+
+        update_bundle(db, bundle.id, {"name": "New Name"})
+
+        assert bundle.name == "New Name"
+        db.commit.assert_called_once()
+
+    def test_update_all_fields(self):
+        db = MagicMock()
+        bundle = MagicMock()
+        bundle.id = uuid.uuid4()
+        bundle.data_resources = []
+        db.query.return_value.filter.return_value.first.return_value = bundle
+
+        data = {
+            "name": "Updated",
+            "runtime": "r-4.5",
+            "version": "2.0.0",
+            "entrypoint": "analysis.R",
+            "description": "Updated description",
+            "outputs": ["results.csv"],
+            "parameters": {"alpha": 0.01},
+            "resource_identifiers": [],
+        }
+        update_bundle(db, bundle.id, data)
+
+        assert bundle.name == "Updated"
+        assert bundle.runtime == "r-4.5"
+        assert bundle.version == "2.0.0"
+        assert bundle.entrypoint == "analysis.R"
+        assert bundle.description == "Updated description"
+        assert bundle.outputs == ["results.csv"]
+        assert bundle.parameters == {"alpha": 0.01}
+
+    def test_update_nonexistent_raises(self):
+        db = MagicMock()
+        db.query.return_value.filter.return_value.first.return_value = None
+
+        with pytest.raises(ValueError, match="not found"):
+            update_bundle(db, uuid.uuid4(), {"name": "Nope"})
+
+    def test_update_invalid_name_raises(self):
+        db = MagicMock()
+        bundle = MagicMock()
+        bundle.id = uuid.uuid4()
+        db.query.return_value.filter.return_value.first.return_value = bundle
+
+        with pytest.raises(ValueError, match="name"):
+            update_bundle(db, bundle.id, {"name": ""})
+
+    def test_update_invalid_entrypoint_path_raises(self):
+        db = MagicMock()
+        bundle = MagicMock()
+        bundle.id = uuid.uuid4()
+        db.query.return_value.filter.return_value.first.return_value = bundle
+
+        with pytest.raises(ValueError, match="filename"):
+            update_bundle(db, bundle.id, {"entrypoint": "src/run.py"})

@@ -40,6 +40,7 @@ export interface AnalysisBundle {
   project_id: string;
   created_by_id: string;
   name: string;
+  status: string;
   runtime: string;
   version: string;
   entrypoint: string;
@@ -56,6 +57,18 @@ export interface AnalysisBundleCreate {
   runtime: string;
   version: string;
   entrypoint: string;
+  description?: string;
+  resource_identifiers?: string[];
+  outputs?: string[];
+  parameters?: Record<string, unknown>;
+  status?: string;
+}
+
+export interface AnalysisBundleUpdate {
+  name?: string;
+  runtime?: string;
+  version?: string;
+  entrypoint?: string;
   description?: string;
   resource_identifiers?: string[];
   outputs?: string[];
@@ -122,6 +135,24 @@ export async function createProjectBundle(
 ): Promise<AnalysisBundle> {
   return request<AnalysisBundle>(`/api/projects/${projectId}/bundles`, {
     method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function getProjectBundle(
+  projectId: string,
+  bundleId: string,
+): Promise<AnalysisBundle> {
+  return request<AnalysisBundle>(`/api/projects/${projectId}/bundles/${bundleId}`);
+}
+
+export async function updateProjectBundle(
+  projectId: string,
+  bundleId: string,
+  data: AnalysisBundleUpdate,
+): Promise<AnalysisBundle> {
+  return request<AnalysisBundle>(`/api/projects/${projectId}/bundles/${bundleId}`, {
+    method: "PUT",
     body: JSON.stringify(data),
   });
 }

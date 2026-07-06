@@ -52,7 +52,7 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
       >
         {tabs.map((tab) => {
           const tabHref = tab.href === "" ? basePath : `${basePath}${tab.href}`;
-          const isActive = pathname === tabHref;
+          const isActive = pathname === tabHref || (tab.href !== "" && pathname.startsWith(tabHref));
           return (
             <Link
               key={tab.href}
