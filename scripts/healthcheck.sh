@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-EPIBRIDGE_HOME="${EPIBRIDGE_HOME:-/opt/epibridge}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+EPIBRIDGE_HOME="${EPIBRIDGE_HOME:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 COMPOSE_FILE="${EPIBRIDGE_HOME}/docker-compose.yml"
 
 echo "=== EpiBridge Health Check ==="

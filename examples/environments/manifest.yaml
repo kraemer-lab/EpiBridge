@@ -1,0 +1,44 @@
+# EpiBridge Execution Environment Manifest
+#
+# Execution Environments are institutional assets representing approved
+# runtimes in which analyses may execute. They are curated by the institution
+# and selected by researchers when authoring an analysis bundle.
+#
+# Required fields per entry:
+#   identifier, name, runtime
+
+environments:
+  - identifier: python-3.13-scientific
+    name: Python 3.13 Scientific
+    runtime: python-3.13
+    description: "NumPy, SciPy, Pandas, Matplotlib, scikit-learn, Statsmodels"
+    status: active
+    image_reference: "epibridge/python-3.13-scientific:latest"
+
+  - identifier: python-3.13-machine-learning
+    name: Python 3.13 Machine Learning
+    runtime: python-3.13
+    description: "PyTorch, TensorFlow, scikit-learn, XGBoost, LightGBM, Transformers"
+    status: active
+    image_reference: "epibridge/python-3.13-ml:latest"
+
+  - identifier: r-4.5-tidyverse
+    name: R 4.5 Tidyverse
+    runtime: r-4.5
+    description: "tidyverse, dplyr, ggplot2, tidyr, readr, purrr, stringr, lubridate"
+    status: active
+    image_reference: "epibridge/r-4.5-tidyverse:latest"
+
+  - identifier: r-4.5-spatial
+    name: R 4.5 Spatial
+    runtime: r-4.5
+    description: "sf, terra, sp, raster, rgdal, leaflet, tmap"
+    status: active
+    image_reference: "epibridge/r-4.5-spatial:latest"
+
+  - identifier: r-4.5-bioconductor
+    name: R 4.5 Bioconductor
+    runtime: r-4.5
+    description: "Bioconductor, DESeq2, limma, edgeR, GenomicRanges, IRanges"
+    status: active
+    image_reference: "epibridge/r-4.5-bioconductor:latest"

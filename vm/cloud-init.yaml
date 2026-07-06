@@ -50,7 +50,6 @@ runcmd:
   - mkdir -p /opt/epibridge
   - mkdir -p /var/lib/epibridge/data
   - mkdir -p /var/lib/epibridge/outputs
-  - mkdir -p /var/lib/epibridge/datasets
   - mkdir -p /var/log/epibridge
 
   # Set ownership

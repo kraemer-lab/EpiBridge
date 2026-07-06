@@ -35,14 +35,20 @@ jobs:
         cd backend
         python -m pytest tests/unit -v --cov=app --cov-report=term-missing
 
-    - name: Prepare environment
-      run: cp .env.example .env
+    - name: Bootstrap EpiBridge
+      run: make ci
 
-    - name: Validate Docker Compose
-      run: docker compose config
+    - name: Run golden path e2e test
+      run: |
+        cd frontend
+        npm ci
+        npx playwright install --with-deps chromium
+        npx playwright test
 
-    - name: Build backend
-      run: docker build -t epibridge-backend backend/
+    - name: Collect logs on failure
+      if: failure()
+      run: docker compose logs --tail=50
 
-    - name: Build frontend
-      run: docker build -t epibridge-frontend frontend/
+    - name: Tear down
+      if: always()
+      run: make ci-clean

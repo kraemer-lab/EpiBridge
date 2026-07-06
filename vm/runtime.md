@@ -27,9 +27,12 @@
 /opt/epibridge              # application repository
 /var/lib/epibridge/data     # persistent database volume
 /var/lib/epibridge/outputs  # job output storage
-/var/lib/epibridge/datasets # sensitive dataset mounts
 /var/log/epibridge          # audit and application logs
 ```
+
+The deployment also places institutional data resources at a location of its
+choosing. EpiBridge accesses them through the runtime contract (see below)
+and never knows the physical host path.
 
 ## Host Dependencies
 
@@ -41,6 +44,136 @@ Only these must be installed on the host:
 - curl
 
 Everything else runs in containers. The host never runs Python, Node.js, or PostgreSQL directly.
+
+## Three Environments
+
+The system consists of three distinct environments, each with a different view of the data.
+
+```
+Host
+  └── Trusted Runtime (VM)
+        └── Analysis Container
+```
+
+### Host
+
+The host owns the physical data — for example, `/srv/data/`. EpiBridge never
+knows host paths. The host is outside the trust boundary.
+
+### Trusted Runtime
+
+The deployment environment guarantees that institutional data resources are
+available beneath a well-known location:
+
+```
+/read-only-data
+```
+
+This is the **runtime contract**. How resources arrive there (host directory
+mount, NFS share, cloud storage, database connection, etc.) is entirely the
+responsibility of the deployment — never EpiBridge.
+
+EpiBridge only understands:
+
+- **Data Resources** — registered metadata about an available asset
+- **Resource Providers** — abstractions that validate endpoints and describe
+  runtime requirements
+- **Runtime Endpoints** — provider-specific configuration
+  (e.g. `{"path": "study123/data.csv"}`)
+
+The `ResourceProvider` translates endpoint configuration into platform-agnostic
+mount and environment requirements (`RuntimeConfig`). The provider returns the
+source path but never decides the target inside the analysis container.
+
+### Analysis Container
+
+The analysis container never receives access to the runtime's complete
+`/read-only-data`. It receives a minimal execution view containing only the
+resources authorised for that job.
+
+The standard container contract:
+
+| Path      | Purpose                              |
+|-----------|--------------------------------------|
+| `/work`   | Writable temporary storage           |
+| `/data`   | Namespace of authorised resources    |
+| `/output` | Writable directory for results       |
+
+#### `/data` — authorised resource namespace
+
+Each authorised resource appears beneath `/data/` at a path determined by its
+**runtime alias**:
+
+```
+/data
+  /{alias_1}
+  /{alias_2}
+```
+
+The runtime alias is a filesystem-safe identifier. It may be a slugified
+version of the display name or a dedicated alias field (future). The analysis
+always refers to the alias, never the display name, so display names can be
+improved without breaking analyses.
+
+Examples:
+
+```
+/data
+  /ukbb
+  /mexico_dengue_2026
+  /weather
+```
+
+If a resource resolves to a single file, it appears directly:
+
+```
+/data/ukbb/phenotypes.csv
+```
+
+If a resource resolves to a directory, all files within are available:
+
+```
+/data/weather/2024/temperature.csv
+/data/weather/2025/temperature.csv
+```
+
+#### `/work`
+
+Writable temporary working directory for the analysis. Empty at container
+start. The analysis may use this for intermediate files, extracted archives,
+or any other scratch data. Discarded after the container is destroyed.
+
+#### `/output`
+
+The analysis writes its results here. After the container exits, the Executor
+collects the contents and registers them as job outputs.
+
+### Security boundary
+
+The most important security property:
+
+> The analysis container must never receive access to `/read-only-data`.
+
+The Executor is responsible for mounting only the authorised subset.
+
+This means:
+- `/data` contains only what the job is authorised to access
+- The analysis cannot enumerate available resources
+- Compromised analysis code cannot exfiltrate unauthorised data
+
+This is a fundamental security boundary enforced by the execution environment.
+
+### Development
+
+In development, `docker-compose.yml` mounts `./examples/resources/` at
+`/read-only-data`. This exercises the exact same provider abstraction used in
+production.
+
+### Production
+
+In production, the system administrator ensures the institution's data
+resources are placed at `/read-only-data` or otherwise reachable through the
+configured provider endpoints.
 
 ## Standard Ports
 
@@ -91,7 +224,21 @@ Host OS
                   Containers             ← Layer 3
 ```
 
-If an analysis container is compromised, the attacker remains inside the VM, not the host infrastructure.
+### Layer isolation
+
+If an analysis container is compromised, the attacker remains inside the VM,
+not the host infrastructure.
+
+### Data access isolation
+
+Platform containers (backend, worker) see the full `/read-only-data`. This is
+necessary for orchestration — they need to know what resources exist.
+
+Analysis containers see only `/data`, which contains exclusively the resources
+authorised for that job. The Executor enforces this by mounting only the
+relevant subset of `/read-only-data` into the container as `/data/{alias}`.
+
+The analysis container has no access to the runtime's full resource pool.
 
 ## Development Environment
 

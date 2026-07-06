@@ -21,6 +21,16 @@ class Settings(BaseSettings):
 
     domain: str = "localhost"
     admin_email: str = "admin@epibridge.local"
+    dev_auth: bool = True
+    auto_create_schema: bool = True
+    auto_register_resources: bool = True
+    resource_manifest_dir: str = ""
+    auto_register_environments: bool = True
+    environment_manifest_dir: str = ""
+    output_dir: str = "/tmp/epibridge-outputs"
+    analysis_bundle_root: str = ""
+    data_root: str = "/read-only-data"
+    host_data_root: str = ""
 
     @property
     def database_url(self) -> str:
