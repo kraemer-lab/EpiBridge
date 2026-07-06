@@ -1,0 +1,75 @@
+{
+    # Global block — add email for Let's Encrypt in production:
+    #   email admin@example.com
+}
+
+epibridge.local, *.epibridge.local, localhost {
+    # ── HTTPS ────────────────────────────────────────────────────────────
+    # Development: self-signed (internal issuer)
+    # Production:  replace with your domain and email:
+    #   tls admin@example.com
+    tls {
+        issuer internal
+    }
+
+    # ── Compression ──────────────────────────────────────────────────────
+    encode zstd gzip
+
+    # ── Security Headers ─────────────────────────────────────────────────
+    header {
+        # HSTS — 2 years, include subdomains, preload
+        Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+
+        # Content Security Policy
+        # REVIEW: tighten per-deployment — especially script-src and
+        # connect-src — once the frontend build is finalised.
+        Content-Security-Policy "
+            default-src 'self';
+            script-src  'self' 'unsafe-inline' 'unsafe-eval';
+            style-src   'self' 'unsafe-inline';
+            img-src     'self' blob: data:;
+            font-src    'self' data:;
+            connect-src 'self' https://identitytoolkit.googleapis.com;
+            frame-ancestors 'none';
+            base-uri    'self';
+            form-action 'self';
+        "
+
+        # Prevent MIME type sniffing
+        X-Content-Type-Options "nosniff"
+
+        # Prevent clickjacking
+        X-Frame-Options "DENY"
+
+        # Restrict referrer information
+        Referrer-Policy "strict-origin-when-cross-origin"
+
+        # Restrict browser feature access
+        Permissions-Policy "camera=(), display-capture=(), geolocation=(), microphone=(), payment=(), usb=()"
+
+        # Remove Caddy's default Server header (information disclosure)
+        -Server
+    }
+
+    # ── API Routes ──────────────────────────────────────────────────────
+    @api {
+        path /api/*
+    }
+
+    handle @api {
+        # 50 MB limit for analysis job submissions
+        request_body 50MB
+        reverse_proxy backend:8000 {
+            header_up Host {host}
+        }
+    }
+
+    # ── Frontend ────────────────────────────────────────────────────────
+    handle {
+        # 10 MB limit for standard requests
+        request_body 10MB
+        reverse_proxy frontend:3000 {
+            header_up Host {host}
+        }
+    }
+}

@@ -1,0 +1,6 @@
+[project]
+name = "epibridge-worker"
+version = "0.1.0"
+description = "EpiBridge job executor"
+requires-python = ">=3.11"
+dependencies = []

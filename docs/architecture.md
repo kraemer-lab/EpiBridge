@@ -350,17 +350,46 @@ No application code should need changing.
 
 # Execution Abstraction
 
-Use an executor interface.
+The Worker never manages containers directly.
 
-Executor.run(job)
+It delegates to an executor interface:
+
+```
+Worker
+  └── Executor (interface)
+        └── run(job) → Result
 
 Implementations:
+  ├── DockerExecutor      ← communicates with Docker Engine
+  ├── KubernetesExecutor  ← creates Kubernetes Jobs
+  └── SlurmExecutor       ← submits Slurm batch jobs
+```
 
-* DockerExecutor
-* KubernetesExecutor
-* SlurmExecutor
+The platform must not depend on any specific execution backend.
 
-The platform should not depend on the execution backend.
+Only the `DockerExecutor` talks to Docker Engine. The Worker holds a reference to whatever `Executor` implementation is configured at startup — it never imports or calls the Docker SDK directly.
+
+This means:
+- The Docker socket is a private implementation detail of `DockerExecutor`, not a platform concern
+- Replacing Docker with Kubernetes or Slurm requires zero changes outside the Worker
+
+```
+Worker
+  └── Executor (interface)
+        └── DockerExecutor
+              └── Docker Engine (via socket)
+                    └── Ephemeral analysis container
+                          ├── datasets (read-only)
+                          ├── workspace (temporary)
+                          └── output directory (writable)
+```
+
+The executor is responsible for:
+- pulling the analysis image (if not present)
+- creating the container with resource limits, read-only dataset mounts, and no network
+- streaming logs to the audit trail
+- collecting the exit code and output files
+- destroying the container after completion
 
 ⸻
 

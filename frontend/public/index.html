@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EpiBridge</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: system-ui, -apple-system, sans-serif; background: #f5f5f5; color: #1a1a2e; display: flex; justify-content: center; padding: 4rem 1rem; }
+        .container { max-width: 480px; width: 100%; }
+        h1 { font-size: 1.5rem; font-weight: 600; margin-bottom: 2rem; color: #1a1a2e; }
+        .service { background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 1rem; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.75rem; }
+        .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+        .dot.healthy { background: #22c55e; }
+        .dot.unhealthy { background: #ef4444; }
+        .dot.checking { background: #f59e0b; animation: pulse 1s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+        .name { font-size: 0.875rem; font-weight: 500; flex: 1; }
+        .status { font-size: 0.8rem; color: #666; }
+        .footer { margin-top: 2rem; font-size: 0.75rem; color: #999; text-align: center; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>EpiBridge</h1>
+
+        <div class="service">
+            <span class="dot checking" id="api-dot"></span>
+            <span class="name">Backend API</span>
+            <span class="status" id="api-status">checking…</span>
+        </div>
+
+        <div class="footer" id="timestamp"></div>
+    </div>
+
+    <script>
+        const apiDot = document.getElementById('api-dot');
+        const apiStatus = document.getElementById('api-status');
+        const timestamp = document.getElementById('timestamp');
+
+        async function check() {
+            apiDot.className = 'dot checking';
+            apiStatus.textContent = 'checking…';
+
+            try {
+                const res = await fetch('/api/health');
+                const data = await res.json();
+
+                if (data.status === 'ok') {
+                    apiDot.className = 'dot healthy';
+                    apiStatus.textContent = 'healthy';
+                } else {
+                    apiDot.className = 'dot unhealthy';
+                    apiStatus.textContent = 'degraded';
+                }
+            } catch {
+                apiDot.className = 'dot unhealthy';
+                apiStatus.textContent = 'unreachable';
+            }
+
+            timestamp.textContent = 'Last checked: ' + new Date().toLocaleTimeString();
+        }
+
+        check();
+        setInterval(check, 10000);
+    </script>
+</body>
+</html>

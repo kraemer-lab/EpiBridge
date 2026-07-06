@@ -33,29 +33,34 @@ Move the computation to the data, not the data to the computation.
 
 ## Repository Structure
 
+```
 frontend/
 backend/
 worker/
-shared/
-containers/
-examples/
+vm/
+scripts/
 docs/
+```
 
-## Deployment
+## Development
 
-Initially, EpiBridge is designed to run inside a single Linux virtual machine using Docker Compose.
+See `vm/runtime.md` for the development quickstart.
 
-Future versions will support Kubernetes deployments without significant architectural changes.
+The only host dependencies are Git and a VM runtime (OrbStack, Multipass, etc.).
+
+No Python, Node.js, or PostgreSQL is ever installed on the host.
+
+```bash
+make dev
+```
 
 ## Documentation
 
-See the docs/ directory for:
+See the `docs/` directory for:
 
 * Architecture
 * Security
 * API
-* Deployment
-* Roadmap
 * Vision
 
 # Status

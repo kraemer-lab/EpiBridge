@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+EPIBRIDGE_HOME="${EPIBRIDGE_HOME:-/opt/epibridge}"
+COMPOSE_FILE="${EPIBRIDGE_HOME}/docker-compose.yml"
+
+echo "=== EpiBridge Health Check ==="
+
+ERRORS=0
+
+# Check Docker is running
+if docker info >/dev/null 2>&1; then
+  echo "  [PASS] Docker Engine"
+else
+  echo "  [FAIL] Docker Engine"
+  ERRORS=$((ERRORS + 1))
+fi
+
+# Check compose file exists
+if [ -f "$COMPOSE_FILE" ]; then
+  echo "  [PASS] docker-compose.yml found"
+else
+  echo "  [FAIL] docker-compose.yml not found"
+  ERRORS=$((ERRORS + 1))
+fi
+
+# Check each service container
+for SERVICE in reverse-proxy frontend backend postgres redis worker; do
+  STATUS=$(docker compose -f "$COMPOSE_FILE" ps --format json "$SERVICE" 2>/dev/null | grep -c '"State":"running"' || true)
+  if [ "$STATUS" -ge 1 ]; then
+    echo "  [PASS] $SERVICE"
+  else
+    echo "  [FAIL] $SERVICE"
+    ERRORS=$((ERRORS + 1))
+  fi
+done
+
+# Check API health endpoint through reverse proxy
+API_URL="${API_URL:-https://localhost}"
+if curl -skf --connect-timeout 5 "${API_URL}/api/health" >/dev/null 2>&1; then
+  echo "  [PASS] API health endpoint"
+else
+  echo "  [FAIL] API health endpoint"
+  ERRORS=$((ERRORS + 1))
+fi
+
+# Check frontend is serving through reverse proxy
+FRONTEND_URL="${FRONTEND_URL:-https://localhost}"
+if curl -skf --connect-timeout 5 "${FRONTEND_URL}/" >/dev/null 2>&1; then
+  echo "  [PASS] Frontend"
+else
+  echo "  [FAIL] Frontend"
+  ERRORS=$((ERRORS + 1))
+fi
+
+echo ""
+if [ "$ERRORS" -eq 0 ]; then
+  echo "=== All checks passed ==="
+  exit 0
+else
+  echo "=== ${ERRORS} check(s) failed ==="
+  exit 1
+fi

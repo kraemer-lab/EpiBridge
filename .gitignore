@@ -8,7 +8,7 @@ node_modules/
 out/
 dist/
 build/
-*.egg-info/
+**/*.egg-info/
 
 # Python
 __pycache__/
