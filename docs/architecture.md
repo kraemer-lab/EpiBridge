@@ -160,10 +160,11 @@ Local Sensitive Data
 
 ## Authentication
 
-* Firebase Authentication
-* Email/password
-* Google
-* Microsoft
+* Local Identity Provider (first implementation)
+* Email/password with Argon2 hashing
+* Server-side sessions backed by PostgreSQL
+* HTTP-only secure cookies
+* IdentityProvider abstraction for future providers (Firebase, OIDC, Entra ID, Keycloak)
 
 Application permissions are managed within PostgreSQL.
 
@@ -189,7 +190,7 @@ Application permissions are managed within PostgreSQL.
 
 ## Authentication and Authorisation
 
-Authentication is handled by Firebase.
+Authentication is handled by a pluggable IdentityProvider (currently LocalIdentityProvider).
 
 Authorisation is handled internally.
 
@@ -202,7 +203,7 @@ Example roles:
 
 Permissions are stored in PostgreSQL.
 
-The application should never depend directly on Firebase beyond validating JWT tokens.
+The application should depend only on the IdentityProvider abstraction, not on any concrete implementation.
 
 ⸻
 

@@ -1,3 +1,5 @@
+const API_BASE = "";
+
 export interface User {
   id: string;
   email: string;
@@ -131,15 +133,42 @@ export interface DashboardStats {
   resources: number;
 }
 
+export interface ExecutionEnvironment {
+  id: string;
+  identifier: string;
+  name: string;
+  runtime: string;
+  description: string;
+  status: string;
+  image_reference: string;
+  created_at: string;
+  updated_at: string;
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(path, {
+  const res = await fetch(`${API_BASE}${path}`, {
     headers: { "Content-Type": "application/json" },
+    credentials: "include",
     ...options,
   });
   if (!res.ok) {
     throw new Error(`API error: ${res.status} ${res.statusText}`);
   }
   return res.json();
+}
+
+export function login(email: string, password: string): Promise<User> {
+  return request<User>("/api/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ email, password }),
+  });
+}
+
+export function logout(): Promise<void> {
+  return fetch("/api/auth/logout", {
+    method: "POST",
+    credentials: "include",
+  }).then(() => undefined);
 }
 
 export function getCurrentUser(): Promise<User> {
@@ -202,6 +231,7 @@ export async function uploadProjectBundle(
   const res = await fetch(`/api/projects/${projectId}/bundles/upload`, {
     method: "POST",
     body: formData,
+    credentials: "include",
   });
   if (!res.ok) {
     const detail = await res.json().then((b) => b.detail).catch(() => res.statusText);
@@ -226,6 +256,7 @@ export async function detachProjectResource(
 ): Promise<void> {
   await fetch(`/api/projects/${projectId}/resources/${resourceId}`, {
     method: "DELETE",
+    credentials: "include",
   });
 }
 
@@ -302,18 +333,6 @@ export function getOutputDownloadUrl(
   outputId: string,
 ): string {
   return `/api/projects/${projectId}/execution-requests/${requestId}/outputs/${outputId}/download`;
-}
-
-export interface ExecutionEnvironment {
-  id: string;
-  identifier: string;
-  name: string;
-  runtime: string;
-  description: string;
-  status: string;
-  image_reference: string;
-  created_at: string;
-  updated_at: string;
 }
 
 export async function getExecutionEnvironments(): Promise<ExecutionEnvironment[]> {

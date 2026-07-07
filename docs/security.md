@@ -36,7 +36,9 @@ Containers should:
 
 ## Authentication
 
-Authentication uses Firebase Authentication.
+Authentication uses the IdentityProvider abstraction (LocalIdentityProvider with Argon2 password hashing).
+
+Sessions are managed server-side with HTTP-only cookies and stored in PostgreSQL.
 
 Application permissions are stored locally.
 

@@ -2,24 +2,9 @@ import uuid
 
 import pytest
 
-from app.core.config import settings
 from app.models.data_resource import DataResource
 from app.models.execution_environment import ExecutionEnvironment
 from app.models.project import Project
-from app.models.user import User, UserRole
-
-
-@pytest.fixture
-def admin_user(db_session):
-    user = User(
-        email=settings.admin_email,
-        display_name="Administrator",
-        role=UserRole.ADMIN,
-    )
-    db_session.add(user)
-    db_session.commit()
-    db_session.refresh(user)
-    return user
 
 
 @pytest.fixture

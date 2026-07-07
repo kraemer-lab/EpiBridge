@@ -3,7 +3,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.core.config import settings
 from app.models.analysis_bundle import AnalysisBundle
 from app.models.data_resource import DataResource
 from app.models.execution_environment import ExecutionEnvironment
@@ -13,24 +12,10 @@ from app.models.execution_request import (
 )
 from app.models.output import Output
 from app.models.project import Project
-from app.models.user import User, UserRole
 from app.services.output_service import (
     register_output,
     transition_request_status,
 )
-
-
-@pytest.fixture
-def admin_user(db_session):
-    user = User(
-        email=settings.admin_email,
-        display_name="Administrator",
-        role=UserRole.ADMIN,
-    )
-    db_session.add(user)
-    db_session.commit()
-    db_session.refresh(user)
-    return user
 
 
 @pytest.fixture

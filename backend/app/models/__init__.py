@@ -7,6 +7,7 @@ from app.models.execution_request import ExecutionRequest, ExecutionRequestStatu
 from app.models.output import Output
 from app.models.project import Project
 from app.models.project_data_resource import ProjectDataResource
+from app.models.session import Session
 from app.models.user import User, UserRole
 
 __all__ = [
@@ -21,6 +22,7 @@ __all__ = [
     "Output",
     "Project",
     "ProjectDataResource",
+    "Session",
     "User",
     "UserRole",
 ]

@@ -13,15 +13,11 @@ class Settings(BaseSettings):
     redis_port: int = 6379
 
     secret_key: str
-    firebase_project_id: str = ""
-    firebase_private_key_id: str = ""
-    firebase_private_key: str = ""
-    firebase_client_email: str = ""
-    firebase_client_id: str = ""
 
     domain: str = "localhost"
     admin_email: str = "admin@epibridge.local"
-    dev_auth: bool = True
+    admin_password: str = "admin"
+    session_ttl_seconds: int = 86400
     auto_create_schema: bool = True
     auto_register_resources: bool = True
     resource_manifest_dir: str = ""

@@ -11,6 +11,7 @@ from app.db.base import Base
 
 class UserRole(str, enum.Enum):
     ADMIN = "admin"
+    RESEARCHER = "researcher"
 
 
 class User(Base):
@@ -21,6 +22,7 @@ class User(Base):
     )
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     display_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[UserRole] = mapped_column(
         Enum(UserRole, name="user_role"), nullable=False
     )
