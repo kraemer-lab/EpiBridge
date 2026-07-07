@@ -60,7 +60,7 @@ test("Golden Path: researcher creates project, uploads bundle, runs analysis, do
   await page.getByLabel("Name").fill(`Test Analysis ${TS}`);
   await page.getByLabel("Version").fill("1.0.0");
   await page.getByLabel("Entrypoint").fill("run.py");
-  await page.getByLabel("Execution Environment").selectOption({ label: "Python 3.13 Scientific (python-3.13)" });
+  await page.getByLabel("Execution Environment").selectOption({ label: "Python 3.13" });
   // Select the Mexico Dengue data resource for this bundle
   await page.getByText("mex-dengue-2026").click();
 

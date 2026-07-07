@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from app.models.ai_bundle_review import AIBundleReview
     from app.models.data_resource import DataResource
     from app.models.execution_environment import ExecutionEnvironment
+    from app.models.execution_image import ExecutionImage
     from app.models.project import Project
     from app.models.user import User
 
@@ -42,6 +43,13 @@ class AnalysisBundle(Base):
     description: Mapped[str] = mapped_column(Text, nullable=False, default="")
     outputs: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
     parameters: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    build_status: Mapped[str] = mapped_column(
+        String(30), nullable=False, default="environment_not_built"
+    )
+    build_error: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    execution_image_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("execution_images.id"), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -52,6 +60,7 @@ class AnalysisBundle(Base):
     project: Mapped["Project"] = relationship(backref="analysis_bundles")
     created_by: Mapped["User"] = relationship(backref="created_bundles")
     execution_environment: Mapped["ExecutionEnvironment"] = relationship()
+    execution_image: Mapped["ExecutionImage | None"] = relationship()
 
     data_resources: Mapped[list["DataResource"]] = relationship(
         secondary="analysis_bundle_data_resources",

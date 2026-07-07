@@ -412,11 +412,8 @@ specifying arbitrary runtime strings.
 Execution Environments are not merely language versions. They represent curated
 environments with specific packages and tooling:
 
-* Python 3.13 Scientific (NumPy, SciPy, Pandas, scikit-learn)
-* Python 3.13 Machine Learning (PyTorch, TensorFlow, XGBoost)
-* R 4.5 Tidyverse (dplyr, ggplot2, tidyr)
-* R 4.5 Spatial (sf, terra, sp)
-* R 4.5 Bioconductor (DESeq2, limma, edgeR)
+* Python 3.13 (slim, NumPy, Pandas)
+* Python 3.14 (slim, NumPy, Pandas)
 
 ### Environment Model
 
@@ -441,12 +438,12 @@ database is a runtime index.
 
 ```yaml
 environments:
-  - identifier: python-3.13-scientific
-    name: Python 3.13 Scientific
+  - identifier: python-3.13
+    name: Python 3.13
     runtime: python-3.13
-    description: "NumPy, SciPy, Pandas, Matplotlib, scikit-learn"
+    description: "Python 3.13 (slim) with NumPy and Pandas"
     status: active
-    image_reference: "epibridge/python-3.13-scientific:latest"
+    image_reference: "epibridge/python-3.13:latest"
 ```
 
 Registration is idempotent — running it multiple times produces the same
@@ -714,6 +711,116 @@ artefacts. It creates a natural place for future validation:
 
 The backend serves files from this volume via the download endpoint.
 No data resource access is involved — outputs are result artefacts.
+
+⸻
+
+## Environment Builder
+
+The **Environment Builder** subsystem transforms an Analysis Bundle's dependency
+specification into a reusable Docker image (Execution Image) via curated
+Dockerfile templates. This separates environment construction from analysis
+execution.
+
+### Architectural principle
+
+The builder subsystem follows the same provider abstraction pattern used by
+Data Resources, AI, and Identity providers.
+
+### Builder abstraction
+
+```python
+class EnvironmentBuilder(ABC):
+    def identifier(self) -> str: ...
+    def dependency_hash(self, bundle_path: Path) -> str: ...
+    def build(self, *, bundle_path, base_image, image_tag) -> BuildResult: ...
+```
+
+Each concrete builder owns its **dependency discovery** (which file to read),
+**dependency hashing** (content-based cache key), **build context construction**
+(temp dir with curated Dockerfile + dependency file), and **Docker build
+invocation**. The worker only orchestrates — it never touches dependency files
+or build context internals.
+
+### Curated Dockerfile templates
+
+Builders use institutional Dockerfile templates, never user-supplied ones.
+Templates live in `backend/builder_templates/{builder_type}/Dockerfile` and are
+curated platform assets.
+
+```
+builder_templates/
+  python/Dockerfile       # ARG BASE_IMAGE → pip install -r requirements.txt
+  conda/Dockerfile        # future
+  r/Dockerfile            # future
+  poetry/Dockerfile       # future
+  dockerfile/Dockerfile   # future (trusted user Dockerfiles)
+```
+
+### Build pipeline
+
+```
+Analysis Bundle
+     ↓
+Environment Builder selection (by runtime prefix, e.g. "python-")
+     ↓
+builder.dependency_hash(bundle_path) → dependency_hash
+     ↓
+Cache lookup: (execution_environment_id, dependency_hash)
+     ├── HIT → nothing to do
+     └── MISS → Create BuildRequest(status=PENDING)
+                  ↓
+           Worker polls PENDING → BUILDING
+                  ↓
+           builder.build(bundle_path, base_image, image_tag)
+                  ↓
+           ExecutionImage record created (cache)
+                  ↓
+           BuildRequest → COMPLETED
+```
+
+### Two distinct models
+
+| Model | Role |
+|-------|------|
+| `BuildRequest` | Work item (like `ExecutionRequest`). Status: PENDING → BUILDING → COMPLETED / FAILED. |
+| `ExecutionImage` | Cached artefact (like `Output`). Keyed by `(execution_environment_id, dependency_hash)`. |
+
+The `ExecutionImage` table is a content-addressable cache with a unique
+constraint on the composite key. The cache is designed for future lifecycle
+management: TTL expiry, transparent rebuild, and image reuse are supported
+by the existing columns (`created_at`, `execution_environment_id`,
+`dependency_hash`).
+
+### Build isolation
+
+Builder containers (created during `docker build`) are intentionally different
+from execution containers:
+
+- May access the Internet (pip install, conda install, etc.)
+- May install dependencies
+- May communicate with package repositories
+
+Builder containers must never receive:
+- Mounted Data Resources
+- Project outputs
+- User sessions
+- Analysis code (only dependency specifications)
+
+### Future builders
+
+Adding a new builder requires:
+1. Create a curated Dockerfile template in `builder_templates/{type}/Dockerfile`
+2. Implement a new `EnvironmentBuilder` subclass
+3. Register it in `builders/__init__.py` with its runtime prefix
+
+No changes to the core abstraction, the worker, the cache model, or the API.
+
+### Execution remains unchanged
+
+This milestone does not replace the existing execution path. Execution
+continues to use the `ExecutionEnvironment.image_reference` directly.
+The build architecture is proven independently; a future milestone will
+switch execution to use the cached `ExecutionImage` when available.
 
 ⸻
 

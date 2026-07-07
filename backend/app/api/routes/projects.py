@@ -1,4 +1,5 @@
 import json
+import logging
 import uuid
 from typing import List
 
@@ -44,6 +45,7 @@ from app.services.analysis_bundle_service import (
     update_bundle,
 )
 from app.services.bundle_store import get_bundle_store
+from app.services.environment_builder_service import ensure_build_request
 from app.services.execution_environment_service import list_environments
 from app.services.execution_request_service import (
     create_execution_request,
@@ -96,6 +98,8 @@ def _bundle_to_read(bundle: AnalysisBundle) -> AnalysisBundleRead:
         resource_identifiers=get_resource_identifiers(bundle),
         outputs=bundle.outputs,
         parameters=bundle.parameters,
+        build_status=bundle.build_status,
+        build_error=bundle.build_error,
         created_at=bundle.created_at,
         updated_at=bundle.updated_at,
         ai_review=ai_review,
@@ -380,6 +384,10 @@ async def post_project_bundle_upload(
     update_bundle(db, bundle.id, {"source_path": store_path, "status": "active"})
 
     background_tasks.add_task(request_and_perform_review, bundle.id)
+
+    if ensure_build_request(db, bundle) is None:
+        logger = logging.getLogger("api.routes.projects")
+        logger.info("Bundle %s registered without build request", bundle.id)
 
     db.refresh(bundle)
     return _bundle_to_read(bundle)

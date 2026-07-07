@@ -30,7 +30,7 @@ Move the computation to the data, not the data to the computation.
 * Queue: Redis
 * Worker: Python
 * Execution: Docker
-* Authentication: Firebase Authentication
+* Authentication: Local Identity Provider (Argon2, server-side sessions)
 
 ## Repository Structure
 

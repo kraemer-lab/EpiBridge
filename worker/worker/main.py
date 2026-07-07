@@ -5,17 +5,21 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session
 
+from app.builders.registry import registry as builder_registry
 from app.core.config import settings
 from app.db.session import SessionLocal
 from app.execution.docker import DockerExecutor
 from app.models.analysis_bundle import AnalysisBundle
+from app.models.build_request import BuildRequest, BuildRequestStatus
 from app.models.execution_environment import ExecutionEnvironment
+from app.models.execution_image import ExecutionImage
 from app.models.execution_request import (
     ExecutionRequest,
     ExecutionRequestStatus,
 )
 from app.providers.registry import registry
 from app.providers.types import ProviderType
+from app.services.bundle_store import get_bundle_store
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("worker")
@@ -39,6 +43,15 @@ def get_pending_requests(db: Session) -> list[ExecutionRequest]:
     )
 
 
+def get_pending_builds(db: Session) -> list[BuildRequest]:
+    return (
+        db.query(BuildRequest)
+        .filter(BuildRequest.status == BuildRequestStatus.PENDING)
+        .order_by(BuildRequest.created_at)
+        .all()
+    )
+
+
 def transition_to(
     db: Session,
     request: ExecutionRequest,
@@ -49,6 +62,23 @@ def transition_to(
     db.commit()
     db.refresh(request)
     msg = f"Request {request.id} → {status.value}"
+    if reason:
+        msg += f" ({reason})"
+    logger.info(msg)
+
+
+def build_transition_to(
+    db: Session,
+    build: BuildRequest,
+    status: BuildRequestStatus,
+    reason: str | None = None,
+) -> None:
+    build.status = status
+    if reason:
+        build.error_message = reason
+    db.commit()
+    db.refresh(build)
+    msg = f"Build {build.id} → {status.value}"
     if reason:
         msg += f" ({reason})"
     logger.info(msg)
@@ -75,6 +105,95 @@ def resolve_data_mounts(
     return mounts
 
 
+def process_build(db: Session, build: BuildRequest) -> None:
+    bundle = db.query(AnalysisBundle).get(build.analysis_bundle_id)
+    if bundle is None:
+        build_transition_to(db, build, BuildRequestStatus.FAILED, "bundle not found")
+        return
+
+    env = db.query(ExecutionEnvironment).get(build.execution_environment_id)
+    if env is None:
+        build_transition_to(
+            db, build, BuildRequestStatus.FAILED, "environment not found"
+        )
+        return
+
+    builder = builder_registry.get_for_runtime(env.runtime)
+    if builder is None:
+        build_transition_to(
+            db, build, BuildRequestStatus.FAILED, "no builder for runtime"
+        )
+        return
+
+    bundle_path = get_bundle_store().get_path(bundle.id)
+    if not bundle_path.is_dir():
+        build_transition_to(
+            db, build, BuildRequestStatus.FAILED, "bundle directory not found"
+        )
+        return
+
+    tag = f"{settings.image_registry_prefix}/{env.runtime}:{build.dependency_hash[:16]}"
+
+    existing = (
+        db.query(ExecutionImage)
+        .filter(
+            ExecutionImage.execution_environment_id == build.execution_environment_id,
+            ExecutionImage.dependency_hash == build.dependency_hash,
+        )
+        .first()
+    )
+    if existing is not None:
+        bundle.execution_image_id = existing.id
+        bundle.build_status = "environment_ready"
+        build.execution_image_id = existing.id
+        build_transition_to(db, build, BuildRequestStatus.COMPLETED, "cache hit (race)")
+        return
+
+    bundle.build_status = "environment_building"
+    build_transition_to(db, build, BuildRequestStatus.BUILDING)
+
+    result = builder.build(
+        bundle_path=bundle_path,
+        base_image=env.image_reference,
+        image_tag=tag,
+    )
+
+    if not result.success:
+        bundle.build_status = "environment_build_failed"
+        bundle.build_error = result.build_log
+        db.commit()
+        build_transition_to(db, build, BuildRequestStatus.FAILED, result.build_log)
+        return
+
+    cached = (
+        db.query(ExecutionImage)
+        .filter(
+            ExecutionImage.execution_environment_id == build.execution_environment_id,
+            ExecutionImage.dependency_hash == build.dependency_hash,
+        )
+        .first()
+    )
+    if cached is None:
+        cached = ExecutionImage(
+            execution_environment_id=build.execution_environment_id,
+            dependency_hash=build.dependency_hash,
+            image_reference=result.image_reference,
+            builder_type=build.builder_type,
+            build_log=result.build_log,
+        )
+        db.add(cached)
+        db.flush()
+    else:
+        cached.image_reference = result.image_reference
+        cached.builder_type = build.builder_type
+        cached.build_log = result.build_log
+
+    bundle.execution_image_id = cached.id
+    bundle.build_status = "environment_ready"
+    build.execution_image_id = cached.id
+    build_transition_to(db, build, BuildRequestStatus.COMPLETED)
+
+
 def execute_request(db: Session, request: ExecutionRequest) -> None:
     bundle = db.query(AnalysisBundle).get(request.analysis_bundle_id)
     if bundle is None:
@@ -88,7 +207,11 @@ def execute_request(db: Session, request: ExecutionRequest) -> None:
         )
         return
 
-    image = env.image_reference
+    image = (
+        bundle.execution_image.image_reference
+        if bundle.execution_image
+        else env.image_reference
+    )
     if not image:
         transition_to(db, request, ExecutionRequestStatus.FAILED, "no image reference")
         return
@@ -170,6 +293,11 @@ def main():
         try:
             db = SessionLocal()
             try:
+                pending_builds = get_pending_builds(db)
+                for build in pending_builds:
+                    logger.info(f"Processing build {build.id}")
+                    process_build(db, build)
+
                 pending = get_pending_requests(db)
                 for request in pending:
                     logger.info(f"Processing request {request.id}: {request.name}")

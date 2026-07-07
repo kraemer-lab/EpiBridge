@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://ollama:11434"
     ollama_model: str = "llama3.2"
 
+    build_context_dir: str = ""
+    image_registry_prefix: str = "epibridge/builds"
+
     @property
     def database_url(self) -> str:
         return (

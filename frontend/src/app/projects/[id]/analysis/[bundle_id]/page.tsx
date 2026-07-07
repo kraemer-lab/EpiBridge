@@ -75,6 +75,41 @@ export default function AnalysisDetailPage() {
     };
   }, [bundle?.ai_review?.status, fetchBundle]);
 
+  const buildPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const BUILD_TERMINAL = ["environment_ready", "environment_build_failed"];
+
+  useEffect(() => {
+    if (!bundle || BUILD_TERMINAL.includes(bundle.build_status)) {
+      if (buildPollRef.current) {
+        clearInterval(buildPollRef.current);
+        buildPollRef.current = null;
+      }
+      return;
+    }
+
+    buildPollRef.current = setInterval(async () => {
+      try {
+        const updated = await fetchBundle();
+        if (BUILD_TERMINAL.includes(updated.build_status) && buildPollRef.current) {
+          clearInterval(buildPollRef.current);
+          buildPollRef.current = null;
+        }
+      } catch {
+        if (buildPollRef.current) {
+          clearInterval(buildPollRef.current);
+          buildPollRef.current = null;
+        }
+      }
+    }, 5000);
+
+    return () => {
+      if (buildPollRef.current) {
+        clearInterval(buildPollRef.current);
+        buildPollRef.current = null;
+      }
+    };
+  }, [bundle?.build_status, fetchBundle]);
+
   const handleRun = async () => {
     setRunning(true);
     try {
@@ -135,6 +170,24 @@ export default function AnalysisDetailPage() {
           >
             {bundle.status.charAt(0).toUpperCase() + bundle.status.slice(1)}
           </span>
+          <div style={{ marginTop: "var(--spacing-sm)", fontSize: "0.85rem", fontWeight: 600 }}>
+            {bundle.build_status === "environment_ready" && (
+              <span style={{ color: "#2e7d32" }}>Ready to run</span>
+            )}
+            {(bundle.build_status === "environment_not_built" || bundle.build_status === "environment_building") && (
+              <span style={{ color: "#ed6c02" }}>Preparing execution environment…</span>
+            )}
+            {bundle.build_status === "environment_build_failed" && (
+              <span>
+                <span style={{ color: "#d32f2f" }}>Execution environment could not be prepared</span>
+                {bundle.build_error && (
+                  <div style={{ marginTop: "var(--spacing-xs)", color: "var(--color-text-secondary)", fontWeight: 400, fontSize: "0.8rem", lineHeight: 1.5 }}>
+                    {bundle.build_error}
+                  </div>
+                )}
+              </span>
+            )}
+          </div>
         </div>
         <div style={{ display: "flex", gap: "var(--spacing-sm)" }}>
           <button className="btn btn-primary" onClick={handleRun} disabled={running}>
@@ -155,7 +208,7 @@ export default function AnalysisDetailPage() {
           <div style={{ fontSize: "0.8rem", color: "var(--color-text-secondary)", marginBottom: "var(--spacing-xs)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
             Runtime
           </div>
-          <div>{bundle.runtime}</div>
+          <div>{bundle.display_runtime}</div>
         </div>
 
         <div style={{ marginBottom: "var(--spacing-md)" }}>
