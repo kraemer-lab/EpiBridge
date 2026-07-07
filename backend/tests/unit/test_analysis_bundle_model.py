@@ -119,6 +119,42 @@ class TestAnalysisBundleModel:
         bundle.project = project
         assert bundle.project.name == "Test Project"
 
+    def test_default_build_status_is_none_in_memory(self):
+        bundle = AnalysisBundle(
+            project_id=uuid.uuid4(),
+            created_by_id=uuid.uuid4(),
+            execution_environment_id=uuid.uuid4(),
+            name="Test",
+            version="1.0.0",
+            entrypoint="run.py",
+        )
+        assert bundle.build_status is None  # server_default, not in-memory
+
+    def test_can_set_build_status(self):
+        bundle = AnalysisBundle(
+            project_id=uuid.uuid4(),
+            created_by_id=uuid.uuid4(),
+            execution_environment_id=uuid.uuid4(),
+            name="Test",
+            version="1.0.0",
+            entrypoint="run.py",
+            build_status="environment_ready",
+        )
+        assert bundle.build_status == "environment_ready"
+
+    def test_can_set_execution_image_id(self):
+        img_id = uuid.uuid4()
+        bundle = AnalysisBundle(
+            project_id=uuid.uuid4(),
+            created_by_id=uuid.uuid4(),
+            execution_environment_id=uuid.uuid4(),
+            name="Test",
+            version="1.0.0",
+            entrypoint="run.py",
+            execution_image_id=img_id,
+        )
+        assert bundle.execution_image_id == img_id
+
 
 class TestAnalysisBundleDataResource:
     def test_join_table_fields(self):

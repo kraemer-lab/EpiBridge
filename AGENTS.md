@@ -6,9 +6,9 @@
 
 ```
 backend/         FastAPI scaffold (app entrypoint, health endpoint, SQLAlchemy,
-                 Alembic, config, Firebase auth stub, CLI seed-admin,
-                 bundle store, worker execution)
-containers/      Base analysis Docker images (python-3.13-scientific)
+                 Alembic, config, Local Identity Provider auth, CLI seed-admin,
+                 bundle store, worker execution, Environment Builder subsystem)
+containers/      Base analysis Docker images (python-3.13, python-3.14)
 vm/              cloud-init.yaml, Caddyfile (HTTPS, HSTS, compression,
                  security headers, request size limits), runtime spec
 scripts/         bootstrap.sh, install.sh, upgrade.sh, backup.sh, restore.sh, healthcheck.sh
@@ -21,7 +21,6 @@ docs/            Architecture, security, API, vision, AI assistance docs
 
 ```
 frontend/        Next.js + React + TypeScript (game in progress)
-worker/          Python job executor (functional — polls Postgres)
 shared/          Shared schemas and types (not started)
 examples/        Synthetic datasets + analysis templates (not started)
 ```
@@ -54,7 +53,7 @@ Single monorepo. Do not add top-level directories without justification.
 - Never bypass the approval workflow
 - Use `Storage` and `Executor` interfaces (not coupling directly to Docker)
 - Only the optional AI service (Ollama) has outbound network access, and only for model downloads
-- Firebase Auth for auth, internal PostgreSQL for authorisation
+- IdentityProvider abstraction for auth, internal PostgreSQL for authorisation
 - Audit trail required for all actions
 
 ### Temporary development policy (domain model iteration phase)
@@ -75,7 +74,8 @@ Once the core schema stabilises, Alembic will be reintroduced as a dedicated mil
 
 - **Institutional assets** (Data Resources, Execution Environments) are registered automatically via lifespan startup from YAML manifests.
 - **Researcher artefacts** (Projects, Analysis Bundles, Execution Requests) are created by users through the application.
-- **Internal system artefacts** (AIBundleReview) are created by background tasks during platform operation.
+- **Internal system artefacts** (AIBundleReview, BuildRequest, ExecutionImage) are created by background tasks and workers during platform operation.
+- **Environment Builder subsystem** transforms Analysis Bundle dependency specifications into reusable Execution Images via curated Dockerfile templates. Builds are driven by `BuildRequest` work items processed by the worker alongside execution requests. `ExecutionImage` records serve as a content-addressable cache keyed by `(execution_environment_id, dependency_hash)`.
 - **Demo workspace** (optional) can be created by `seed-demo` CLI command — a development tool, not application startup logic.
 - **Manifest directories** (`RESOURCE_MANIFEST_DIR`, `ENVIRONMENT_MANIFEST_DIR`) are deployment configuration, not application defaults. Docker Compose sets them for development; production points them elsewhere.
 
@@ -162,7 +162,7 @@ make playwright    # run the golden-path e2e test
 
 The test (in `frontend/e2e/golden-path.spec.ts`) validates:
 1. Opening EpiBridge
-2. Dev auth auto-login
+2. Login with admin credentials
 3. Creating a project
 4. Attaching a data resource to the project
 5. Creating an analysis and uploading a bundle

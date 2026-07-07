@@ -154,7 +154,7 @@ export default function EditAnalysisPage() {
           >
             {environments.map((env) => (
               <option key={env.id} value={env.id}>
-                {env.name} ({env.runtime})
+                {env.display_name}
               </option>
             ))}
           </select>

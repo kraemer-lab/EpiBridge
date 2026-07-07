@@ -1,9 +1,10 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, computed_field
 
 from app.schemas.ai_bundle_review import AIBundleReviewRead
+from app.schemas.execution_environment import _display_name
 
 
 class AnalysisBundleCreate(BaseModel):
@@ -31,12 +32,19 @@ class AnalysisBundleRead(BaseModel):
     version: str
     entrypoint: str
     description: str
+    build_status: str = "environment_not_built"
+    build_error: str = ""
     resource_identifiers: list[str] = []
     outputs: list[str] = []
     parameters: dict = {}
     created_at: datetime
     updated_at: datetime
     ai_review: AIBundleReviewRead | None = None
+
+    @computed_field
+    @property
+    def display_runtime(self) -> str:
+        return _display_name(self.runtime)
 
     model_config = {"from_attributes": True}
 

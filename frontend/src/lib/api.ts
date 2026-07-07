@@ -56,7 +56,10 @@ export interface AnalysisBundle {
   execution_environment_id: string;
   name: string;
   status: string;
+  build_status: string;
+  build_error: string;
   runtime: string;
+  display_runtime: string;
   version: string;
   entrypoint: string;
   description: string;
@@ -141,6 +144,7 @@ export interface ExecutionEnvironment {
   description: string;
   status: string;
   image_reference: string;
+  display_name: string;
   created_at: string;
   updated_at: string;
 }

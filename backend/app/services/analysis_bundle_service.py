@@ -208,6 +208,14 @@ def update_bundle(db: Session, bundle_id: uuid.UUID, data: dict) -> AnalysisBund
             raise ValueError("'parameters' must be a dict")
         bundle.parameters = update_data["parameters"]
 
+    if "status" in update_data:
+        if (
+            not isinstance(update_data["status"], str)
+            or not update_data["status"].strip()
+        ):
+            raise ValueError("'status' must be a non-empty string")
+        bundle.status = update_data["status"]
+
     if "resource_identifiers" in update_data:
         resources = validate_resources(update_data["resource_identifiers"], db)
         db.query(AnalysisBundleDataResource).filter(

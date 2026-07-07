@@ -61,8 +61,12 @@ export HOST_DATA_ROOT="${HOST_DATA_ROOT:-${REPO_ROOT}/examples/resources}"
 echo "Building application images..."
 docker compose build
 
-echo "Building analysis container image..."
-docker build -t epibridge/python-3.13-scientific:latest containers/python-3.13-scientific/
+echo "Building analysis container images..."
+for dir in containers/*/; do
+    tag="epibridge/$(basename "$dir"):latest"
+    echo "  Building $tag..."
+    docker build -t "$tag" "$dir"
+done
 
 ###############################################################################
 # 4. Start services
