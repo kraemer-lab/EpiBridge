@@ -4,6 +4,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, computed_field
 
+from app.models.analysis_bundle import AnalysisBundleBuildStatus, AnalysisBundleStatus
 from app.schemas.ai_bundle_review import AIBundleReviewRead
 from app.schemas.execution_environment import _display_name
 
@@ -23,6 +24,7 @@ class Interpreter(str, enum.Enum):
 
 
 class AnalysisBundleCreate(BaseModel):
+    # NOTE: lifecycle state is owned by the server, not supplied by clients.
     name: str
     execution_environment_id: uuid.UUID
     version: str
@@ -34,7 +36,6 @@ class AnalysisBundleCreate(BaseModel):
     resource_identifiers: list[str] = []
     outputs: list[str] = []
     parameters: dict = {}
-    status: str = "draft"
 
 
 class AnalysisBundleRead(BaseModel):
@@ -44,14 +45,16 @@ class AnalysisBundleRead(BaseModel):
     execution_environment_id: uuid.UUID
     name: str
     source_path: str
-    status: str
+    status: AnalysisBundleStatus
     runtime: str
     version: str
     entrypoint: str
     interpreter: str = "python"
     arguments: str = ""
     description: str
-    build_status: str = "environment_not_built"
+    build_status: AnalysisBundleBuildStatus = (
+        AnalysisBundleBuildStatus.ENVIRONMENT_NOT_BUILT
+    )
     build_error: str = ""
     build_log: str = ""
     resource_identifiers: list[str] = []

@@ -1,6 +1,10 @@
 from sqlalchemy.orm import Session
 
-from app.models.analysis_bundle import AnalysisBundle, AnalysisBundleDataResource
+from app.models.analysis_bundle import (
+    AnalysisBundle,
+    AnalysisBundleDataResource,
+    AnalysisBundleStatus,
+)
 from app.models.data_resource import DataResource
 from app.models.execution_environment import ExecutionEnvironment
 from app.models.project import Project
@@ -67,7 +71,7 @@ def seed_demo_workspace(db: Session) -> dict:
         execution_environment_id=env.id if env else None,
         name=DEMO_BUNDLE_NAME,
         source_path="demo",
-        status="active",
+        status=AnalysisBundleStatus.ACTIVE,
         version="1.0.0",
         entrypoint="run.py",
         description=(

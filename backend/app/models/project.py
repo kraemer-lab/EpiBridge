@@ -33,6 +33,6 @@ class Project(Base):
     owner = relationship("User", backref="projects")
 
     data_resources: Mapped[list["DataResource"]] = relationship(
-        secondary="project_data_resources",
+        secondary="project_resource_allocations",
         back_populates="projects",
     )

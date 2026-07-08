@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.ai import get_ai_provider
 from app.ai.context import AIReviewContext
 from app.db.session import SessionLocal
-from app.models.ai_bundle_review import AIBundleReview
+from app.models.ai_bundle_review import AIBundleReview, AIBundleReviewStatus
 from app.models.analysis_bundle import AnalysisBundle
 from app.services.bundle_store import get_bundle_store
 
@@ -24,10 +24,12 @@ def request_review(bundle_id: uuid.UUID) -> None:
             )
             if bundle is None:
                 return
-            review = AIBundleReview(bundle_id=bundle_id, status="pending")
+            review = AIBundleReview(
+                bundle_id=bundle_id, status=AIBundleReviewStatus.PENDING
+            )
             db.add(review)
         else:
-            review.status = "pending"
+            review.status = AIBundleReviewStatus.PENDING
             review.summary = None
             review.assessment = None
             review.assessment_confidence = None
@@ -52,7 +54,7 @@ def perform_review(bundle_id: uuid.UUID) -> None:
 
         provider = get_ai_provider()
         if provider is None:
-            review.status = "unavailable"
+            review.status = AIBundleReviewStatus.UNAVAILABLE
             db.commit()
             return
 
@@ -73,13 +75,13 @@ def perform_review(bundle_id: uuid.UUID) -> None:
         result = provider.review(analysis_dir, context=context)
 
         if result.is_unavailable:
-            review.status = "unavailable"
+            review.status = AIBundleReviewStatus.UNAVAILABLE
         else:
             review.summary = result.summary
             review.assessment = result.assessment
             review.assessment_confidence = result.assessment_confidence
             review.reviewer_notes = result.reviewer_notes
-            review.status = "completed"
+            review.status = AIBundleReviewStatus.COMPLETED
 
         db.commit()
     except Exception:
@@ -90,7 +92,7 @@ def perform_review(bundle_id: uuid.UUID) -> None:
                 .first()
             )
             if review is not None:
-                review.status = "failed"
+                review.status = AIBundleReviewStatus.FAILED
                 db.commit()
         except Exception:
             db.rollback()

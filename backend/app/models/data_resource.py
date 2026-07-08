@@ -35,6 +35,6 @@ class DataResource(Base):
     )
 
     projects: Mapped[list["Project"]] = relationship(
-        secondary="project_data_resources",
+        secondary="project_resource_allocations",
         back_populates="data_resources",
     )

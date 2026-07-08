@@ -18,11 +18,11 @@ from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_user
 from app.db.session import get_db
-from app.models.analysis_bundle import AnalysisBundle
+from app.models.analysis_bundle import AnalysisBundle, AnalysisBundleStatus
 from app.models.build_request import BuildRequest
 from app.models.data_resource import DataResource
 from app.models.project import Project
-from app.models.project_data_resource import ProjectDataResource
+from app.models.project_data_resource import ProjectResourceAllocation
 from app.models.user import User
 from app.schemas.ai_bundle_review import AIBundleReviewRead
 from app.schemas.analysis_bundle import (
@@ -189,10 +189,10 @@ def delete_project_resource(
 ):
     _get_owned_project(db, project_id, current_user.id)
     join = (
-        db.query(ProjectDataResource)
+        db.query(ProjectResourceAllocation)
         .filter(
-            ProjectDataResource.project_id == project_id,
-            ProjectDataResource.data_resource_id == resource_id,
+            ProjectResourceAllocation.project_id == project_id,
+            ProjectResourceAllocation.data_resource_id == resource_id,
         )
         .first()
     )
@@ -382,7 +382,6 @@ async def post_project_bundle_upload(
         "resource_identifiers": ri,
         "outputs": outs,
         "parameters": params,
-        "status": "draft",
     }
 
     bundle = create_bundle(db, bundle_data, project_id, current_user.id)
@@ -398,7 +397,11 @@ async def post_project_bundle_upload(
             detail=str(e),
         )
 
-    update_bundle(db, bundle.id, {"source_path": store_path, "status": "active"})
+    update_bundle(
+        db,
+        bundle.id,
+        {"source_path": store_path, "status": AnalysisBundleStatus.ACTIVE},
+    )
 
     background_tasks.add_task(request_and_perform_review, bundle.id)
 

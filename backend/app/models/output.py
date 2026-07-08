@@ -1,3 +1,4 @@
+import enum
 import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
@@ -12,6 +13,12 @@ if TYPE_CHECKING:
     from app.models.execution_request import ExecutionRequest
 
 
+class OutputStatus(str, enum.Enum):
+    # Currently only AVAILABLE; future lifecycle to include
+    # PENDING_REVIEW, APPROVED, RELEASED, REJECTED.
+    AVAILABLE = "available"
+
+
 class Output(Base):
     __tablename__ = "outputs"
 
@@ -23,7 +30,9 @@ class Output(Base):
     )
     filename: Mapped[str] = mapped_column(String(255), nullable=False)
     size: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    status: Mapped[str] = mapped_column(String(20), nullable=False, default="available")
+    status: Mapped[OutputStatus] = mapped_column(
+        String(20), nullable=False, default=OutputStatus.AVAILABLE
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

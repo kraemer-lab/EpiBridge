@@ -7,8 +7,8 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.db.base import Base
 
 
-class ProjectDataResource(Base):
-    __tablename__ = "project_data_resources"
+class ProjectResourceAllocation(Base):
+    __tablename__ = "project_resource_allocations"
 
     project_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("projects.id"), primary_key=True

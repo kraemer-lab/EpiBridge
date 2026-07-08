@@ -2,7 +2,11 @@ import uuid
 
 from sqlalchemy.orm import Session
 
-from app.models.analysis_bundle import AnalysisBundle, AnalysisBundleDataResource
+from app.models.analysis_bundle import (
+    AnalysisBundle,
+    AnalysisBundleDataResource,
+    AnalysisBundleStatus,
+)
 from app.models.data_resource import DataResource
 from app.models.execution_environment import ExecutionEnvironment
 
@@ -211,11 +215,8 @@ def update_bundle(db: Session, bundle_id: uuid.UUID, data: dict) -> AnalysisBund
         bundle.parameters = update_data["parameters"]
 
     if "status" in update_data:
-        if (
-            not isinstance(update_data["status"], str)
-            or not update_data["status"].strip()
-        ):
-            raise ValueError("'status' must be a non-empty string")
+        if not isinstance(update_data["status"], AnalysisBundleStatus):
+            raise ValueError("'status' must be a valid AnalysisBundleStatus")
         bundle.status = update_data["status"]
 
     if "resource_identifiers" in update_data:

@@ -6,7 +6,7 @@ from app.models.analysis_bundle import AnalysisBundle
 from app.models.data_resource import DataResource
 from app.models.execution_environment import ExecutionEnvironment
 from app.models.project import Project
-from app.models.project_data_resource import ProjectDataResource
+from app.models.project_data_resource import ProjectResourceAllocation
 
 
 @pytest.fixture
@@ -124,7 +124,9 @@ class TestGetProjectResources:
         assert response.json() == []
 
     def test_resources_with_data(self, client, project, resource, db_session):
-        link = ProjectDataResource(project_id=project.id, data_resource_id=resource.id)
+        link = ProjectResourceAllocation(
+            project_id=project.id, data_resource_id=resource.id
+        )
         db_session.add(link)
         db_session.commit()
 
@@ -150,7 +152,9 @@ class TestGetProjectBundles:
     def test_bundles_with_data(
         self, client, project, resource, execution_environment, db_session
     ):
-        link = ProjectDataResource(project_id=project.id, data_resource_id=resource.id)
+        link = ProjectResourceAllocation(
+            project_id=project.id, data_resource_id=resource.id
+        )
         db_session.add(link)
 
         bundle = AnalysisBundle(

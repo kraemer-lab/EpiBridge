@@ -1,3 +1,4 @@
+import enum
 import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
@@ -16,6 +17,18 @@ if TYPE_CHECKING:
     from app.models.execution_image import ExecutionImage
     from app.models.project import Project
     from app.models.user import User
+
+
+class AnalysisBundleStatus(str, enum.Enum):
+    DRAFT = "draft"
+    ACTIVE = "active"
+
+
+class AnalysisBundleBuildStatus(str, enum.Enum):
+    ENVIRONMENT_NOT_BUILT = "environment_not_built"
+    ENVIRONMENT_BUILDING = "environment_building"
+    ENVIRONMENT_READY = "environment_ready"
+    ENVIRONMENT_BUILD_FAILED = "environment_build_failed"
 
 
 class AnalysisBundle(Base):
@@ -37,7 +50,9 @@ class AnalysisBundle(Base):
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     source_path: Mapped[str] = mapped_column(Text, nullable=False, default="")
-    status: Mapped[str] = mapped_column(String(20), nullable=False, default="draft")
+    status: Mapped[AnalysisBundleStatus] = mapped_column(
+        String(20), nullable=False, default=AnalysisBundleStatus.DRAFT
+    )
     version: Mapped[str] = mapped_column(String(50), nullable=False)
     entrypoint: Mapped[str] = mapped_column(String(255), nullable=False)
     interpreter: Mapped[str] = mapped_column(
@@ -47,8 +62,15 @@ class AnalysisBundle(Base):
     description: Mapped[str] = mapped_column(Text, nullable=False, default="")
     outputs: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
     parameters: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
-    build_status: Mapped[str] = mapped_column(
-        String(30), nullable=False, default="environment_not_built"
+    # NOTE:
+    # This field mirrors the BuildRequest lifecycle for historical reasons.
+    # Environment preparation is owned by BuildRequest, not AnalysisBundle.
+    # This field is retained for backwards compatibility and is expected
+    # to be removed in a future governance refactor.
+    build_status: Mapped[AnalysisBundleBuildStatus] = mapped_column(
+        String(30),
+        nullable=False,
+        default=AnalysisBundleBuildStatus.ENVIRONMENT_NOT_BUILT,
     )
     build_error: Mapped[str] = mapped_column(Text, nullable=False, default="")
     execution_image_id: Mapped[uuid.UUID | None] = mapped_column(
