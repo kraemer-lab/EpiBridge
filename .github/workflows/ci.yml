@@ -38,7 +38,7 @@ jobs:
     - name: Bootstrap EpiBridge
       run: make ci
 
-    - name: Run golden path e2e test
+    - name: Run canonical workflow e2e test
       run: |
         cd frontend
         npm ci

@@ -1,7 +1,7 @@
 import enum
 import uuid
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
@@ -12,6 +12,7 @@ from app.db.base import Base
 
 if TYPE_CHECKING:
     from app.models.analysis_bundle import AnalysisBundle
+    from app.models.output_set import OutputSet
     from app.models.project import Project
     from app.models.user import User
 
@@ -42,7 +43,7 @@ class ExecutionRequest(Base):
         JSON, nullable=False, default=dict
     )
     status: Mapped[ExecutionRequestStatus] = mapped_column(
-        String(20), nullable=False, default=ExecutionRequestStatus.PENDING
+        String(64), nullable=False, default=ExecutionRequestStatus.PENDING
     )
     log: Mapped[str] = mapped_column(Text, nullable=False, default="")
     requested_by_id: Mapped[uuid.UUID] = mapped_column(
@@ -58,3 +59,6 @@ class ExecutionRequest(Base):
     project: Mapped["Project"] = relationship()
     analysis_bundle: Mapped["AnalysisBundle"] = relationship()
     requested_by: Mapped["User"] = relationship()
+    output_set: Mapped[Optional["OutputSet"]] = relationship(
+        back_populates="execution_request", uselist=False
+    )

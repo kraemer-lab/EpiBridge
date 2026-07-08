@@ -11,6 +11,7 @@ from app.db.base import Base
 
 if TYPE_CHECKING:
     from app.models.project import Project
+    from app.models.project_data_resource import ProjectResourceAllocation
 
 
 class DataResource(Base):
@@ -34,7 +35,10 @@ class DataResource(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
-    projects: Mapped[list["Project"]] = relationship(
-        secondary="project_data_resources",
-        back_populates="data_resources",
+    resource_allocations: Mapped[list["ProjectResourceAllocation"]] = relationship(
+        back_populates="data_resource",
     )
+
+    @property
+    def projects(self) -> list["Project"]:
+        return [a.project for a in self.resource_allocations if a.revoked_at is None]

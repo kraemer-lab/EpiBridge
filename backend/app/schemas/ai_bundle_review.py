@@ -3,11 +3,13 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
+from app.models.ai_bundle_review import AIBundleReviewStatus
+
 
 class AIBundleReviewRead(BaseModel):
     id: uuid.UUID
     bundle_id: uuid.UUID
-    status: str
+    status: AIBundleReviewStatus
     summary: str | None = None
     assessment: str | None = None
     assessment_confidence: str | None = None

@@ -22,7 +22,7 @@ reset:
 	@echo "=== Development environment reset to known-good state ==="
 
 # --- CI targets (native Linux) -----------------------------------------------
-# CI bootstraps EpiBridge directly on the runner, runs the golden path test,
+# CI bootstraps EpiBridge directly on the runner, runs the canonical workflow test,
 # then tears everything down.
 
 ci: bootstrap

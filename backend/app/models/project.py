@@ -10,6 +10,8 @@ from app.db.base import Base
 
 if TYPE_CHECKING:
     from app.models.data_resource import DataResource
+    from app.models.project_data_resource import ProjectResourceAllocation
+    from app.models.project_membership import ProjectMembership
 
 
 class Project(Base):
@@ -32,7 +34,16 @@ class Project(Base):
 
     owner = relationship("User", backref="projects")
 
-    data_resources: Mapped[list["DataResource"]] = relationship(
-        secondary="project_data_resources",
-        back_populates="projects",
+    resource_allocations: Mapped[list["ProjectResourceAllocation"]] = relationship(
+        back_populates="project",
+        cascade="all, delete-orphan",
     )
+    members: Mapped[list["ProjectMembership"]] = relationship(
+        back_populates="project", cascade="all, delete-orphan"
+    )
+
+    @property
+    def data_resources(self) -> list["DataResource"]:
+        return [
+            a.data_resource for a in self.resource_allocations if a.revoked_at is None
+        ]

@@ -2,9 +2,14 @@ import uuid
 
 from sqlalchemy.orm import Session
 
-from app.models.analysis_bundle import AnalysisBundle, AnalysisBundleDataResource
+from app.models.analysis_bundle import (
+    AnalysisBundle,
+    AnalysisBundleDataResource,
+    AnalysisBundleStatus,
+)
 from app.models.data_resource import DataResource
 from app.models.execution_environment import ExecutionEnvironment
+from app.models.project_data_resource import ProjectResourceAllocation
 
 REQUIRED_MANIFEST_FIELDS = {
     "name",
@@ -63,7 +68,7 @@ def validate_entrypoint(entrypoint: str) -> None:
 
 
 def validate_resources(
-    resource_identifiers: list[str], db: Session
+    resource_identifiers: list[str], project_id: uuid.UUID, db: Session
 ) -> list[DataResource]:
     if not resource_identifiers:
         return []
@@ -79,6 +84,22 @@ def validate_resources(
     if missing:
         sorted_missing = ", ".join(sorted(missing))
         msg = f"Referenced Data Resources not found: {sorted_missing}"
+        raise ValueError(msg)
+
+    allocated = (
+        db.query(ProjectResourceAllocation.data_resource_id)
+        .filter(
+            ProjectResourceAllocation.project_id == project_id,
+            ProjectResourceAllocation.data_resource_id.in_([r.id for r in resources]),
+            ProjectResourceAllocation.revoked_at.is_(None),
+        )
+        .all()
+    )
+    allocated_ids = {a[0] for a in allocated}
+    unallocated = [r for r in resources if r.id not in allocated_ids]
+    if unallocated:
+        names = ", ".join(sorted(r.identifier for r in unallocated))
+        msg = f"Data Resources not allocated to this project: {names}"
         raise ValueError(msg)
 
     return resources
@@ -105,7 +126,7 @@ def create_bundle(
 ) -> AnalysisBundle:
     validate_manifest(data)
     validate_entrypoint(data["entrypoint"])
-    resources = validate_resources(data.get("resource_identifiers", []), db)
+    resources = validate_resources(data.get("resource_identifiers", []), project_id, db)
 
     ee_id = data["execution_environment_id"]
     if isinstance(ee_id, str):
@@ -211,15 +232,14 @@ def update_bundle(db: Session, bundle_id: uuid.UUID, data: dict) -> AnalysisBund
         bundle.parameters = update_data["parameters"]
 
     if "status" in update_data:
-        if (
-            not isinstance(update_data["status"], str)
-            or not update_data["status"].strip()
-        ):
-            raise ValueError("'status' must be a non-empty string")
+        if not isinstance(update_data["status"], AnalysisBundleStatus):
+            raise ValueError("'status' must be a valid AnalysisBundleStatus")
         bundle.status = update_data["status"]
 
     if "resource_identifiers" in update_data:
-        resources = validate_resources(update_data["resource_identifiers"], db)
+        resources = validate_resources(
+            update_data["resource_identifiers"], bundle.project_id, db
+        )
         db.query(AnalysisBundleDataResource).filter(
             AnalysisBundleDataResource.analysis_bundle_id == bundle.id
         ).delete()

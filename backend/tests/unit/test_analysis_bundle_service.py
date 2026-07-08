@@ -116,37 +116,49 @@ class TestValidateEntrypoint:
 
 class TestValidateResources:
     def test_all_resources_found(self):
+        project_id = uuid.uuid4()
         db = MagicMock()
         r1 = MagicMock()
         r1.identifier = "ukbb-phenotypes"
+        r1.id = uuid.uuid4()
         r2 = MagicMock()
         r2.identifier = "mex-dengue-2026"
-        db.query.return_value.filter.return_value.all.return_value = [r1, r2]
+        r2.id = uuid.uuid4()
+        db.query.return_value.filter.return_value.all.side_effect = [
+            [r1, r2],
+            [(r1.id,), (r2.id,)],
+        ]
 
-        result = validate_resources(["ukbb-phenotypes", "mex-dengue-2026"], db)
+        result = validate_resources(
+            ["ukbb-phenotypes", "mex-dengue-2026"], project_id, db
+        )
         assert len(result) == 2
 
     def test_missing_resource_raises(self):
+        project_id = uuid.uuid4()
         db = MagicMock()
         r1 = MagicMock()
         r1.identifier = "ukbb-phenotypes"
+        r1.id = uuid.uuid4()
         db.query.return_value.filter.return_value.all.return_value = [r1]
 
         with pytest.raises(ValueError, match="mex-dengue-2026"):
-            validate_resources(["ukbb-phenotypes", "mex-dengue-2026"], db)
+            validate_resources(["ukbb-phenotypes", "mex-dengue-2026"], project_id, db)
 
     def test_empty_list_returns_empty(self):
+        project_id = uuid.uuid4()
         db = MagicMock()
-        result = validate_resources([], db)
+        result = validate_resources([], project_id, db)
         assert result == []
         db.query.assert_not_called()
 
     def test_missing_resource_raises_with_correct_message(self):
+        project_id = uuid.uuid4()
         db = MagicMock()
         db.query.return_value.filter.return_value.all.return_value = []
 
         with pytest.raises(ValueError, match="not found"):
-            validate_resources(["nonexistent-resource"], db)
+            validate_resources(["nonexistent-resource"], project_id, db)
 
 
 class TestValidateExecutionEnvironment:

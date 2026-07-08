@@ -6,9 +6,14 @@ import Link from "next/link";
 import {
   AnalysisBundle,
   getProjectBundle,
+  submitBundle,
+  approveBundle,
+  rejectBundle,
+  supersedeBundle,
   createExecutionRequest,
   triggerAiReview,
 } from "@/lib/api";
+import { formatBundleStatus, bundleStatusStyle } from "@/lib/status";
 import LogViewer from "@/components/LogViewer";
 
 const TERMINAL_STATUSES = ["completed", "failed", "unavailable"];
@@ -22,7 +27,7 @@ export default function AnalysisDetailPage() {
   const [bundle, setBundle] = useState<AnalysisBundle | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [running, setRunning] = useState(false);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [reviewing, setReviewing] = useState(false);
 
   const fetchBundle = useCallback(async () => {
@@ -111,8 +116,35 @@ export default function AnalysisDetailPage() {
     };
   }, [bundle?.build_status, fetchBundle]);
 
+  const performAction = async (
+    label: string,
+    action: () => Promise<unknown>,
+  ) => {
+    setActionLoading(label);
+    setError(null);
+    try {
+      await action();
+      await fetchBundle();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : `Failed to ${label.toLowerCase()}`);
+    }
+    setActionLoading(null);
+  };
+
+  const handleSubmit = () =>
+    performAction("Submit", () => submitBundle(projectId, bundleId));
+
+  const handleApprove = () =>
+    performAction("Approve", () => approveBundle(bundleId));
+
+  const handleReject = () =>
+    performAction("Reject", () => rejectBundle(bundleId));
+
+  const handleSupersede = () =>
+    performAction("Supersede", () => supersedeBundle(bundleId));
+
   const handleRun = async () => {
-    setRunning(true);
+    setActionLoading("Run");
     try {
       await createExecutionRequest(projectId, {
         analysis_bundle_id: bundleId,
@@ -120,7 +152,7 @@ export default function AnalysisDetailPage() {
       router.push(`/projects/${projectId}/jobs`);
     } catch {
       setError("Failed to create execution request");
-      setRunning(false);
+      setActionLoading(null);
     }
   };
 
@@ -165,17 +197,16 @@ export default function AnalysisDetailPage() {
               borderRadius: "4px",
               fontSize: "0.8rem",
               fontWeight: 600,
-              background: "var(--color-surface)",
-              color: "var(--color-text-secondary)",
+              ...bundleStatusStyle(bundle.status),
             }}
           >
-            {bundle.status.charAt(0).toUpperCase() + bundle.status.slice(1)}
+            {formatBundleStatus(bundle.status)}
           </span>
           <div style={{ marginTop: "var(--spacing-sm)", fontSize: "0.85rem", fontWeight: 600 }}>
             {bundle.build_status === "environment_ready" && (
               <span style={{ color: "#2e7d32" }}>Ready to run</span>
             )}
-            {(bundle.build_status === "environment_not_built" || bundle.build_status === "environment_building") && (
+            {(bundle.build_status === "environment_building" || (bundle.build_status === "environment_not_built" && bundle.status === "approved_for_execution")) && (
               <span style={{ color: "#ed6c02" }}>Preparing execution environment…</span>
             )}
             {bundle.build_status === "environment_build_failed" && (
@@ -195,17 +226,66 @@ export default function AnalysisDetailPage() {
             )}
           </div>
         </div>
-        <div style={{ display: "flex", gap: "var(--spacing-sm)" }}>
-          <button className="btn btn-primary" onClick={handleRun} disabled={running}>
-            {running ? "Submitting..." : "Run Analysis"}
-          </button>
-          <Link
-            href={`/projects/${projectId}/analysis/${bundleId}/edit`}
-            className="btn"
-            style={{ textDecoration: "none" }}
-          >
-            Edit
-          </Link>
+        <div>
+          <div style={{ display: "flex", gap: "var(--spacing-sm)", marginBottom: "var(--spacing-xs)" }}>
+            {bundle.status === "draft" && (
+              <button
+                className="btn btn-primary"
+                onClick={handleSubmit}
+                disabled={actionLoading !== null}
+              >
+                {actionLoading === "Submit" ? "Submitting…" : "Submit"}
+              </button>
+            )}
+            {bundle.status === "submitted" && (
+              <>
+                <button
+                  className="btn btn-primary"
+                  onClick={handleApprove}
+                  disabled={actionLoading !== null}
+                >
+                  {actionLoading === "Approve" ? "Approving…" : "Approve"}
+                </button>
+                <button
+                  className="btn"
+                  onClick={handleReject}
+                  disabled={actionLoading !== null}
+                >
+                  {actionLoading === "Reject" ? "Rejecting…" : "Reject"}
+                </button>
+              </>
+            )}
+            {bundle.status === "approved_for_execution" && (
+              <>
+                <button
+                  className="btn btn-primary"
+                  onClick={handleRun}
+                  disabled={actionLoading !== null}
+                >
+                  {actionLoading === "Run" ? "Submitting…" : "Run Analysis"}
+                </button>
+                <button
+                  className="btn"
+                  onClick={handleSupersede}
+                  disabled={actionLoading !== null}
+                >
+                  {actionLoading === "Supersede" ? "Superseding…" : "Supersede"}
+                </button>
+              </>
+            )}
+            <Link
+              href={`/projects/${projectId}/analysis/${bundleId}/edit`}
+              className="btn"
+              style={{ textDecoration: "none" }}
+            >
+              Edit
+            </Link>
+          </div>
+          {error && (
+            <div style={{ color: "#d32f2f", fontSize: "0.85rem", textAlign: "right" }}>
+              {error}
+            </div>
+          )}
         </div>
       </div>
 

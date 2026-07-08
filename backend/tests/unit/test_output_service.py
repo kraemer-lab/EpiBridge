@@ -4,45 +4,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from app.models.execution_request import ExecutionRequestStatus
-from app.services.output_service import (
-    get_output,
-    list_outputs,
-    register_output,
-    transition_request_status,
-)
-
-
-class TestRegisterOutput:
-    def test_registers_successfully(self):
-        db = MagicMock()
-        er_id = uuid.uuid4()
-
-        result = register_output(db, er_id, "summary.csv", 1024)
-
-        assert result.execution_request_id == er_id
-        assert result.filename == "summary.csv"
-        assert result.size == 1024
-        db.add.assert_called_once()
-        db.commit.assert_called_once()
-
-
-class TestListOutputs:
-    def test_list_empty(self):
-        db = MagicMock()
-        (
-            db.query.return_value.filter.return_value.order_by.return_value.all.return_value
-        ) = []
-        result = list_outputs(db, uuid.uuid4())
-        assert result == []
-
-    def test_list_with_data(self):
-        db = MagicMock()
-        expected = [MagicMock(), MagicMock()]
-        (
-            db.query.return_value.filter.return_value.order_by.return_value.all.return_value
-        ) = expected
-        result = list_outputs(db, uuid.uuid4())
-        assert result == expected
+from app.services.output_service import get_output, transition_request_status
 
 
 class TestGetOutput:

@@ -52,7 +52,15 @@ class TestDataResourceAssociation:
             status="active",
         )
 
-        project.data_resources.append(resource)
+        from app.models.project_data_resource import ProjectResourceAllocation
+
+        allocation = ProjectResourceAllocation(
+            project_id=project.id,
+            data_resource_id=resource.id,
+            created_by_id=owner_id,
+        )
+        allocation.data_resource = resource
+        project.resource_allocations.append(allocation)
 
         assert len(project.data_resources) == 1
         assert project.data_resources[0].name == "Test Resource"
@@ -71,7 +79,17 @@ class TestDataResourceAssociation:
             name="Resource 2", provider_type="csv", endpoint=ep2, status="active"
         )
 
-        project.data_resources.extend([r1, r2])
+        from app.models.project_data_resource import ProjectResourceAllocation
+
+        a1 = ProjectResourceAllocation(
+            project_id=project.id, data_resource_id=r1.id, created_by_id=owner_id
+        )
+        a1.data_resource = r1
+        a2 = ProjectResourceAllocation(
+            project_id=project.id, data_resource_id=r2.id, created_by_id=owner_id
+        )
+        a2.data_resource = r2
+        project.resource_allocations.extend([a1, a2])
 
         assert len(project.data_resources) == 2
 
@@ -84,8 +102,23 @@ class TestDataResourceAssociation:
             name="Shared", provider_type="csv", endpoint=ep, status="active"
         )
 
-        project_a.data_resources.append(shared)
-        project_b.data_resources.append(shared)
+        from app.models.project_data_resource import ProjectResourceAllocation
+
+        a1 = ProjectResourceAllocation(
+            project_id=project_a.id,
+            data_resource_id=shared.id,
+            created_by_id=owner_id,
+        )
+        a1.data_resource = shared
+        project_a.resource_allocations.append(a1)
+
+        a2 = ProjectResourceAllocation(
+            project_id=project_b.id,
+            data_resource_id=shared.id,
+            created_by_id=owner_id,
+        )
+        a2.data_resource = shared
+        project_b.resource_allocations.append(a2)
 
         assert len(shared.projects) == 2
 

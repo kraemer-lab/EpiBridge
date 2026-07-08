@@ -1,3 +1,4 @@
+import enum
 import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
@@ -12,6 +13,13 @@ if TYPE_CHECKING:
     from app.models.analysis_bundle import AnalysisBundle
 
 
+class AIBundleReviewStatus(str, enum.Enum):
+    PENDING = "pending"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    UNAVAILABLE = "unavailable"
+
+
 class AIBundleReview(Base):
     __tablename__ = "ai_bundle_reviews"
 
@@ -24,7 +32,9 @@ class AIBundleReview(Base):
         unique=True,
         nullable=False,
     )
-    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
+    status: Mapped[AIBundleReviewStatus] = mapped_column(
+        String(64), nullable=False, default=AIBundleReviewStatus.PENDING
+    )
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     assessment: Mapped[str | None] = mapped_column(Text, nullable=True)
     assessment_confidence: Mapped[str | None] = mapped_column(String(10), nullable=True)

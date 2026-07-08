@@ -5,12 +5,19 @@ import pytest
 from app.models.data_resource import DataResource
 from app.models.execution_environment import ExecutionEnvironment
 from app.models.project import Project
+from app.models.project_membership import ProjectMembership
 
 
 @pytest.fixture
 def project(db_session, admin_user):
     project = Project(name="Test Project", owner_id=admin_user.id)
     db_session.add(project)
+    db_session.flush()
+    db_session.add(
+        ProjectMembership(
+            project_id=project.id, user_id=admin_user.id, created_by_id=admin_user.id
+        )
+    )
     db_session.commit()
     db_session.refresh(project)
     return project

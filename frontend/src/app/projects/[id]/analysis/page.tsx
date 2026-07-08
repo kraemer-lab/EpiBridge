@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { AnalysisBundle, getProjectBundles } from "@/lib/api";
+import { formatBundleStatus, bundleStatusStyle } from "@/lib/status";
 
 export default function ProjectAnalysisPage() {
   const params = useParams();
@@ -93,11 +94,10 @@ export default function ProjectAnalysisPage() {
                         borderRadius: "4px",
                         fontSize: "0.8rem",
                         fontWeight: 600,
-                        background: "var(--color-surface)",
-                        color: "var(--color-text-secondary)",
+                        ...bundleStatusStyle(b.status),
                       }}
                     >
-                      {b.status.charAt(0).toUpperCase() + b.status.slice(1)}
+                      {formatBundleStatus(b.status)}
                     </span>
                   </td>
                   <td>

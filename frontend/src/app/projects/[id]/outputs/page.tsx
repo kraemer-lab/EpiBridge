@@ -4,10 +4,10 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import {
   ExecutionRequest,
-  Output,
+  OutputSet,
   getProjectExecutionRequests,
   getExecutionRequestOutputs,
-  getOutputDownloadUrl,
+  getOutputSetDownloadUrl,
 } from "@/lib/api";
 
 function statusStyle(status: string): React.CSSProperties {
@@ -27,7 +27,7 @@ export default function ProjectOutputsPage() {
 
   const [requests, setRequests] = useState<ExecutionRequest[]>([]);
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
-  const [outputs, setOutputs] = useState<Output[]>([]);
+  const [outputSet, setOutputSet] = useState<OutputSet | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -37,7 +37,9 @@ export default function ProjectOutputsPage() {
         const completed = reqs.find((r) => r.status === "completed");
         if (completed) {
           setSelectedRequestId(completed.id);
-          return getExecutionRequestOutputs(projectId, completed.id).then(setOutputs);
+          return getExecutionRequestOutputs(projectId, completed.id)
+            .then(setOutputSet)
+            .catch(() => setOutputSet(null));
         }
       })
       .catch(() => {})
@@ -47,9 +49,11 @@ export default function ProjectOutputsPage() {
   const handleSelectRequest = (requestId: string) => {
     setSelectedRequestId(requestId);
     getExecutionRequestOutputs(projectId, requestId)
-      .then(setOutputs)
-      .catch(() => setOutputs([]));
+      .then(setOutputSet)
+      .catch(() => setOutputSet(null));
   };
+
+  const selectedRequest = requests.find((r) => r.id === selectedRequestId);
 
   if (loading) return <div className="card empty-state">Loading...</div>;
 
@@ -88,48 +92,63 @@ export default function ProjectOutputsPage() {
         </div>
       )}
 
-      {selectedRequestId && requests.find((r) => r.id === selectedRequestId)?.status !== "completed" && (
+      {selectedRequest && selectedRequest.status === "completed" && !outputSet && (
+        <div className="card empty-state">
+          Outputs are pending review. They will appear here once released.
+        </div>
+      )}
+
+      {selectedRequest && selectedRequest.status !== "completed" && (
         <div className="card empty-state">
           Outputs will appear here once the execution completes.
         </div>
       )}
 
-      {selectedRequestId && outputs.length === 0 && (
-        <div className="card empty-state">No outputs available.</div>
-      )}
+      {outputSet && (
+        <div>
+          <div className="card" style={{ marginBottom: "var(--spacing-md)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <strong>Release Package</strong>
+                <span style={{ marginLeft: "var(--spacing-sm)", color: "var(--color-text-secondary)", fontSize: "0.85rem" }}>
+                  {outputSet.file_count} file{outputSet.file_count !== 1 ? "s" : ""}
+                  {outputSet.release_package_size
+                    ? ` — ${(outputSet.release_package_size / 1024).toFixed(1)} KB`
+                    : ""}
+                </span>
+              </div>
+              <a
+                href={getOutputSetDownloadUrl(projectId, selectedRequestId!)}
+                className="btn"
+                style={{ textDecoration: "none" }}
+                download
+              >
+                Download All
+              </a>
+            </div>
+          </div>
 
-      {outputs.length > 0 && (
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Filename</th>
-              <th>Size</th>
-              <th>Download</th>
-            </tr>
-          </thead>
-          <tbody>
-            {outputs.map((o) => (
-              <tr key={o.id}>
-                <td style={{ fontWeight: 500 }}>{o.filename}</td>
-                <td style={{ color: "var(--color-text-secondary)" }}>
-                  {o.size > 1024
-                    ? `${(o.size / 1024).toFixed(1)} KB`
-                    : `${o.size} bytes`}
-                </td>
-                <td>
-                  <a
-                    href={getOutputDownloadUrl(projectId, selectedRequestId!, o.id)}
-                    className="btn"
-                    style={{ textDecoration: "none", fontSize: "0.85rem" }}
-                    download
-                  >
-                    Download
-                  </a>
-                </td>
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Filename</th>
+                <th>Size</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {outputSet.outputs.map((o) => (
+                <tr key={o.id}>
+                  <td style={{ fontWeight: 500 }}>{o.filename}</td>
+                  <td style={{ color: "var(--color-text-secondary)" }}>
+                    {o.size > 1024
+                      ? `${(o.size / 1024).toFixed(1)} KB`
+                      : `${o.size} bytes`}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
 
       {requests.length === 0 && (

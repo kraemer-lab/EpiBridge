@@ -79,3 +79,136 @@ class TestAdminResources:
         data = response.json()
         names = [r["name"] for r in data]
         assert names == sorted(names)
+
+
+class TestAdminUsers:
+    def test_list_users(self, client, admin_user, researcher_user, moderator_user):
+        response = client.get("/api/admin/users")
+        assert response.status_code == 200
+        data = response.json()
+        emails = {u["email"] for u in data}
+        assert admin_user.email in emails
+        assert researcher_user.email in emails
+        assert moderator_user.email in emails
+
+    def test_list_users_unauthorized(self, researcher_client):
+        response = researcher_client.get("/api/admin/users")
+        assert response.status_code == 403
+
+    def test_list_users_anonymous(self, anon_client):
+        response = anon_client.get("/api/admin/users")
+        assert response.status_code == 401
+
+    def test_create_user(self, client, db_session):
+        response = client.post(
+            "/api/admin/users",
+            json={
+                "email": "new@test.local",
+                "display_name": "New User",
+                "password": "secret",
+                "role": "researcher",
+            },
+        )
+        assert response.status_code == 201
+        data = response.json()
+        assert data["email"] == "new@test.local"
+        assert data["display_name"] == "New User"
+        assert data["role"] == "researcher"
+        assert "capabilities" in data
+        assert "project.manage" in data["capabilities"]
+        assert "user.manage" not in data["capabilities"]
+
+    def test_create_user_default_role(self, client):
+        response = client.post(
+            "/api/admin/users",
+            json={
+                "email": "default@test.local",
+                "display_name": "Default Role",
+                "password": "secret",
+            },
+        )
+        assert response.status_code == 201
+        assert response.json()["role"] == "researcher"
+
+    def test_create_user_duplicate_email(self, client, admin_user):
+        response = client.post(
+            "/api/admin/users",
+            json={
+                "email": admin_user.email,
+                "display_name": "Duplicate",
+                "password": "secret",
+            },
+        )
+        assert response.status_code == 409
+
+    def test_create_user_unauthorized(self, researcher_client):
+        response = researcher_client.post(
+            "/api/admin/users",
+            json={
+                "email": "should@fail.local",
+                "display_name": "Should Fail",
+                "password": "secret",
+            },
+        )
+        assert response.status_code == 403
+
+    def test_get_user_by_id(self, client, researcher_user):
+        response = client.get(f"/api/admin/users/{researcher_user.id}")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["email"] == researcher_user.email
+        assert data["display_name"] == "Researcher User"
+        assert data["role"] == "researcher"
+
+    def test_get_user_not_found(self, client):
+        import uuid
+
+        response = client.get(f"/api/admin/users/{uuid.uuid4()}")
+        assert response.status_code == 404
+
+    def test_create_user_moderator(self, client):
+        response = client.post(
+            "/api/admin/users",
+            json={
+                "email": "mod@test.local",
+                "display_name": "Moderator",
+                "password": "secret",
+                "role": "moderator",
+            },
+        )
+        assert response.status_code == 201
+        caps = response.json()["capabilities"]
+        assert "bundle.review" in caps
+        assert "output.review" in caps
+        assert "output.release" not in caps
+        assert "data.manage" not in caps
+
+    def test_create_user_maintainer(self, client):
+        response = client.post(
+            "/api/admin/users",
+            json={
+                "email": "maint@test.local",
+                "display_name": "Maintainer",
+                "password": "secret",
+                "role": "maintainer",
+            },
+        )
+        assert response.status_code == 201
+        caps = response.json()["capabilities"]
+        assert "output.release" in caps
+        assert "data.manage" in caps
+        assert "user.manage" not in caps
+
+    def test_create_user_admin(self, client):
+        response = client.post(
+            "/api/admin/users",
+            json={
+                "email": "admin2@test.local",
+                "display_name": "Admin Two",
+                "password": "secret",
+                "role": "admin",
+            },
+        )
+        assert response.status_code == 201
+        caps = response.json()["capabilities"]
+        assert "user.manage" in caps

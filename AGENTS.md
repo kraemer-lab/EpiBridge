@@ -1,28 +1,34 @@
 # AGENTS.md
 
-## Project status — backend scaffolded, rest is stubs
+## Project status — Milestone 16 complete (Identity Management)
 
 ### Exists and functional
 
 ```
-backend/         FastAPI scaffold (app entrypoint, health endpoint, SQLAlchemy,
-                 Alembic, config, Local Identity Provider auth, CLI seed-admin,
-                 bundle store, worker execution, Environment Builder subsystem)
+backend/         FastAPI: identity model (User, Role, Capability,
+                 ProjectMembership), capability-based policy, SQLAlchemy,
+                 Alembic-ready, config, Local Identity Provider auth,
+                 CLI seed-admin/seed-demo, bundle store, worker execution,
+                 Environment Builder subsystem, auth framework seeder,
+                 user management API (create/list/get users), email validation
+frontend/        Next.js + React + TypeScript: login, projects, admin pages,
+                 user management UI, project members UI
 containers/      Base analysis Docker images (python-3.13, python-3.14)
 vm/              cloud-init.yaml, Caddyfile (HTTPS, HSTS, compression,
                  security headers, request size limits), runtime spec
 scripts/         bootstrap.sh, install.sh, upgrade.sh, backup.sh, restore.sh, healthcheck.sh
 docker-compose.yml  6 services + optional ollama (--profile ai),
                     internal + frontend + external networks
-docs/            Architecture, security, API, vision, AI assistance docs
+tests/           Unit (223), integration (identity validation, user management,
+                 project membership), smoke, e2e (canonical workflow)
+docs/            Architecture (current state), security, API, vision, AI assistance
 ```
 
 ### Still needs creating
 
 ```
-frontend/        Next.js + React + TypeScript (game in progress)
 shared/          Shared schemas and types (not started)
-examples/        Synthetic datasets + analysis templates (not started)
+examples/        Synthetic datasets and analysis templates (not started)
 ```
 
 ### Intended architecture (from docs/)
@@ -39,11 +45,6 @@ docs/        Architecture, security, API, roadmap, vision
 
 Single monorepo. Do not add top-level directories without justification.
 
-### Foreseen conventions (documented, not yet enforced)
-
-- Backend: FastAPI dependency injection, business logic in `services/`, thin endpoints, SQLAlchemy ORM, Pydantic models
-- Frontend: App Router, TypeScript, server components where appropriate, functional components
-
 ### Security constraints (must preserve in implementation)
 
 - Researchers never get direct dataset access
@@ -54,7 +55,69 @@ Single monorepo. Do not add top-level directories without justification.
 - Use `Storage` and `Executor` interfaces (not coupling directly to Docker)
 - Only the optional AI service (Ollama) has outbound network access, and only for model downloads
 - IdentityProvider abstraction for auth, internal PostgreSQL for authorisation
+- **Capability-based authorisation**: policy checks `require_capability()`, not roles
+- **Project Membership scoping**: access requires membership + capability
 - Audit trail required for all actions
+
+### Identity model
+
+There are four independent concepts:
+
+#### User
+
+A User represents an authenticated person. Users may belong to zero or more Projects via ProjectMembership. Users possess a `role` (metadata / seeding hint) and a list of `capabilities` (authoritative).
+
+#### Role
+
+A Role is a descriptive label with a default capability template. Roles seed capabilities at user creation time. After that, capabilities become the source of truth — changing a role does **not** silently change existing users.
+
+Four roles exist: `researcher`, `moderator`, `maintainer`, `admin`.
+
+Roles and role–capability mappings are stored in the database (`roles`, `role_capabilities` tables) and seeded by `auth_framework_seeder.seed_auth_framework()`.
+
+#### Capability
+
+Capabilities are authoritative. The policy layer authorises capabilities, not roles.
+
+Capability vocabulary (defined in `app.models.capability.Capability` enum):
+
+| Capability | Purpose |
+|------------|---------|
+| `project.manage` | Create and manage projects |
+| `project.members.manage` | Add/remove project members |
+| `project.resources.manage` | Attach/detach data resources |
+| `bundle.create` | Create and edit analysis bundles |
+| `bundle.submit` | Submit bundles for review |
+| `bundle.review` | Approve/reject/supersede bundles |
+| `execution.run` | Request execution of approved bundles |
+| `output.review` | Approve/reject output sets |
+| `output.release` | Release output sets to researchers |
+| `environment.manage` | Manage execution environments |
+| `data.manage` | Manage data resources |
+| `user.manage` | Manage user accounts |
+
+The `capabilities` table is materialised from the enum during seeding (the enum is authoritative). `UserCapability` records are copied from role templates at user creation and become independent thereafter.
+
+#### Project Membership
+
+ProjectMembership answers one question only: does this User participate in this Project?
+
+- Membership is **scope**, not authorisation.
+- No roles, capabilities, or permissions are stored on membership.
+- The project creator becomes the first member automatically.
+- Access requires: (1) membership in the project, (2) the required capability.
+
+### Policy layer
+
+The policy layer (`app.auth.policy`) exposes three functions:
+
+| Function | Purpose |
+|----------|---------|
+| `require_capability(user, capability)` | Raise `PolicyError` if user lacks the capability |
+| `require_project_membership(db, user, project_id)` | Raise 404 if user is not a project member; returns the Project |
+| `require_owner(user, resource)` | Raise `PolicyError` if user is not the resource owner/creator |
+
+Policy is entirely capability-based. Roles are never consulted by the policy layer.
 
 ### Temporary development policy (domain model iteration phase)
 
@@ -73,9 +136,10 @@ Once the core schema stabilises, Alembic will be reintroduced as a dedicated mil
 ### Domain model boundary
 
 - **Institutional assets** (Data Resources, Execution Environments) are registered automatically via lifespan startup from YAML manifests.
-- **Researcher artefacts** (Projects, Analysis Bundles, Execution Requests) are created by users through the application.
-- **Internal system artefacts** (AIBundleReview, BuildRequest, ExecutionImage) are created by background tasks and workers during platform operation.
+- **Researcher artefacts** (Projects, Analysis Bundles, Execution Requests) are created by users through the application. Projects have members (ProjectMembership) in addition to the owner/creator.
+- **Internal system artefacts** (AIBundleReview, BuildRequest, ExecutionImage, OutputSet) are created by background tasks and workers during platform operation.
 - **Environment Builder subsystem** transforms Analysis Bundle dependency specifications into reusable Execution Images via curated Dockerfile templates. Builds are driven by `BuildRequest` work items processed by the worker alongside execution requests. `ExecutionImage` records serve as a content-addressable cache keyed by `(execution_environment_id, dependency_hash)`.
+- **Auth framework** (capabilities, roles, role–capability mappings) is seeded by `auth_framework_seeder.seed_auth_framework()` on first use (idempotent).
 - **Demo workspace** (optional) can be created by `seed-demo` CLI command — a development tool, not application startup logic.
 - **Manifest directories** (`RESOURCE_MANIFEST_DIR`, `ENVIRONMENT_MANIFEST_DIR`) are deployment configuration, not application defaults. Docker Compose sets them for development; production points them elsewhere.
 
@@ -121,7 +185,7 @@ make test         # run tests
 **Testing** (from repo root):
 - `make test` — run unit, integration, and smoke test suites (CI compatible)
 - `make dev-test` — run full suite inside the container via SSH (requires dev stack)
-- `make playwright` — run golden-path end-to-end test (requires full stack running)
+- `make playwright` — run canonical workflow e2e test (requires full stack running)
 - `python -m pytest backend/tests/unit -v` — unit tests only
 - `python -m pytest backend/tests/integration -v` — integration tests (requires DB + Redis running)
 - `python -m pytest backend/tests/smoke -v` — smoke tests (requires full stack running)
@@ -129,7 +193,7 @@ make test         # run tests
 **CI** (from repo root, requires Docker):
 - `make ci` — bootstrap full stack (build, start, seed), same as `make bootstrap`
 - `make ci-clean` — tear down all Docker resources and remove `.env`
-- `make playwright` — run golden-path e2e test (must be run after `make ci`)
+- `make playwright` — run canonical workflow e2e test (must be run after `make ci`)
 
 **Shared bootstrap** (from repo root, requires Docker):
 - `make bootstrap` — idempotent bootstrap used by both development and CI.
@@ -151,26 +215,29 @@ make test         # run tests
 **VM / Dev environment** (see `vm/runtime.md`):
 - `scripts/orbstack.sh` — OrbStack-specific helpers (create, mount, ssh, ip)
 
-### Golden Path (end-to-end)
+### Canonical Workflow (end-to-end)
 
-The golden path is a single Playwright e2e test that proves the entire platform works from a researcher's perspective.
+The canonical workflow is a single Playwright e2e test that proves the entire platform works from a researcher's perspective.
 
 ```bash
 make dev           # bootstrap the full stack (OrbStack VM)
-make playwright    # run the golden-path e2e test
+make playwright    # run the canonical workflow e2e test
 ```
 
-The test (in `frontend/e2e/golden-path.spec.ts`) validates:
+The test (in `frontend/e2e/canonical-workflow.spec.ts`) validates:
 1. Opening EpiBridge
 2. Login with admin credentials
 3. Creating a project
 4. Attaching a data resource to the project
 5. Creating an analysis and uploading a bundle
-6. Running the analysis
-7. Waiting for PENDING → RUNNING → COMPLETED status transition
-8. Opening the Outputs tab
-9. Downloading `summary.csv`
-10. Verifying the file exists and is non-empty
+6. Submitting the bundle (DRAFT → SUBMITTED)
+7. Approving the bundle (SUBMITTED → APPROVED_FOR_EXECUTION)
+8. Running the analysis
+9. Waiting for PENDING → RUNNING → COMPLETED status transition
+10. Approving the Output Set (PENDING_REVIEW → APPROVED)
+11. Releasing the Output Set (APPROVED → RELEASED), creating the Release Package ZIP
+12. Downloading the Release Package
+13. Verifying the ZIP contains the expected output file (`summary.csv`) and execution metadata (`execution_metadata.json`)
 
 This is a system test — not UI, not API — covering frontend, backend, database, worker, Docker executor, provider abstraction, runtime contract, output registration, and download endpoint.
 

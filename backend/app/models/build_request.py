@@ -37,7 +37,7 @@ class BuildRequest(Base):
     dependency_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     builder_type: Mapped[str] = mapped_column(String(50), nullable=False)
     status: Mapped[BuildRequestStatus] = mapped_column(
-        String(20), nullable=False, default=BuildRequestStatus.PENDING
+        String(64), nullable=False, default=BuildRequestStatus.PENDING
     )
     execution_image_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("execution_images.id"), nullable=True

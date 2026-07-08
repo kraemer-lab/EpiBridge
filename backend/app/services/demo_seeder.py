@@ -1,10 +1,16 @@
 from sqlalchemy.orm import Session
 
-from app.models.analysis_bundle import AnalysisBundle, AnalysisBundleDataResource
+from app.models.analysis_bundle import (
+    AnalysisBundle,
+    AnalysisBundleDataResource,
+)
 from app.models.data_resource import DataResource
 from app.models.execution_environment import ExecutionEnvironment
 from app.models.project import Project
+from app.models.project_data_resource import ProjectResourceAllocation
+from app.models.project_membership import ProjectMembership
 from app.models.user import User
+from app.workflow.bundle import approve_bundle, submit_bundle
 
 DEMO_PROJECT_NAME = "Dengue Analysis Demo"
 DEMO_BUNDLE_NAME = "Dengue Summary Statistics"
@@ -33,11 +39,20 @@ def seed_demo_workspace(db: Session) -> dict:
 
     project = Project(
         name=DEMO_PROJECT_NAME,
-        description="Dengue surveillance analysis demo for EpiBridge golden path.",
+        description=(
+            "Dengue surveillance analysis demo for EpiBridge canonical workflow."
+        ),
         owner_id=admin.id,
     )
     db.add(project)
     db.flush()
+
+    membership = ProjectMembership(
+        project_id=project.id,
+        user_id=admin.id,
+        created_by_id=admin.id,
+    )
+    db.add(membership)
 
     resource = (
         db.query(DataResource)
@@ -45,7 +60,12 @@ def seed_demo_workspace(db: Session) -> dict:
         .first()
     )
     if resource:
-        project.data_resources.append(resource)
+        allocation = ProjectResourceAllocation(
+            project_id=project.id,
+            data_resource_id=resource.id,
+            created_by_id=admin.id,
+        )
+        db.add(allocation)
 
     env = (
         db.query(ExecutionEnvironment)
@@ -67,7 +87,6 @@ def seed_demo_workspace(db: Session) -> dict:
         execution_environment_id=env.id if env else None,
         name=DEMO_BUNDLE_NAME,
         source_path="demo",
-        status="active",
         version="1.0.0",
         entrypoint="run.py",
         description=(
@@ -86,6 +105,8 @@ def seed_demo_workspace(db: Session) -> dict:
         )
         db.add(join)
 
+    submit_bundle(db, bundle)
+    approve_bundle(db, bundle)
     db.commit()
 
     return {

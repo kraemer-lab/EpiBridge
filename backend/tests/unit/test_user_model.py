@@ -1,3 +1,4 @@
+from app.models.capability import Capability, UserCapability
 from app.models.user import User, UserRole
 
 
@@ -38,3 +39,26 @@ def test_user_researcher_role():
         role=UserRole.RESEARCHER,
     )
     assert user.role == UserRole.RESEARCHER
+
+
+def test_user_capabilities_empty_by_default():
+    user = User(
+        email="researcher@example.com",
+        display_name="Researcher",
+        password_hash="hash",
+        role=UserRole.RESEARCHER,
+    )
+    assert user.capabilities == []
+
+
+def test_user_with_capabilities():
+    user = User(
+        email="researcher@example.com",
+        display_name="Researcher",
+        password_hash="hash",
+        role=UserRole.RESEARCHER,
+    )
+    cap = UserCapability(capability_name=Capability.BUNDLE_CREATE)
+    user.capabilities.append(cap)
+    assert user.has_capability(Capability.BUNDLE_CREATE) is True
+    assert user.has_capability(Capability.EXECUTION_RUN) is False

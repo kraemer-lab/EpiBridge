@@ -1,12 +1,18 @@
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import text
 
 from app.auth.local import hash_password
 from app.core.config import settings
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.main import app
+from app.models.capability import ALL_CAPABILITIES, UserCapability
 from app.models.user import User, UserRole
+from app.services.auth_framework_seeder import (
+    grant_role_capabilities,
+    seed_auth_framework,
+)
 from app.services.session_service import create_session
 
 
@@ -67,17 +73,82 @@ def admin_user(db_session):
         role=UserRole.ADMIN,
     )
     db_session.add(user)
+    db_session.flush()
+
+    for cap_name in ALL_CAPABILITIES:
+        db_session.execute(
+            text("INSERT INTO capabilities (name) VALUES (:n) ON CONFLICT DO NOTHING"),
+            {"n": cap_name},
+        )
+        db_session.add(UserCapability(user_id=user.id, capability_name=cap_name))
+
+    db_session.commit()
+    db_session.refresh(user)
+    return user
+
+
+def _make_user(db_session, email, display_name, role):
+    seed_auth_framework(db_session)
+    user = User(
+        email=email,
+        display_name=display_name,
+        password_hash=hash_password("password"),
+        role=role,
+    )
+    db_session.add(user)
+    db_session.flush()
+    grant_role_capabilities(db_session, user)
     db_session.commit()
     db_session.refresh(user)
     return user
 
 
 @pytest.fixture
-def client(db_session, admin_user):
+def researcher_user(db_session):
+    return _make_user(
+        db_session, "researcher@test.local", "Researcher User", UserRole.RESEARCHER
+    )
+
+
+@pytest.fixture
+def moderator_user(db_session):
+    return _make_user(
+        db_session, "moderator@test.local", "Moderator User", UserRole.MODERATOR
+    )
+
+
+@pytest.fixture
+def maintainer_user(db_session):
+    return _make_user(
+        db_session, "maintainer@test.local", "Maintainer User", UserRole.MAINTAINER
+    )
+
+
+def _make_client(db_session, user):
     test_client = TestClient(app)
-    session = create_session(db_session, admin_user.id)
+    session = create_session(db_session, user.id)
     test_client.cookies.set("session_id", session.id)
     return test_client
+
+
+@pytest.fixture
+def client(db_session, admin_user):
+    return _make_client(db_session, admin_user)
+
+
+@pytest.fixture
+def researcher_client(db_session, researcher_user):
+    return _make_client(db_session, researcher_user)
+
+
+@pytest.fixture
+def moderator_client(db_session, moderator_user):
+    return _make_client(db_session, moderator_user)
+
+
+@pytest.fixture
+def maintainer_client(db_session, maintainer_user):
+    return _make_client(db_session, maintainer_user)
 
 
 @pytest.fixture

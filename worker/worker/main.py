@@ -11,7 +11,7 @@ from app.builders.registry import registry as builder_registry
 from app.core.config import settings
 from app.db.session import SessionLocal
 from app.execution.docker import DockerExecutor
-from app.models.analysis_bundle import AnalysisBundle
+from app.models.analysis_bundle import AnalysisBundle, AnalysisBundleBuildStatus
 from app.schemas.analysis_bundle import Interpreter
 from app.models.build_request import BuildRequest, BuildRequestStatus
 from app.models.execution_environment import ExecutionEnvironment
@@ -113,6 +113,10 @@ def resolve_data_mounts(
 
 
 def process_build(db: Session, build: BuildRequest) -> None:
+    # NOTE: bundle.build_status mirrors the BuildRequest lifecycle.
+    # Environment preparation is owned by BuildRequest, not AnalysisBundle.
+    # The build_status field is retained for backwards compatibility and
+    # is expected to be removed in a future governance refactor.
     ts = _timestamp()
     bundle = db.query(AnalysisBundle).get(build.analysis_bundle_id)
     if bundle is None:
@@ -173,7 +177,7 @@ def process_build(db: Session, build: BuildRequest) -> None:
         )
         build.log = log
         bundle.execution_image_id = existing.id
-        bundle.build_status = "environment_ready"
+        bundle.build_status = AnalysisBundleBuildStatus.ENVIRONMENT_READY
         build.execution_image_id = existing.id
         build_transition_to(db, build, BuildRequestStatus.COMPLETED, "cache hit (race)")
         return
@@ -188,7 +192,7 @@ def process_build(db: Session, build: BuildRequest) -> None:
         f"[build] bundle_path={bundle_path}"
     )
 
-    bundle.build_status = "environment_building"
+    bundle.build_status = AnalysisBundleBuildStatus.ENVIRONMENT_BUILDING
     build_transition_to(db, build, BuildRequestStatus.BUILDING)
 
     result = builder.build(
@@ -204,7 +208,7 @@ def process_build(db: Session, build: BuildRequest) -> None:
             f"[{build_end}] BUILD FAILED (duration={result.duration_seconds:.1f}s)\n"
             f"{result.build_log}"
         )
-        bundle.build_status = "environment_build_failed"
+        bundle.build_status = AnalysisBundleBuildStatus.ENVIRONMENT_BUILD_FAILED
         bundle.build_error = result.build_log
         db.commit()
         build_transition_to(db, build, BuildRequestStatus.FAILED, result.build_log)
@@ -241,7 +245,7 @@ def process_build(db: Session, build: BuildRequest) -> None:
         f"[build] Result image: {ref}"
     )
     bundle.execution_image_id = cached.id
-    bundle.build_status = "environment_ready"
+    bundle.build_status = AnalysisBundleBuildStatus.ENVIRONMENT_READY
     build.execution_image_id = cached.id
     build_transition_to(db, build, BuildRequestStatus.COMPLETED)
 
@@ -379,18 +383,16 @@ def execute_request(db: Session, request: ExecutionRequest) -> None:
         )
         return
 
-    # The filename field represents the relative path within the execution
-    # output directory (e.g. "summary.csv", "figures/plot.png").
-    # This preserves structured output hierarchies without flattening.
+    from app.services.output_set_service import ensure_output_set, register_output as register_set_output
+
+    output_set = ensure_output_set(db, request.id)
     output_count = 0
     if output_dir.is_dir():
-        from app.services.output_service import register_output
-
         for root, dirs, files in os.walk(output_dir):
             for fname in files:
                 fpath = os.path.join(root, fname)
                 relative = os.path.relpath(fpath, output_dir)
-                register_output(db, request.id, relative, os.path.getsize(fpath))
+                register_set_output(db, output_set.id, relative, os.path.getsize(fpath))
                 output_count += 1
                 logger.info(
                     f"Registered output: {relative} ({os.path.getsize(fpath)} bytes)"

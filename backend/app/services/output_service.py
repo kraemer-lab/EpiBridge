@@ -1,51 +1,31 @@
-import os
 import uuid
 from pathlib import Path
 
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
-from app.models.execution_request import (
-    ExecutionRequest,
-    ExecutionRequestStatus,
-)
+from app.core.config import settings
+from app.models.execution_request import ExecutionRequest, ExecutionRequestStatus
 from app.models.output import Output
 
-OUTPUT_ROOT = Path(os.environ.get("OUTPUT_DIR", "/tmp/epibridge-outputs"))
+OUTPUT_ROOT = Path(settings.output_dir)
 
 
 def ensure_output_root():
     OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
 
 
-def register_output(
-    db: Session,
-    execution_request_id: uuid.UUID,
-    filename: str,
-    size: int,
-) -> Output:
-    output = Output(
-        execution_request_id=execution_request_id,
-        filename=filename,
-        size=size,
-    )
-    db.add(output)
-    db.commit()
-    db.refresh(output)
-    return output
-
-
-def list_outputs(db: Session, execution_request_id: uuid.UUID) -> list[Output]:
-    return (
-        db.query(Output)
-        .filter(Output.execution_request_id == execution_request_id)
-        .order_by(Output.created_at)
-        .all()
-    )
-
-
 def get_output(db: Session, output_id: uuid.UUID) -> Output | None:
     return db.query(Output).filter(Output.id == output_id).first()
+
+
+def get_output_path(execution_request_id: uuid.UUID, filename: str) -> Path:
+    return OUTPUT_ROOT / str(execution_request_id) / filename
+
+
+def stream_output(execution_request_id: uuid.UUID, filename: str) -> FileResponse:
+    path = get_output_path(execution_request_id, filename)
+    return FileResponse(path, filename=filename)
 
 
 def transition_request_status(
@@ -63,12 +43,3 @@ def transition_request_status(
     db.commit()
     db.refresh(request)
     return request
-
-
-def get_output_path(execution_request_id: uuid.UUID, filename: str) -> Path:
-    return OUTPUT_ROOT / str(execution_request_id) / filename
-
-
-def stream_output(execution_request_id: uuid.UUID, filename: str) -> FileResponse:
-    path = get_output_path(execution_request_id, filename)
-    return FileResponse(path, filename=filename)
