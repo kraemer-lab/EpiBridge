@@ -4,11 +4,13 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 
 from app.models.analysis_bundle import AnalysisBundle, AnalysisBundleStatus
+from app.models.audit_event import AuditEventType
 from app.models.execution_request import ExecutionRequest
 from app.services.analysis_bundle_service import (
     get_environment_runtime,
     get_resource_identifiers,
 )
+from app.services.audit_service import create_audit_event
 
 MIN_TIMEOUT = 60
 MAX_TIMEOUT = 86400
@@ -63,6 +65,16 @@ def create_execution_request(
         requested_by_id=requested_by_id,
     )
     db.add(request)
+    db.flush()  # Flush so request.id is available for the audit event before commit
+    create_audit_event(
+        db,
+        event_type=AuditEventType.EXECUTION_REQUESTED,
+        actor_id=requested_by_id,
+        project_id=project_id,
+        resource_type="execution_request",
+        resource_id=request.id,
+        metadata={"bundle_name": bundle.name, "timeout_seconds": timeout},
+    )
     db.commit()
     db.refresh(request)
     return request

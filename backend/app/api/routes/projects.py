@@ -25,6 +25,7 @@ from app.auth.policy import (
 )
 from app.db.session import get_db
 from app.models.analysis_bundle import AnalysisBundle
+from app.models.audit_event import AuditEventType
 from app.models.build_request import BuildRequest
 from app.models.capability import Capability
 from app.models.data_resource import DataResource
@@ -57,6 +58,7 @@ from app.services.analysis_bundle_service import (
     get_resource_identifiers,
     update_bundle,
 )
+from app.services.audit_service import create_audit_event
 from app.services.bundle_store import get_bundle_store
 from app.services.execution_environment_service import list_environments
 from app.services.execution_request_service import (
@@ -184,6 +186,7 @@ def post_project_resources(
             ProjectResourceAllocation.revoked_at.is_(None),
         )
     }
+    allocated_resources = []
     for r in resources:
         if r.id not in existing_resources:
             allocation = ProjectResourceAllocation(
@@ -192,6 +195,18 @@ def post_project_resources(
                 created_by_id=current_user.id,
             )
             db.add(allocation)
+            allocated_resources.append({"name": r.name, "identifier": r.identifier})
+
+    if allocated_resources:
+        create_audit_event(
+            db,
+            event_type=AuditEventType.PROJECT_RESOURCE_ALLOCATED,
+            actor_id=current_user.id,
+            project_id=project.id,
+            resource_type="project",
+            resource_id=project.id,
+            metadata={"resources": allocated_resources},
+        )
     db.commit()
 
     allocations = (
@@ -239,6 +254,20 @@ def delete_project_resource(
         )
     join.revoked_by_id = current_user.id
     join.revoked_at = datetime.utcnow()
+    resource_name = join.data_resource.name if join.data_resource else ""
+    resource_identifier = join.data_resource.identifier if join.data_resource else ""
+    create_audit_event(
+        db,
+        event_type=AuditEventType.PROJECT_RESOURCE_DEALLOCATED,
+        actor_id=current_user.id,
+        project_id=project_id,
+        resource_type="project",
+        resource_id=project_id,
+        metadata={
+            "resource_name": resource_name,
+            "resource_identifier": resource_identifier,
+        },
+    )
     db.commit()
 
 
@@ -519,6 +548,15 @@ def post_submit_bundle(
             detail=str(e),
         )
 
+    create_audit_event(
+        db,
+        event_type=AuditEventType.BUNDLE_SUBMITTED,
+        actor_id=current_user.id,
+        project_id=project_id,
+        resource_type="analysis_bundle",
+        resource_id=bundle.id,
+        metadata={"bundle_name": bundle.name},
+    )
     db.commit()
     db.refresh(bundle)
     return _bundle_to_read(bundle)
@@ -768,7 +806,7 @@ def delete_project_member(
             detail=str(e),
         )
 
-    removed = remove_member(db, project_id, user_id)
+    removed = remove_member(db, project_id, user_id, actor_id=current_user.id)
     if not removed:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

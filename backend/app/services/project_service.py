@@ -3,10 +3,12 @@ from typing import List
 
 from sqlalchemy.orm import Session
 
+from app.models.audit_event import AuditEventType
 from app.models.project import Project
 from app.models.project_membership import ProjectMembership
 from app.models.user import User
 from app.schemas.project import ProjectCreate
+from app.services.audit_service import create_audit_event
 
 
 def list_projects(db: Session, user_id: uuid.UUID) -> List[Project]:
@@ -38,6 +40,15 @@ def create_project(db: Session, data: ProjectCreate, owner_id: uuid.UUID) -> Pro
         created_by_id=owner_id,
     )
     db.add(membership)
+    create_audit_event(
+        db,
+        event_type=AuditEventType.PROJECT_CREATED,
+        actor_id=owner_id,
+        project_id=project.id,
+        resource_type="project",
+        resource_id=project.id,
+        metadata={"project_name": project.name},
+    )
     db.commit()
     db.refresh(project)
     return project
@@ -63,12 +74,27 @@ def add_member(
         created_by_id=invited_by_id,
     )
     db.add(membership)
+    create_audit_event(
+        db,
+        event_type=AuditEventType.PROJECT_MEMBER_ADDED,
+        actor_id=invited_by_id,
+        project_id=project_id,
+        resource_type="project",
+        resource_id=project_id,
+        metadata={
+            "member_email": user.email,
+            "member_display_name": user.display_name,
+        },
+    )
     db.commit()
     db.refresh(membership)
     return membership
 
 
-def remove_member(db: Session, project_id: uuid.UUID, user_id: uuid.UUID) -> bool:
+def remove_member(
+    db: Session, project_id: uuid.UUID, user_id: uuid.UUID, actor_id: uuid.UUID
+) -> bool:
+    member_user = db.query(User).filter(User.id == user_id).first()
     result = (
         db.query(ProjectMembership)
         .filter(
@@ -77,6 +103,19 @@ def remove_member(db: Session, project_id: uuid.UUID, user_id: uuid.UUID) -> boo
         )
         .delete()
     )
+    if result > 0 and member_user is not None:
+        create_audit_event(
+            db,
+            event_type=AuditEventType.PROJECT_MEMBER_REMOVED,
+            actor_id=actor_id,
+            project_id=project_id,
+            resource_type="project",
+            resource_id=project_id,
+            metadata={
+                "member_user_id": str(user_id),
+                "member_email": member_user.email,
+            },
+        )
     db.commit()
     return result > 0
 

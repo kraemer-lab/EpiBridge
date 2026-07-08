@@ -8,6 +8,7 @@ from app.auth.dependencies import get_current_user
 from app.auth.policy import PolicyError, require_capability
 from app.db.session import get_db
 from app.models.analysis_bundle import AnalysisBundle
+from app.models.audit_event import AuditEventType
 from app.models.capability import Capability
 from app.models.data_resource import DataResource
 from app.models.execution_environment import ExecutionEnvironment
@@ -23,6 +24,7 @@ from app.services.analysis_bundle_service import (
     get_environment_runtime,
     get_resource_identifiers,
 )
+from app.services.audit_service import create_audit_event
 from app.services.execution_request_service import (
     get_execution_request,
     list_execution_requests,
@@ -367,6 +369,15 @@ def post_admin_approve_output_set(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=str(e),
         )
+    create_audit_event(
+        db,
+        event_type=AuditEventType.OUTPUT_SET_APPROVED,
+        actor_id=current_user.id,
+        project_id=output_set.execution_request.project_id,
+        resource_type="output_set",
+        resource_id=output_set.id,
+        metadata={},
+    )
     db.commit()
     db.refresh(output_set)
     req = output_set.execution_request
@@ -422,6 +433,15 @@ def post_admin_reject_output_set(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=str(e),
         )
+    create_audit_event(
+        db,
+        event_type=AuditEventType.OUTPUT_SET_REJECTED,
+        actor_id=current_user.id,
+        project_id=output_set.execution_request.project_id,
+        resource_type="output_set",
+        resource_id=output_set.id,
+        metadata={},
+    )
     db.commit()
     db.refresh(output_set)
     req = output_set.execution_request
@@ -477,6 +497,18 @@ def post_admin_release_output_set(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=str(e),
         )
+    create_audit_event(
+        db,
+        event_type=AuditEventType.OUTPUT_SET_RELEASED,
+        actor_id=current_user.id,
+        project_id=output_set.execution_request.project_id,
+        resource_type="output_set",
+        resource_id=output_set.id,
+        metadata={
+            "file_count": len(output_set.outputs) if output_set.outputs else 0,
+            "total_size_bytes": output_set.release_package_size or 0,
+        },
+    )
     db.commit()
     db.refresh(output_set)
     req = output_set.execution_request
@@ -570,6 +602,7 @@ def post_admin_user(
         display_name=data.display_name,
         password=data.password,
         role=data.role,
+        actor_id=current_user.id,
     )
     return user
 
@@ -635,6 +668,15 @@ def post_admin_approve_bundle(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=str(e),
         )
+    create_audit_event(
+        db,
+        event_type=AuditEventType.BUNDLE_APPROVED,
+        actor_id=current_user.id,
+        project_id=bundle.project_id,
+        resource_type="analysis_bundle",
+        resource_id=bundle.id,
+        metadata={"bundle_name": bundle.name},
+    )
     db.commit()
     db.refresh(bundle)
     return _admin_bundle_to_read(bundle)
@@ -664,6 +706,15 @@ def post_admin_reject_bundle(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=str(e),
         )
+    create_audit_event(
+        db,
+        event_type=AuditEventType.BUNDLE_REJECTED,
+        actor_id=current_user.id,
+        project_id=bundle.project_id,
+        resource_type="analysis_bundle",
+        resource_id=bundle.id,
+        metadata={"bundle_name": bundle.name},
+    )
     db.commit()
     db.refresh(bundle)
     return _admin_bundle_to_read(bundle)
@@ -694,6 +745,15 @@ def post_admin_supersede_bundle(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=str(e),
         )
+    create_audit_event(
+        db,
+        event_type=AuditEventType.BUNDLE_SUPERSEDED,
+        actor_id=current_user.id,
+        project_id=bundle.project_id,
+        resource_type="analysis_bundle",
+        resource_id=bundle.id,
+        metadata={"bundle_name": bundle.name},
+    )
     db.commit()
     db.refresh(bundle)
     return _admin_bundle_to_read(bundle)

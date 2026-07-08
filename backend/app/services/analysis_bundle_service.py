@@ -7,9 +7,11 @@ from app.models.analysis_bundle import (
     AnalysisBundleDataResource,
     AnalysisBundleStatus,
 )
+from app.models.audit_event import AuditEventType
 from app.models.data_resource import DataResource
 from app.models.execution_environment import ExecutionEnvironment
 from app.models.project_data_resource import ProjectResourceAllocation
+from app.services.audit_service import create_audit_event
 
 REQUIRED_MANIFEST_FIELDS = {
     "name",
@@ -157,6 +159,15 @@ def create_bundle(
         )
         db.add(join)
 
+    create_audit_event(
+        db,
+        event_type=AuditEventType.BUNDLE_CREATED,
+        actor_id=created_by_id,
+        project_id=project_id,
+        resource_type="analysis_bundle",
+        resource_id=bundle.id,
+        metadata={"bundle_name": bundle.name},
+    )
     db.commit()
     db.refresh(bundle)
     return bundle
