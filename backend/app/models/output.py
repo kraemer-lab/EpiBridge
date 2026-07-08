@@ -14,9 +14,10 @@ if TYPE_CHECKING:
 
 
 class OutputStatus(str, enum.Enum):
-    # Currently only AVAILABLE; future lifecycle to include
-    # PENDING_REVIEW, APPROVED, RELEASED, REJECTED.
-    AVAILABLE = "available"
+    PENDING_REVIEW = "pending_review"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    RELEASED = "released"
 
 
 class Output(Base):
@@ -31,7 +32,7 @@ class Output(Base):
     filename: Mapped[str] = mapped_column(String(255), nullable=False)
     size: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     status: Mapped[OutputStatus] = mapped_column(
-        String(64), nullable=False, default=OutputStatus.AVAILABLE
+        String(64), nullable=False, default=OutputStatus.PENDING_REVIEW
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

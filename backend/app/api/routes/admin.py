@@ -9,6 +9,7 @@ from app.db.session import get_db
 from app.models.analysis_bundle import AnalysisBundle
 from app.models.data_resource import DataResource
 from app.models.execution_environment import ExecutionEnvironment
+from app.models.output import Output
 from app.models.user import User, UserRole
 from app.schemas.analysis_bundle import AnalysisBundleRead
 from app.schemas.data_resource import DataResourceRead
@@ -24,8 +25,9 @@ from app.services.execution_request_service import (
     list_execution_requests,
     request_to_read,
 )
-from app.services.output_service import list_outputs
+from app.services.output_service import get_output, list_outputs
 from app.workflow.bundle import approve_bundle, reject_bundle, supersede_bundle
+from app.workflow.output import approve_output, reject_output, release_output
 
 router = APIRouter()
 
@@ -186,6 +188,17 @@ def get_admin_execution_request(
 
 
 @router.get(
+    "/admin/outputs",
+    response_model=List[OutputRead],
+)
+def list_admin_outputs(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return db.query(Output).order_by(Output.created_at.desc()).all()
+
+
+@router.get(
     "/admin/execution-requests/{request_id}/outputs",
     response_model=List[OutputRead],
 )
@@ -201,6 +214,132 @@ def list_admin_execution_request_outputs(
             detail="Execution request not found",
         )
     return list_outputs(db, request.id)
+
+
+@router.get(
+    "/admin/outputs/{output_id}",
+    response_model=OutputRead,
+)
+def get_admin_output(
+    output_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    output = get_output(db, output_id)
+    if output is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Output not found",
+        )
+    return output
+
+
+@router.post(
+    "/admin/outputs/{output_id}/approve",
+    response_model=OutputRead,
+)
+def post_admin_approve_output(
+    output_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    output = get_output(db, output_id)
+    if output is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Output not found",
+        )
+    try:
+        require_any_role(
+            current_user, UserRole.MODERATOR, UserRole.MAINTAINER, UserRole.ADMIN
+        )
+    except PolicyError as e:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(e),
+        )
+    try:
+        approve_output(db, output)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e),
+        )
+    db.commit()
+    db.refresh(output)
+    return output
+
+
+@router.post(
+    "/admin/outputs/{output_id}/reject",
+    response_model=OutputRead,
+)
+def post_admin_reject_output(
+    output_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    output = get_output(db, output_id)
+    if output is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Output not found",
+        )
+    try:
+        require_any_role(
+            current_user, UserRole.MODERATOR, UserRole.MAINTAINER, UserRole.ADMIN
+        )
+    except PolicyError as e:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(e),
+        )
+    try:
+        reject_output(db, output)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e),
+        )
+    db.commit()
+    db.refresh(output)
+    return output
+
+
+@router.post(
+    "/admin/outputs/{output_id}/release",
+    response_model=OutputRead,
+)
+def post_admin_release_output(
+    output_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    output = get_output(db, output_id)
+    if output is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Output not found",
+        )
+    try:
+        require_any_role(
+            current_user, UserRole.MODERATOR, UserRole.MAINTAINER, UserRole.ADMIN
+        )
+    except PolicyError as e:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(e),
+        )
+    try:
+        release_output(db, output)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e),
+        )
+    db.commit()
+    db.refresh(output)
+    return output
 
 
 def _admin_bundle_to_read(bundle: AnalysisBundle) -> AnalysisBundleRead:

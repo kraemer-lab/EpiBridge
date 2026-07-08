@@ -21,6 +21,15 @@ function statusStyle(status: string): React.CSSProperties {
   }
 }
 
+function outputStatusBadge(status: string): { background: string; color: string; label: string } {
+  switch (status) {
+    case "released":
+      return { background: "#d4edda", color: "#155724", label: "Released" };
+    default:
+      return { background: "#f0f0f0", color: "#666", label: status };
+  }
+}
+
 export default function ProjectOutputsPage() {
   const params = useParams();
   const projectId = params.id as string;
@@ -50,6 +59,8 @@ export default function ProjectOutputsPage() {
       .then(setOutputs)
       .catch(() => setOutputs([]));
   };
+
+  const selectedRequest = requests.find((r) => r.id === selectedRequestId);
 
   if (loading) return <div className="card empty-state">Loading...</div>;
 
@@ -88,14 +99,16 @@ export default function ProjectOutputsPage() {
         </div>
       )}
 
-      {selectedRequestId && requests.find((r) => r.id === selectedRequestId)?.status !== "completed" && (
+      {selectedRequest && selectedRequest.status === "completed" && outputs.length === 0 && (
         <div className="card empty-state">
-          Outputs will appear here once the execution completes.
+          Outputs are pending review. They will appear here once released.
         </div>
       )}
 
-      {selectedRequestId && outputs.length === 0 && (
-        <div className="card empty-state">No outputs available.</div>
+      {selectedRequest && selectedRequest.status !== "completed" && (
+        <div className="card empty-state">
+          Outputs will appear here once the execution completes.
+        </div>
       )}
 
       {outputs.length > 0 && (
@@ -104,30 +117,49 @@ export default function ProjectOutputsPage() {
             <tr>
               <th>Filename</th>
               <th>Size</th>
+              <th>Status</th>
               <th>Download</th>
             </tr>
           </thead>
           <tbody>
-            {outputs.map((o) => (
-              <tr key={o.id}>
-                <td style={{ fontWeight: 500 }}>{o.filename}</td>
-                <td style={{ color: "var(--color-text-secondary)" }}>
-                  {o.size > 1024
-                    ? `${(o.size / 1024).toFixed(1)} KB`
-                    : `${o.size} bytes`}
-                </td>
-                <td>
-                  <a
-                    href={getOutputDownloadUrl(projectId, selectedRequestId!, o.id)}
-                    className="btn"
-                    style={{ textDecoration: "none", fontSize: "0.85rem" }}
-                    download
-                  >
-                    Download
-                  </a>
-                </td>
-              </tr>
-            ))}
+            {outputs.map((o) => {
+              const badge = outputStatusBadge(o.status);
+              return (
+                <tr key={o.id}>
+                  <td style={{ fontWeight: 500 }}>{o.filename}</td>
+                  <td style={{ color: "var(--color-text-secondary)" }}>
+                    {o.size > 1024
+                      ? `${(o.size / 1024).toFixed(1)} KB`
+                      : `${o.size} bytes`}
+                  </td>
+                  <td>
+                    <span
+                      style={{
+                        display: "inline-block",
+                        padding: "2px 8px",
+                        borderRadius: "4px",
+                        fontSize: "0.8rem",
+                        fontWeight: 600,
+                        background: badge.background,
+                        color: badge.color,
+                      }}
+                    >
+                      {badge.label}
+                    </span>
+                  </td>
+                  <td>
+                    <a
+                      href={getOutputDownloadUrl(projectId, selectedRequestId!, o.id)}
+                      className="btn"
+                      style={{ textDecoration: "none", fontSize: "0.85rem" }}
+                      download
+                    >
+                      Download
+                    </a>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       )}

@@ -206,7 +206,7 @@ export default function AnalysisDetailPage() {
             {bundle.build_status === "environment_ready" && (
               <span style={{ color: "#2e7d32" }}>Ready to run</span>
             )}
-            {(bundle.build_status === "environment_not_built" || bundle.build_status === "environment_building") && (
+            {(bundle.build_status === "environment_building" || (bundle.build_status === "environment_not_built" && bundle.status === "approved_for_execution")) && (
               <span style={{ color: "#ed6c02" }}>Preparing execution environment…</span>
             )}
             {bundle.build_status === "environment_build_failed" && (

@@ -222,6 +222,30 @@ export async function getAdminBundles(): Promise<AnalysisBundle[]> {
   return request<AnalysisBundle[]>("/api/admin/bundles");
 }
 
+export async function getAdminOutputs(): Promise<Output[]> {
+  return request<Output[]>("/api/admin/outputs");
+}
+
+export async function getAdminExecutionRequests(): Promise<ExecutionRequest[]> {
+  return request<ExecutionRequest[]>("/api/admin/execution-requests");
+}
+
+export async function getAdminOutput(outputId: string): Promise<Output> {
+  return request<Output>(`/api/admin/outputs/${outputId}`);
+}
+
+export async function approveOutput(outputId: string): Promise<Output> {
+  return request<Output>(`/api/admin/outputs/${outputId}/approve`, { method: "POST" });
+}
+
+export async function rejectOutput(outputId: string): Promise<Output> {
+  return request<Output>(`/api/admin/outputs/${outputId}/reject`, { method: "POST" });
+}
+
+export async function releaseOutput(outputId: string): Promise<Output> {
+  return request<Output>(`/api/admin/outputs/${outputId}/release`, { method: "POST" });
+}
+
 export async function getAdminBundle(id: string): Promise<AnalysisBundle> {
   return request<AnalysisBundle>(`/api/admin/bundles/${id}`);
 }

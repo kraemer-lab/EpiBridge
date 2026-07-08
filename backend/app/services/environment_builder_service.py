@@ -4,7 +4,7 @@ import uuid
 from sqlalchemy.orm import Session
 
 from app.builders.registry import registry
-from app.models.analysis_bundle import AnalysisBundle
+from app.models.analysis_bundle import AnalysisBundle, AnalysisBundleBuildStatus
 from app.models.build_request import BuildRequest, BuildRequestStatus
 from app.models.execution_image import ExecutionImage
 from app.services.bundle_store import get_bundle_store
@@ -50,6 +50,9 @@ def ensure_build_request(db: Session, bundle: AnalysisBundle) -> BuildRequest | 
 
     cached = get_cached_image(db, bundle.execution_environment_id, dependency_hash)
     if cached is not None:
+        bundle.build_status = AnalysisBundleBuildStatus.ENVIRONMENT_READY
+        bundle.execution_image_id = cached.id
+        db.commit()
         return None
 
     build_request = BuildRequest(

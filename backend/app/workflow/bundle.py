@@ -1,6 +1,11 @@
+import logging
+
 from sqlalchemy.orm import Session
 
 from app.models.analysis_bundle import AnalysisBundle, AnalysisBundleStatus
+from app.services.environment_builder_service import ensure_build_request
+
+logger = logging.getLogger("workflow.bundle")
 
 
 def submit_bundle(db: Session, bundle: AnalysisBundle) -> AnalysisBundle:
@@ -14,6 +19,8 @@ def approve_bundle(db: Session, bundle: AnalysisBundle) -> AnalysisBundle:
     if bundle.status != AnalysisBundleStatus.SUBMITTED:
         raise ValueError(f"Cannot approve bundle in state: {bundle.status.value}")
     bundle.status = AnalysisBundleStatus.APPROVED_FOR_EXECUTION
+    if ensure_build_request(db, bundle) is None:
+        logger.info("Bundle %s approved without build request", bundle.id)
     return bundle
 
 

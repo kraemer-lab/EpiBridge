@@ -1,5 +1,4 @@
 import json
-import logging
 import uuid
 from typing import List
 
@@ -22,6 +21,7 @@ from app.db.session import get_db
 from app.models.analysis_bundle import AnalysisBundle
 from app.models.build_request import BuildRequest
 from app.models.data_resource import DataResource
+from app.models.output import OutputStatus
 from app.models.project import Project
 from app.models.project_data_resource import ProjectResourceAllocation
 from app.models.user import User
@@ -47,7 +47,6 @@ from app.services.analysis_bundle_service import (
     update_bundle,
 )
 from app.services.bundle_store import get_bundle_store
-from app.services.environment_builder_service import ensure_build_request
 from app.services.execution_environment_service import list_environments
 from app.services.execution_request_service import (
     create_execution_request,
@@ -57,7 +56,8 @@ from app.services.execution_request_service import (
 )
 from app.services.output_service import (
     get_output,
-    list_outputs,
+    list_released_outputs,
+    require_output_released,
     stream_output,
 )
 from app.services.project_service import create_project, list_projects
@@ -403,10 +403,6 @@ async def post_project_bundle_upload(
 
     background_tasks.add_task(request_and_perform_review, bundle.id)
 
-    if ensure_build_request(db, bundle) is None:
-        logger = logging.getLogger("api.routes.projects")
-        logger.info("Bundle %s registered without build request", bundle.id)
-
     db.refresh(bundle)
     return _bundle_to_read(bundle)
 
@@ -567,7 +563,7 @@ def get_execution_request_outputs(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Execution request not found",
         )
-    return list_outputs(db, request_id)
+    return list_released_outputs(db, request_id)
 
 
 @router.get(
@@ -590,6 +586,11 @@ def get_execution_request_output(
         )
     output = get_output(db, output_id)
     if output is None or output.execution_request_id != request_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Output not found",
+        )
+    if output.status != OutputStatus.RELEASED:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Output not found",
@@ -619,6 +620,13 @@ def download_execution_request_output(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Output not found",
+        )
+    try:
+        require_output_released(output)
+    except PermissionError as e:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(e),
         )
     return stream_output(request_id, output.filename)
 

@@ -9,13 +9,33 @@ from app.models.execution_request import (
     ExecutionRequest,
     ExecutionRequestStatus,
 )
-from app.models.output import Output
+from app.models.output import Output, OutputStatus
 
 OUTPUT_ROOT = Path(os.environ.get("OUTPUT_DIR", "/tmp/epibridge-outputs"))
 
 
 def ensure_output_root():
     OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
+
+
+def require_output_released(output: Output) -> None:
+    if output.status != OutputStatus.RELEASED:
+        raise PermissionError(
+            f"Output '{output.filename}' is in state '{output.status.value}'; "
+            "only released outputs can be downloaded"
+        )
+
+
+def list_released_outputs(db: Session, execution_request_id: uuid.UUID) -> list[Output]:
+    return (
+        db.query(Output)
+        .filter(
+            Output.execution_request_id == execution_request_id,
+            Output.status == OutputStatus.RELEASED,
+        )
+        .order_by(Output.created_at)
+        .all()
+    )
 
 
 def register_output(
