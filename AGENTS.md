@@ -1,6 +1,6 @@
 # AGENTS.md
 
-## Project status — Milestone 17 Phase 0 complete (Audit Event Model)
+## Project status — Milestone 17 complete (Audit & Provenance)
 
 ### Exists and functional
 
@@ -11,16 +11,18 @@ backend/         FastAPI: identity model (User, Role, Capability,
                  CLI seed-admin/seed-demo, bundle store, worker execution,
                  Environment Builder subsystem, auth framework seeder,
                  user management API (create/list/get users), email validation,
-                 audit event model (AuditEvent, AuditEventType), audit service
+                 audit event model (AuditEvent, AuditEventType), audit service,
+                 audit query API
 frontend/        Next.js + React + TypeScript: login, projects, admin pages,
-                 user management UI, project members UI
+                 user management UI, project members UI, audit log tab,
+                 per-project and per-resource audit views
 containers/      Base analysis Docker images (python-3.13, python-3.14)
 vm/              cloud-init.yaml, Caddyfile (HTTPS, HSTS, compression,
                  security headers, request size limits), runtime spec
 scripts/         bootstrap.sh, install.sh, upgrade.sh, backup.sh, restore.sh, healthcheck.sh
 docker-compose.yml  6 services + optional ollama (--profile ai),
                     internal + frontend + external networks
-tests/           Unit (236), integration (identity validation, user management,
+tests/           Unit (256), integration (identity validation, user management,
                  project membership, audit), smoke, e2e (canonical workflow)
 docs/            Architecture (current state), security, API, vision, AI assistance
 ```
@@ -337,8 +339,9 @@ The test (in `frontend/e2e/canonical-workflow.spec.ts`) validates:
 11. Releasing the Output Set (APPROVED → RELEASED), creating the Release Package ZIP
 12. Downloading the Release Package
 13. Verifying the ZIP contains the expected output file (`summary.csv`) and execution metadata (`execution_metadata.json`)
+14. Verifying audit events are visible in the admin Audit Log for each governance action
 
-This is a system test — not UI, not API — covering frontend, backend, database, worker, Docker executor, provider abstraction, runtime contract, output registration, and download endpoint.
+This is a system test — not UI, not API — covering frontend, backend, database, worker, Docker executor, provider abstraction, runtime contract, output registration, download endpoint, and audit ledger.
 
 ### Stack dependencies
 

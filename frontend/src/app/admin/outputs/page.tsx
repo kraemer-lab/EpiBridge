@@ -3,12 +3,31 @@
 import { useEffect, useState } from "react";
 import {
   OutputSetListItem,
+  AuditEvent,
   getAdminOutputSets,
   getAdminOutputSet,
   approveOutputSet,
   rejectOutputSet,
   releaseOutputSet,
+  getAuditEvents,
 } from "@/lib/api";
+
+function eventLabel(eventType: string): string {
+  const labels: Record<string, string> = {
+    "output_set.created": "Output set created",
+    "output_set.approved": "Output approved",
+    "output_set.rejected": "Output rejected",
+    "output_set.released": "Output released",
+    "execution.started": "Execution started",
+    "execution.completed": "Execution completed",
+    "execution.failed": "Execution failed",
+  };
+  return labels[eventType] || eventType;
+}
+
+function formatTime(iso: string): string {
+  return new Date(iso).toLocaleString();
+}
 
 function statusBadge(status: string): { background: string; color: string; label: string } {
   switch (status) {
@@ -29,6 +48,7 @@ export default function AdminOutputsPage() {
   const [sets, setSets] = useState<OutputSetListItem[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [expandedOutputs, setExpandedOutputs] = useState<{ filename: string; size: number }[]>([]);
+  const [outputAudit, setOutputAudit] = useState<Record<string, AuditEvent[]>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -51,11 +71,22 @@ export default function AdminOutputsPage() {
     try {
       const outputSet = await getAdminOutputSet(id);
       setExpandedOutputs(outputSet.outputs);
-      setExpandedId(id);
     } catch {
       setExpandedOutputs([]);
-      setExpandedId(id);
     }
+    if (!outputAudit[id]) {
+      try {
+        const res = await getAuditEvents({
+          resource_type: "output_set",
+          resource_id: id,
+          limit: 20,
+        });
+        setOutputAudit((prev) => ({ ...prev, [id]: res.items }));
+      } catch {
+        setOutputAudit((prev) => ({ ...prev, [id]: [] }));
+      }
+    }
+    setExpandedId(id);
   };
 
   const handleApprove = async (id: string) => {
@@ -169,16 +200,43 @@ export default function AdminOutputsPage() {
                         </div>
                       </td>
                     </tr>
-                    {expandedId === s.id && expandedOutputs.length > 0 && (
-                      <tr key={`${s.id}-files`}>
+                    {expandedId === s.id && (
+                      <tr key={`${s.id}-detail`}>
                         <td colSpan={4} style={{ padding: "0 16px 8px 16px" }}>
-                          <div style={{ fontSize: "0.85rem", color: "var(--color-text-secondary)" }}>
-                            <strong style={{ display: "block", marginBottom: "4px" }}>Artefacts:</strong>
-                            {expandedOutputs.map((o) => (
-                              <div key={o.filename} style={{ padding: "2px 0" }}>
-                                {o.filename} — {o.size > 1024 ? `${(o.size / 1024).toFixed(1)} KB` : `${o.size} bytes`}
-                              </div>
-                            ))}
+                          {expandedOutputs.length > 0 && (
+                            <div style={{ fontSize: "0.85rem", color: "var(--color-text-secondary)", marginBottom: "var(--spacing-sm)" }}>
+                              <strong style={{ display: "block", marginBottom: "4px" }}>Artefacts:</strong>
+                              {expandedOutputs.map((o) => (
+                                <div key={o.filename} style={{ padding: "2px 0" }}>
+                                  {o.filename} — {o.size > 1024 ? `${(o.size / 1024).toFixed(1)} KB` : `${o.size} bytes`}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          <div style={{ fontSize: "0.85rem" }}>
+                            <strong style={{ display: "block", marginBottom: "4px" }}>Audit History:</strong>
+                            {!outputAudit[s.id] ? (
+                              <div style={{ color: "var(--color-text-secondary)" }}>Loading...</div>
+                            ) : outputAudit[s.id].length === 0 ? (
+                              <div style={{ color: "var(--color-text-secondary)" }}>No audit events.</div>
+                            ) : (
+                              outputAudit[s.id].map((e) => (
+                                <div
+                                  key={e.id}
+                                  style={{
+                                    display: "flex",
+                                    justifyContent: "space-between",
+                                    padding: "3px 0",
+                                    borderBottom: "1px solid var(--color-border, #eee)",
+                                  }}
+                                >
+                                  <span style={{ fontWeight: 500 }}>{eventLabel(e.event_type)}</span>
+                                  <span style={{ color: "var(--color-text-secondary)" }}>
+                                    {e.actor_display_name} — {formatTime(e.occurred_at)}
+                                  </span>
+                                </div>
+                              ))
+                            )}
                           </div>
                         </td>
                       </tr>

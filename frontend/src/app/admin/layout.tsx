@@ -7,6 +7,7 @@ const adminTabs = [
   { href: "/admin", label: "Data Resources" },
   { href: "/admin/bundles", label: "Analysis Bundles" },
   { href: "/admin/outputs", label: "Outputs" },
+  { href: "/admin/audit", label: "Audit Log" },
   { href: "/admin/users", label: "Users" },
 ];
 

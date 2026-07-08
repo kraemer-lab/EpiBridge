@@ -451,6 +451,52 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   };
 }
 
+// --- Audit Events ---
+
+export interface AuditEvent {
+  id: string;
+  event_type: string;
+  actor_id: string;
+  actor_display_name: string;
+  actor_email: string;
+  project_id: string | null;
+  resource_type: string;
+  resource_id: string;
+  event_metadata: Record<string, unknown>;
+  occurred_at: string;
+}
+
+export interface AuditEventList {
+  items: AuditEvent[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export function getAuditEvents(params?: {
+  project_id?: string;
+  actor_id?: string;
+  resource_type?: string;
+  resource_id?: string;
+  event_type?: string;
+  date_from?: string;
+  date_to?: string;
+  limit?: number;
+  offset?: number;
+  order?: "asc" | "desc";
+}): Promise<AuditEventList> {
+  const searchParams = new URLSearchParams();
+  if (params) {
+    for (const [key, value] of Object.entries(params)) {
+      if (value !== undefined && value !== null) {
+        searchParams.set(key, String(value));
+      }
+    }
+  }
+  const qs = searchParams.toString();
+  return request<AuditEventList>(`/api/admin/audit-events${qs ? `?${qs}` : ""}`);
+}
+
 // --- Identity Management ---
 
 export interface UserCreate {

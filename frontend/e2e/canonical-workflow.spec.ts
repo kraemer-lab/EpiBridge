@@ -124,7 +124,19 @@ test("Canonical Workflow: researcher creates project, uploads bundle, runs analy
     page.getByRole("link", { name: "Download All" }).click(),
   ]);
 
-  // 23. Verify the downloaded file is a ZIP containing summary.csv
+  // 23. Navigate to Admin Audit Log and verify governance events are recorded
+  await page.getByRole("link", { name: "Admin" }).click();
+  await page.getByRole("link", { name: "Audit Log" }).click();
+  await expect(page.getByText("Audit Log")).toBeVisible();
+  await expect(page.getByText("project.created")).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText("bundle.submitted")).toBeVisible();
+  await expect(page.getByText("bundle.approved")).toBeVisible();
+  await expect(page.getByText("execution.requested")).toBeVisible();
+  await expect(page.getByText("execution.completed")).toBeVisible();
+  await expect(page.getByText("output_set.approved")).toBeVisible();
+  await expect(page.getByText("output_set.released")).toBeVisible();
+
+  // 24. Verify the downloaded file is a ZIP containing summary.csv
   expect(download.suggestedFilename()).toMatch(/\.zip$/);
   const downloadPath = await download.path();
   expect(downloadPath).not.toBeNull();
