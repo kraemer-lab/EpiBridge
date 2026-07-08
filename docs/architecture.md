@@ -670,48 +670,110 @@ parameter overrides).
 
 ⸻
 
-## Outputs
+## Output Sets
 
-An **Output** represents a file produced by an execution. Outputs are
-registered by the worker after a successful execution.
+Execution outputs are governed as a collection — the **Output Set** —
+not as individual files. The governed object is "the result of an
+execution", and its lifecycle is separate from both the execution
+request lifecycle and the file metadata.
 
-### Output Model
+### Governing Model
+
+```
+Execution Request
+        │
+        ▼
+Output Set  (governed artefact)
+        │
+        ├── Output files (individual artefacts, no lifecycle)
+        ├── Execution metadata
+        └── Release Package (ZIP, created on Release)
+```
+
+### Output Set Lifecycle
+
+```
+Pending Review
+      │
+      ▼
+Approved     ← Moderator review complete, safe to release
+      │
+      ▼
+Released     ← Release Package created and published
+```
+
+* **Pending Review** — Execution completed. Moderators inspect all
+  artefacts. Researchers cannot access any outputs.
+
+* **Approved** — Moderator has determined the Output Set is safe.
+  Authorises the platform to construct the Release Package, but does
+  not yet expose outputs to researchers.
+
+* **Released** — The Release Package (ZIP) has been created and is
+  available for researcher download. Only released Output Sets are
+  visible to researchers.
+
+### Output Set Model
+
+```
+OutputSet
+├── id                          (UUID, auto-generated)
+├── execution_request_id        (FK → ExecutionRequest, unique, 1:1)
+├── status                      (pending_review | approved | rejected | released)
+├── release_package_path        (path to ZIP archive, set on Release)
+├── release_package_size        (size in bytes, set on Release)
+├── created_at
+└── updated_at
+```
+
+### Output Model (individual artefacts)
+
+Individual `Output` records are pure file metadata — they carry no
+lifecycle state:
 
 ```
 Output
-├── id                      (UUID, auto-generated)
-├── execution_request_id    (FK → ExecutionRequest)
-├── filename                ("summary.csv")
-├── size                    (bytes)
-├── status                  ("available")
+├── id                  (UUID, auto-generated)
+├── output_set_id       (FK → OutputSet)
+├── filename            ("summary.csv")
+├── size                (bytes)
 └── created_at
 ```
 
-Outputs are immediately available for download. Approval workflows
-will be added in a future milestone.
+### Release Package
+
+When an Output Set is **Released**, the platform creates a ZIP archive
+containing:
+
+* All output files (preserving directory structure)
+* `execution_metadata.json` (execution request details, file listing)
+
+The Release Package is the sole delivery mechanism to researchers.
+Individual output files are never downloaded separately. Moderators
+retain the ability to inspect individual artefacts via the admin UI.
+
+The working artefacts on disk (produced by the executor) and the
+Release Package (the researcher-facing distribution) are kept
+distinct. Working artefacts may be discarded after successful
+packaging in future iterations.
 
 ### Storage
 
 Output files are written to the execution container's local `/output`
-directory during analysis. After execution completes, the worker
-retrieves them via the Docker API (`get_archive`) and persists them to
-a shared filesystem volume:
+directory during analysis. After execution completes, the worker:
 
-```
-/outputs/{execution_request_id}/{filename}
-```
+1. Retrieves them via the Docker API (`get_archive`) — a **pull**
+   operation from inside the container (trust boundary preserved)
+2. Persists them to a shared filesystem volume at
+   `/outputs/{execution_request_id}/{filename}`
+3. Creates an `OutputSet` record and registers each file as an
+   `Output` record linked to that set
+4. Release Packages are written to `/tmp/epibridge-releases/` during
+   the Release transition
 
-This makes the worker the controlled import stage for all execution
-artefacts. It creates a natural place for future validation:
-
-* file size and count limits
-* approved filename patterns and extensions
-* checksum generation
-* antivirus scanning
-* approval workflow gates
-
-The backend serves files from this volume via the download endpoint.
-No data resource access is involved — outputs are result artefacts.
+The worker remains the controlled import stage for all execution
+artefacts. File-level validation (size limits, allowed patterns,
+checksums) operates at the set level rather than per-file.
 
 ⸻
 
@@ -1083,7 +1145,7 @@ The analysis receives references through well-known environment variables
 
 ⸻
 
-### Job Lifecycle
+### Job Lifecycle (end-to-end)
 
 Draft
 ↓
@@ -1091,17 +1153,19 @@ Submitted
 ↓
 Pending Approval
 ↓
-Approved
+Approved for Execution
 ↓
 Running
 ↓
 Completed
 ↓
-Output Review
+Output Set — Pending Review
 ↓
-Approved
+Output Set — Approved
 ↓
-Downloaded
+Output Set — Released (ZIP created)
+↓
+Downloads
 
 ⸻
 

@@ -74,7 +74,7 @@ Once the core schema stabilises, Alembic will be reintroduced as a dedicated mil
 
 - **Institutional assets** (Data Resources, Execution Environments) are registered automatically via lifespan startup from YAML manifests.
 - **Researcher artefacts** (Projects, Analysis Bundles, Execution Requests) are created by users through the application.
-- **Internal system artefacts** (AIBundleReview, BuildRequest, ExecutionImage) are created by background tasks and workers during platform operation.
+- **Internal system artefacts** (AIBundleReview, BuildRequest, ExecutionImage, OutputSet) are created by background tasks and workers during platform operation.
 - **Environment Builder subsystem** transforms Analysis Bundle dependency specifications into reusable Execution Images via curated Dockerfile templates. Builds are driven by `BuildRequest` work items processed by the worker alongside execution requests. `ExecutionImage` records serve as a content-addressable cache keyed by `(execution_environment_id, dependency_hash)`.
 - **Demo workspace** (optional) can be created by `seed-demo` CLI command — a development tool, not application startup logic.
 - **Manifest directories** (`RESOURCE_MANIFEST_DIR`, `ENVIRONMENT_MANIFEST_DIR`) are deployment configuration, not application defaults. Docker Compose sets them for development; production points them elsewhere.
@@ -166,11 +166,14 @@ The test (in `frontend/e2e/canonical-workflow.spec.ts`) validates:
 3. Creating a project
 4. Attaching a data resource to the project
 5. Creating an analysis and uploading a bundle
-6. Running the analysis
-7. Waiting for PENDING → RUNNING → COMPLETED status transition
-8. Opening the Outputs tab
-9. Downloading `summary.csv`
-10. Verifying the file exists and is non-empty
+6. Submitting the bundle (DRAFT → SUBMITTED)
+7. Approving the bundle (SUBMITTED → APPROVED_FOR_EXECUTION)
+8. Running the analysis
+9. Waiting for PENDING → RUNNING → COMPLETED status transition
+10. Approving the Output Set (PENDING_REVIEW → APPROVED)
+11. Releasing the Output Set (APPROVED → RELEASED), creating the Release Package ZIP
+12. Downloading the Release Package
+13. Verifying the ZIP contains the expected output file (`summary.csv`) and execution metadata (`execution_metadata.json`)
 
 This is a system test — not UI, not API — covering frontend, backend, database, worker, Docker executor, provider abstraction, runtime contract, output registration, and download endpoint.
 

@@ -59,37 +59,30 @@ Typical roles include:
 
 ## Approval Workflow
 
-Execution approval
+The platform has a two-stage approval gate. Each gate governs a
+different artefact and requires moderator review.
+
+### Stage 1: Execution Approval
 
 Researcher
-
 ↓
-
-Submit Job
-
+Submit Bundle
 ↓
-
-Administrator Approves
-
-↓
-
-Execution
-
-Output approval
-
-Execution
-
-↓
-
-Outputs Generated
-
-↓
-
 Administrator Reviews
-
 ↓
+Execution
 
-Approved Download
+### Stage 2: Output Approval
+
+Execution completes
+↓
+Output Set — Pending Review (all artefacts await inspection)
+↓
+Administrator Approves (marks Output Set as safe)
+↓
+Administrator Releases (creates and publishes Release Package ZIP)
+↓
+Researcher downloads ZIP
 
 ⸻
 

@@ -4,10 +4,10 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import {
   ExecutionRequest,
-  Output,
+  OutputSet,
   getProjectExecutionRequests,
   getExecutionRequestOutputs,
-  getOutputDownloadUrl,
+  getOutputSetDownloadUrl,
 } from "@/lib/api";
 
 function statusStyle(status: string): React.CSSProperties {
@@ -21,22 +21,13 @@ function statusStyle(status: string): React.CSSProperties {
   }
 }
 
-function outputStatusBadge(status: string): { background: string; color: string; label: string } {
-  switch (status) {
-    case "released":
-      return { background: "#d4edda", color: "#155724", label: "Released" };
-    default:
-      return { background: "#f0f0f0", color: "#666", label: status };
-  }
-}
-
 export default function ProjectOutputsPage() {
   const params = useParams();
   const projectId = params.id as string;
 
   const [requests, setRequests] = useState<ExecutionRequest[]>([]);
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
-  const [outputs, setOutputs] = useState<Output[]>([]);
+  const [outputSet, setOutputSet] = useState<OutputSet | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -46,7 +37,9 @@ export default function ProjectOutputsPage() {
         const completed = reqs.find((r) => r.status === "completed");
         if (completed) {
           setSelectedRequestId(completed.id);
-          return getExecutionRequestOutputs(projectId, completed.id).then(setOutputs);
+          return getExecutionRequestOutputs(projectId, completed.id)
+            .then(setOutputSet)
+            .catch(() => setOutputSet(null));
         }
       })
       .catch(() => {})
@@ -56,8 +49,8 @@ export default function ProjectOutputsPage() {
   const handleSelectRequest = (requestId: string) => {
     setSelectedRequestId(requestId);
     getExecutionRequestOutputs(projectId, requestId)
-      .then(setOutputs)
-      .catch(() => setOutputs([]));
+      .then(setOutputSet)
+      .catch(() => setOutputSet(null));
   };
 
   const selectedRequest = requests.find((r) => r.id === selectedRequestId);
@@ -99,7 +92,7 @@ export default function ProjectOutputsPage() {
         </div>
       )}
 
-      {selectedRequest && selectedRequest.status === "completed" && outputs.length === 0 && (
+      {selectedRequest && selectedRequest.status === "completed" && !outputSet && (
         <div className="card empty-state">
           Outputs are pending review. They will appear here once released.
         </div>
@@ -111,20 +104,39 @@ export default function ProjectOutputsPage() {
         </div>
       )}
 
-      {outputs.length > 0 && (
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Filename</th>
-              <th>Size</th>
-              <th>Status</th>
-              <th>Download</th>
-            </tr>
-          </thead>
-          <tbody>
-            {outputs.map((o) => {
-              const badge = outputStatusBadge(o.status);
-              return (
+      {outputSet && (
+        <div>
+          <div className="card" style={{ marginBottom: "var(--spacing-md)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <strong>Release Package</strong>
+                <span style={{ marginLeft: "var(--spacing-sm)", color: "var(--color-text-secondary)", fontSize: "0.85rem" }}>
+                  {outputSet.file_count} file{outputSet.file_count !== 1 ? "s" : ""}
+                  {outputSet.release_package_size
+                    ? ` — ${(outputSet.release_package_size / 1024).toFixed(1)} KB`
+                    : ""}
+                </span>
+              </div>
+              <a
+                href={getOutputSetDownloadUrl(projectId, selectedRequestId!)}
+                className="btn"
+                style={{ textDecoration: "none" }}
+                download
+              >
+                Download All
+              </a>
+            </div>
+          </div>
+
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Filename</th>
+                <th>Size</th>
+              </tr>
+            </thead>
+            <tbody>
+              {outputSet.outputs.map((o) => (
                 <tr key={o.id}>
                   <td style={{ fontWeight: 500 }}>{o.filename}</td>
                   <td style={{ color: "var(--color-text-secondary)" }}>
@@ -132,36 +144,11 @@ export default function ProjectOutputsPage() {
                       ? `${(o.size / 1024).toFixed(1)} KB`
                       : `${o.size} bytes`}
                   </td>
-                  <td>
-                    <span
-                      style={{
-                        display: "inline-block",
-                        padding: "2px 8px",
-                        borderRadius: "4px",
-                        fontSize: "0.8rem",
-                        fontWeight: 600,
-                        background: badge.background,
-                        color: badge.color,
-                      }}
-                    >
-                      {badge.label}
-                    </span>
-                  </td>
-                  <td>
-                    <a
-                      href={getOutputDownloadUrl(projectId, selectedRequestId!, o.id)}
-                      className="btn"
-                      style={{ textDecoration: "none", fontSize: "0.85rem" }}
-                      download
-                    >
-                      Download
-                    </a>
-                  </td>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
 
       {requests.length === 0 && (

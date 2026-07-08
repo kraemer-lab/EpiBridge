@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { execSync } from "child_process";
 import fs from "fs";
 import { createZip } from "./helpers/zip";
 
@@ -15,7 +16,7 @@ summary.to_csv("/output/summary.csv")
 print(f"Analysis complete. Processed {len(df)} rows, {len(df.columns)} columns.")
 `;
 
-test("Canonical Workflow: researcher creates project, uploads bundle, runs analysis, approves outputs, downloads output", async ({
+test("Canonical Workflow: researcher creates project, uploads bundle, runs analysis, approves output set, downloads release package", async ({
   page,
 }) => {
   const projectName = `Canonical Workflow Test ${TS}`;
@@ -94,42 +95,45 @@ test("Canonical Workflow: researcher creates project, uploads bundle, runs analy
   await page.getByRole("button", { name: "Run Analysis" }).click();
 
   // 17. Wait for the Execution Request to transition: PENDING → RUNNING → COMPLETED
-  // Scope to the row containing the analysis name to avoid ambiguity with other test runs
   await expect(
     page.locator("tr").filter({ hasText: analysisName }).getByText("completed")
   ).toBeVisible({ timeout: 180_000 });
 
-  // 18. Navigate to Admin → Outputs to review and release the output
+  // 18. Navigate to Admin → Outputs to review and release the output set
   await page.getByRole("link", { name: "Admin" }).click();
   await page.getByRole("link", { name: "Outputs" }).click();
 
-  // 19. Find the output row for this test's analysis and click Approve
-  const outputRow = page.locator("tr").filter({ hasText: analysisName });
-  await expect(outputRow.getByText("summary.csv")).toBeVisible({ timeout: 30_000 });
-  await outputRow.getByRole("button", { name: "Approve" }).click();
-  await expect(outputRow.getByText("Approved")).toBeVisible();
+  // 19. Find the output set row for this test's analysis and click Approve
+  const setRow = page.locator("tr").filter({ hasText: analysisName }).first();
+  await expect(setRow).toBeVisible({ timeout: 30_000 });
+  await setRow.getByRole("button", { name: "Approve" }).click();
+  await expect(setRow.getByText("Approved")).toBeVisible();
 
   // 20. Click Release
-  await outputRow.getByRole("button", { name: "Release" }).click();
-  await expect(outputRow.getByText("Released")).toBeVisible();
+  await setRow.getByRole("button", { name: "Release" }).click();
+  await expect(setRow.getByText("Released")).toBeVisible();
 
   // 21. Navigate back to the project outputs page
   await page.getByRole("link", { name: "Projects" }).click();
   await page.getByText(projectName).click();
   await page.getByRole("link", { name: "Outputs" }).click();
 
-  // 22. Download summary.csv — scope to the row containing the filename
+  // 22. Download the Release Package ZIP
   const [download] = await Promise.all([
     page.waitForEvent("download"),
-    page.locator("tr").filter({ hasText: "summary.csv" }).getByRole("link", { name: "Download" }).click(),
+    page.getByRole("link", { name: "Download All" }).click(),
   ]);
 
-  // 23. Verify the downloaded file exists and is non-empty
-  expect(download.suggestedFilename()).toBe("summary.csv");
+  // 23. Verify the downloaded file is a ZIP containing summary.csv
+  expect(download.suggestedFilename()).toMatch(/\.zip$/);
   const downloadPath = await download.path();
   expect(downloadPath).not.toBeNull();
   if (downloadPath) {
     const stats = fs.statSync(downloadPath);
     expect(stats.size).toBeGreaterThan(0);
+
+    const listing = execSync(`unzip -l "${downloadPath}"`, { encoding: "utf-8" });
+    expect(listing).toContain("summary.csv");
+    expect(listing).toContain("execution_metadata.json");
   }
 });

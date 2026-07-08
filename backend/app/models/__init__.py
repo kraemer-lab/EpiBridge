@@ -11,7 +11,8 @@ from app.models.data_resource import DataResource
 from app.models.execution_environment import ExecutionEnvironment
 from app.models.execution_image import ExecutionImage
 from app.models.execution_request import ExecutionRequest, ExecutionRequestStatus
-from app.models.output import Output, OutputStatus
+from app.models.output import Output
+from app.models.output_set import OutputSet, OutputSetStatus
 from app.models.project import Project
 from app.models.project_data_resource import ProjectResourceAllocation
 from app.models.session import Session
@@ -33,7 +34,8 @@ __all__ = [
     "ExecutionRequest",
     "ExecutionRequestStatus",
     "Output",
-    "OutputStatus",
+    "OutputSet",
+    "OutputSetStatus",
     "Project",
     "ProjectResourceAllocation",
     "Session",

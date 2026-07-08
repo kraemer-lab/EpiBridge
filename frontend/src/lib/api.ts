@@ -130,11 +130,33 @@ export interface ExecutionRequestCreate {
 
 export interface Output {
   id: string;
-  execution_request_id: string;
+  output_set_id: string;
   filename: string;
   size: number;
-  status: string;
   created_at: string;
+}
+
+export interface OutputSet {
+  id: string;
+  execution_request_id: string;
+  execution_request_name: string;
+  status: string;
+  release_package_size: number | null;
+  outputs: Output[];
+  file_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OutputSetListItem {
+  id: string;
+  execution_request_id: string;
+  execution_request_name: string;
+  status: string;
+  file_count: number;
+  release_package_size: number | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface DashboardStats {
@@ -222,8 +244,12 @@ export async function getAdminBundles(): Promise<AnalysisBundle[]> {
   return request<AnalysisBundle[]>("/api/admin/bundles");
 }
 
-export async function getAdminOutputs(): Promise<Output[]> {
-  return request<Output[]>("/api/admin/outputs");
+export async function getAdminOutputSets(): Promise<OutputSetListItem[]> {
+  return request<OutputSetListItem[]>("/api/admin/output-sets");
+}
+
+export async function getAdminOutputSet(id: string): Promise<OutputSet> {
+  return request<OutputSet>(`/api/admin/output-sets/${id}`);
 }
 
 export async function getAdminExecutionRequests(): Promise<ExecutionRequest[]> {
@@ -234,16 +260,16 @@ export async function getAdminOutput(outputId: string): Promise<Output> {
   return request<Output>(`/api/admin/outputs/${outputId}`);
 }
 
-export async function approveOutput(outputId: string): Promise<Output> {
-  return request<Output>(`/api/admin/outputs/${outputId}/approve`, { method: "POST" });
+export async function approveOutputSet(outputSetId: string): Promise<OutputSet> {
+  return request<OutputSet>(`/api/admin/output-sets/${outputSetId}/approve`, { method: "POST" });
 }
 
-export async function rejectOutput(outputId: string): Promise<Output> {
-  return request<Output>(`/api/admin/outputs/${outputId}/reject`, { method: "POST" });
+export async function rejectOutputSet(outputSetId: string): Promise<OutputSet> {
+  return request<OutputSet>(`/api/admin/output-sets/${outputSetId}/reject`, { method: "POST" });
 }
 
-export async function releaseOutput(outputId: string): Promise<Output> {
-  return request<Output>(`/api/admin/outputs/${outputId}/release`, { method: "POST" });
+export async function releaseOutputSet(outputSetId: string): Promise<OutputSet> {
+  return request<OutputSet>(`/api/admin/output-sets/${outputSetId}/release`, { method: "POST" });
 }
 
 export async function getAdminBundle(id: string): Promise<AnalysisBundle> {
@@ -394,18 +420,17 @@ export async function getProjectExecutionRequest(
 export async function getExecutionRequestOutputs(
   projectId: string,
   requestId: string,
-): Promise<Output[]> {
-  return request<Output[]>(
+): Promise<OutputSet> {
+  return request<OutputSet>(
     `/api/projects/${projectId}/execution-requests/${requestId}/outputs`,
   );
 }
 
-export function getOutputDownloadUrl(
+export function getOutputSetDownloadUrl(
   projectId: string,
   requestId: string,
-  outputId: string,
 ): string {
-  return `/api/projects/${projectId}/execution-requests/${requestId}/outputs/${outputId}/download`;
+  return `/api/projects/${projectId}/execution-requests/${requestId}/outputs/download`;
 }
 
 export async function getExecutionEnvironments(): Promise<ExecutionEnvironment[]> {

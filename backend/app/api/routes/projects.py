@@ -21,7 +21,6 @@ from app.db.session import get_db
 from app.models.analysis_bundle import AnalysisBundle
 from app.models.build_request import BuildRequest
 from app.models.data_resource import DataResource
-from app.models.output import OutputStatus
 from app.models.project import Project
 from app.models.project_data_resource import ProjectResourceAllocation
 from app.models.user import User
@@ -38,6 +37,7 @@ from app.schemas.execution_request import (
     ExecutionRequestRead,
 )
 from app.schemas.output import OutputRead
+from app.schemas.output_set import OutputSetRead
 from app.schemas.project import ProjectCreate, ProjectRead
 from app.services.ai_review_service import request_and_perform_review
 from app.services.analysis_bundle_service import (
@@ -54,11 +54,10 @@ from app.services.execution_request_service import (
     list_execution_requests,
     request_to_read,
 )
-from app.services.output_service import (
-    get_output,
-    list_released_outputs,
-    require_output_released,
-    stream_output,
+from app.services.output_set_service import (
+    get_released_output_set,
+    list_outputs_by_set,
+    stream_release_package,
 )
 from app.services.project_service import create_project, list_projects
 from app.workflow.bundle import submit_bundle
@@ -548,7 +547,7 @@ def get_project_execution_request(
 
 @router.get(
     "/projects/{project_id}/execution-requests/{request_id}/outputs",
-    response_model=List[OutputRead],
+    response_model=OutputSetRead,
 )
 def get_execution_request_outputs(
     project_id: uuid.UUID,
@@ -563,17 +562,41 @@ def get_execution_request_outputs(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Execution request not found",
         )
-    return list_released_outputs(db, request_id)
+    output_set = get_released_output_set(db, request_id)
+    if output_set is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No released outputs found for this execution request",
+        )
+    outputs = list_outputs_by_set(db, output_set.id)
+    return OutputSetRead(
+        id=output_set.id,
+        execution_request_id=output_set.execution_request_id,
+        execution_request_name=request.name,
+        status=output_set.status,
+        release_package_size=output_set.release_package_size,
+        outputs=[
+            OutputRead(
+                id=o.id,
+                output_set_id=o.output_set_id,
+                filename=o.filename,
+                size=o.size,
+                created_at=o.created_at,
+            )
+            for o in outputs
+        ],
+        file_count=len(outputs),
+        created_at=output_set.created_at,
+        updated_at=output_set.updated_at,
+    )
 
 
 @router.get(
-    "/projects/{project_id}/execution-requests/{request_id}/outputs/{output_id}",
-    response_model=OutputRead,
+    "/projects/{project_id}/execution-requests/{request_id}/outputs/download",
 )
-def get_execution_request_output(
+def download_execution_request_outputs(
     project_id: uuid.UUID,
     request_id: uuid.UUID,
-    output_id: uuid.UUID,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -584,51 +607,13 @@ def get_execution_request_output(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Execution request not found",
         )
-    output = get_output(db, output_id)
-    if output is None or output.execution_request_id != request_id:
+    output_set = get_released_output_set(db, request_id)
+    if output_set is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Output not found",
+            detail="No released outputs found for this execution request",
         )
-    if output.status != OutputStatus.RELEASED:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Output not found",
-        )
-    return output
-
-
-@router.get(
-    "/projects/{project_id}/execution-requests/{request_id}/outputs/{output_id}/download",
-)
-def download_execution_request_output(
-    project_id: uuid.UUID,
-    request_id: uuid.UUID,
-    output_id: uuid.UUID,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    _get_owned_project(db, project_id, current_user.id)
-    request = get_execution_request(db, request_id)
-    if request is None or request.project_id != project_id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Execution request not found",
-        )
-    output = get_output(db, output_id)
-    if output is None or output.execution_request_id != request_id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Output not found",
-        )
-    try:
-        require_output_released(output)
-    except PermissionError as e:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=str(e),
-        )
-    return stream_output(request_id, output.filename)
+    return stream_release_package(output_set)
 
 
 @router.get(

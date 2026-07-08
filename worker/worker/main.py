@@ -383,18 +383,16 @@ def execute_request(db: Session, request: ExecutionRequest) -> None:
         )
         return
 
-    # The filename field represents the relative path within the execution
-    # output directory (e.g. "summary.csv", "figures/plot.png").
-    # This preserves structured output hierarchies without flattening.
+    from app.services.output_set_service import ensure_output_set, register_output as register_set_output
+
+    output_set = ensure_output_set(db, request.id)
     output_count = 0
     if output_dir.is_dir():
-        from app.services.output_service import register_output
-
         for root, dirs, files in os.walk(output_dir):
             for fname in files:
                 fpath = os.path.join(root, fname)
                 relative = os.path.relpath(fpath, output_dir)
-                register_output(db, request.id, relative, os.path.getsize(fpath))
+                register_set_output(db, output_set.id, relative, os.path.getsize(fpath))
                 output_count += 1
                 logger.info(
                     f"Registered output: {relative} ({os.path.getsize(fpath)} bytes)"

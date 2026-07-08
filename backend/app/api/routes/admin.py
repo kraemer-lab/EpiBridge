@@ -9,13 +9,13 @@ from app.db.session import get_db
 from app.models.analysis_bundle import AnalysisBundle
 from app.models.data_resource import DataResource
 from app.models.execution_environment import ExecutionEnvironment
-from app.models.output import Output
 from app.models.user import User, UserRole
 from app.schemas.analysis_bundle import AnalysisBundleRead
 from app.schemas.data_resource import DataResourceRead
 from app.schemas.execution_environment import ExecutionEnvironmentRead
 from app.schemas.execution_request import ExecutionRequestRead
 from app.schemas.output import OutputRead
+from app.schemas.output_set import OutputSetListItem, OutputSetRead
 from app.services.analysis_bundle_service import (
     get_environment_runtime,
     get_resource_identifiers,
@@ -25,9 +25,19 @@ from app.services.execution_request_service import (
     list_execution_requests,
     request_to_read,
 )
-from app.services.output_service import get_output, list_outputs
+from app.services.output_service import get_output
+from app.services.output_set_service import (
+    get_output_set,
+    get_output_set_by_execution,
+    list_output_sets,
+    list_outputs_by_set,
+)
 from app.workflow.bundle import approve_bundle, reject_bundle, supersede_bundle
-from app.workflow.output import approve_output, reject_output, release_output
+from app.workflow.output_set import (
+    approve_output_set,
+    reject_output_set,
+    release_output_set,
+)
 
 router = APIRouter()
 
@@ -188,19 +198,74 @@ def get_admin_execution_request(
 
 
 @router.get(
-    "/admin/outputs",
-    response_model=List[OutputRead],
+    "/admin/output-sets",
+    response_model=List[OutputSetListItem],
 )
-def list_admin_outputs(
+def list_admin_output_sets(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return db.query(Output).order_by(Output.created_at.desc()).all()
+    sets = list_output_sets(db)
+    result: list[OutputSetListItem] = []
+    for s in sets:
+        req = s.execution_request
+        result.append(
+            OutputSetListItem(
+                id=s.id,
+                execution_request_id=s.execution_request_id,
+                execution_request_name=req.name if req else "",
+                status=s.status,
+                file_count=len(s.outputs) if s.outputs else 0,
+                release_package_size=s.release_package_size,
+                created_at=s.created_at,
+                updated_at=s.updated_at,
+            )
+        )
+    return result
+
+
+@router.get(
+    "/admin/output-sets/{output_set_id}",
+    response_model=OutputSetRead,
+)
+def get_admin_output_set(
+    output_set_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    output_set = get_output_set(db, output_set_id)
+    if output_set is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Output set not found",
+        )
+    outputs = list_outputs_by_set(db, output_set.id)
+    req = output_set.execution_request
+    return OutputSetRead(
+        id=output_set.id,
+        execution_request_id=output_set.execution_request_id,
+        execution_request_name=req.name if req else "",
+        status=output_set.status,
+        release_package_size=output_set.release_package_size,
+        outputs=[
+            OutputRead(
+                id=o.id,
+                output_set_id=o.output_set_id,
+                filename=o.filename,
+                size=o.size,
+                created_at=o.created_at,
+            )
+            for o in outputs
+        ],
+        file_count=len(outputs),
+        created_at=output_set.created_at,
+        updated_at=output_set.updated_at,
+    )
 
 
 @router.get(
     "/admin/execution-requests/{request_id}/outputs",
-    response_model=List[OutputRead],
+    response_model=OutputSetRead,
 )
 def list_admin_execution_request_outputs(
     request_id: str,
@@ -213,7 +278,33 @@ def list_admin_execution_request_outputs(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Execution request not found",
         )
-    return list_outputs(db, request.id)
+    output_set = get_output_set_by_execution(db, request.id)
+    if output_set is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Output set not found",
+        )
+    outputs = list_outputs_by_set(db, output_set.id)
+    return OutputSetRead(
+        id=output_set.id,
+        execution_request_id=output_set.execution_request_id,
+        execution_request_name=request.name,
+        status=output_set.status,
+        release_package_size=output_set.release_package_size,
+        outputs=[
+            OutputRead(
+                id=o.id,
+                output_set_id=o.output_set_id,
+                filename=o.filename,
+                size=o.size,
+                created_at=o.created_at,
+            )
+            for o in outputs
+        ],
+        file_count=len(outputs),
+        created_at=output_set.created_at,
+        updated_at=output_set.updated_at,
+    )
 
 
 @router.get(
@@ -231,23 +322,32 @@ def get_admin_output(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Output not found",
         )
-    return output
+    return OutputRead(
+        id=output.id,
+        output_set_id=output.output_set_id,
+        filename=output.filename,
+        size=output.size,
+        created_at=output.created_at,
+    )
+
+
+# --- Output Set governance (admin / moderator) ---
 
 
 @router.post(
-    "/admin/outputs/{output_id}/approve",
-    response_model=OutputRead,
+    "/admin/output-sets/{output_set_id}/approve",
+    response_model=OutputSetRead,
 )
-def post_admin_approve_output(
-    output_id: str,
+def post_admin_approve_output_set(
+    output_set_id: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    output = get_output(db, output_id)
-    if output is None:
+    output_set = get_output_set(db, output_set_id)
+    if output_set is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Output not found",
+            detail="Output set not found",
         )
     try:
         require_any_role(
@@ -259,31 +359,52 @@ def post_admin_approve_output(
             detail=str(e),
         )
     try:
-        approve_output(db, output)
+        approve_output_set(db, output_set)
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=str(e),
         )
     db.commit()
-    db.refresh(output)
-    return output
+    db.refresh(output_set)
+    req = output_set.execution_request
+    outputs = list_outputs_by_set(db, output_set.id)
+    return OutputSetRead(
+        id=output_set.id,
+        execution_request_id=output_set.execution_request_id,
+        execution_request_name=req.name if req else "",
+        status=output_set.status,
+        release_package_size=output_set.release_package_size,
+        outputs=[
+            OutputRead(
+                id=o.id,
+                output_set_id=o.output_set_id,
+                filename=o.filename,
+                size=o.size,
+                created_at=o.created_at,
+            )
+            for o in outputs
+        ],
+        file_count=len(outputs),
+        created_at=output_set.created_at,
+        updated_at=output_set.updated_at,
+    )
 
 
 @router.post(
-    "/admin/outputs/{output_id}/reject",
-    response_model=OutputRead,
+    "/admin/output-sets/{output_set_id}/reject",
+    response_model=OutputSetRead,
 )
-def post_admin_reject_output(
-    output_id: str,
+def post_admin_reject_output_set(
+    output_set_id: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    output = get_output(db, output_id)
-    if output is None:
+    output_set = get_output_set(db, output_set_id)
+    if output_set is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Output not found",
+            detail="Output set not found",
         )
     try:
         require_any_role(
@@ -295,31 +416,52 @@ def post_admin_reject_output(
             detail=str(e),
         )
     try:
-        reject_output(db, output)
+        reject_output_set(db, output_set)
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=str(e),
         )
     db.commit()
-    db.refresh(output)
-    return output
+    db.refresh(output_set)
+    req = output_set.execution_request
+    outputs = list_outputs_by_set(db, output_set.id)
+    return OutputSetRead(
+        id=output_set.id,
+        execution_request_id=output_set.execution_request_id,
+        execution_request_name=req.name if req else "",
+        status=output_set.status,
+        release_package_size=output_set.release_package_size,
+        outputs=[
+            OutputRead(
+                id=o.id,
+                output_set_id=o.output_set_id,
+                filename=o.filename,
+                size=o.size,
+                created_at=o.created_at,
+            )
+            for o in outputs
+        ],
+        file_count=len(outputs),
+        created_at=output_set.created_at,
+        updated_at=output_set.updated_at,
+    )
 
 
 @router.post(
-    "/admin/outputs/{output_id}/release",
-    response_model=OutputRead,
+    "/admin/output-sets/{output_set_id}/release",
+    response_model=OutputSetRead,
 )
-def post_admin_release_output(
-    output_id: str,
+def post_admin_release_output_set(
+    output_set_id: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    output = get_output(db, output_id)
-    if output is None:
+    output_set = get_output_set(db, output_set_id)
+    if output_set is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Output not found",
+            detail="Output set not found",
         )
     try:
         require_any_role(
@@ -331,15 +473,36 @@ def post_admin_release_output(
             detail=str(e),
         )
     try:
-        release_output(db, output)
-    except ValueError as e:
+        release_output_set(db, output_set)
+    except (ValueError, OSError) as e:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=str(e),
         )
     db.commit()
-    db.refresh(output)
-    return output
+    db.refresh(output_set)
+    req = output_set.execution_request
+    outputs = list_outputs_by_set(db, output_set.id)
+    return OutputSetRead(
+        id=output_set.id,
+        execution_request_id=output_set.execution_request_id,
+        execution_request_name=req.name if req else "",
+        status=output_set.status,
+        release_package_size=output_set.release_package_size,
+        outputs=[
+            OutputRead(
+                id=o.id,
+                output_set_id=o.output_set_id,
+                filename=o.filename,
+                size=o.size,
+                created_at=o.created_at,
+            )
+            for o in outputs
+        ],
+        file_count=len(outputs),
+        created_at=output_set.created_at,
+        updated_at=output_set.updated_at,
+    )
 
 
 def _admin_bundle_to_read(bundle: AnalysisBundle) -> AnalysisBundleRead:

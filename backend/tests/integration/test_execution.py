@@ -12,10 +12,8 @@ from app.models.execution_request import (
 )
 from app.models.output import Output
 from app.models.project import Project
-from app.services.output_service import (
-    register_output,
-    transition_request_status,
-)
+from app.services.output_service import transition_request_status
+from app.services.output_set_service import ensure_output_set, register_output
 
 
 @pytest.fixture
@@ -116,19 +114,19 @@ class TestStatusTransitions:
 
 class TestOutputRegistration:
     def test_register_output(self, db_session, pending_request):
-        output = register_output(db_session, pending_request.id, "summary.csv", 1024)
-        assert output.execution_request_id == pending_request.id
+        output_set = ensure_output_set(db_session, pending_request.id)
+        output = register_output(db_session, output_set.id, "summary.csv", 1024)
+        assert output.output_set_id == output_set.id
         assert output.filename == "summary.csv"
         assert output.size == 1024
 
     def test_list_outputs(self, db_session, pending_request):
-        register_output(db_session, pending_request.id, "a.csv", 100)
-        register_output(db_session, pending_request.id, "b.csv", 200)
+        output_set = ensure_output_set(db_session, pending_request.id)
+        register_output(db_session, output_set.id, "a.csv", 100)
+        register_output(db_session, output_set.id, "b.csv", 200)
 
         outputs = (
-            db_session.query(Output)
-            .filter(Output.execution_request_id == pending_request.id)
-            .all()
+            db_session.query(Output).filter(Output.output_set_id == output_set.id).all()
         )
         assert len(outputs) == 2
 

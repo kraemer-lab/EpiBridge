@@ -29,12 +29,19 @@ The backend validates the token and maps it to an internal user.
 * `GET /admin/execution-requests` — list all execution requests (admin)
 * `GET /admin/execution-requests/{id}` — get execution request details (admin)
 
-### Outputs
+### Output Sets
 
-* `GET /projects/{project_id}/execution-requests/{id}/outputs` — list outputs for an execution request
-* `GET /projects/{project_id}/execution-requests/{id}/outputs/{output_id}` — get output metadata
-* `GET /projects/{project_id}/execution-requests/{id}/outputs/{output_id}/download` — download output file
-* `GET /admin/execution-requests/{id}/outputs` — list outputs for an execution request (admin)
+Outputs are governed as a collection (Output Set), not individually. The Output Set lifecycle is `PENDING_REVIEW → APPROVED → RELEASED`. Release creates a ZIP Release Package.
+
+* `GET /projects/{project_id}/execution-requests/{id}/outputs` — get the released Output Set (researcher-facing, includes member file listing)
+* `GET /projects/{project_id}/execution-requests/{id}/outputs/download` — download the Release Package ZIP (researcher-facing, only if RELEASED)
+* `GET /admin/output-sets` — list all Output Sets (admin, all statuses)
+* `GET /admin/output-sets/{id}` — get Output Set with member files (admin)
+* `POST /admin/output-sets/{id}/approve` — approve (PENDING_REVIEW → APPROVED)
+* `POST /admin/output-sets/{id}/reject` — reject (PENDING_REVIEW → REJECTED)
+* `POST /admin/output-sets/{id}/release` — release (APPROVED → RELEASED), creates ZIP
+* `GET /admin/execution-requests/{id}/outputs` — get Output Set for an execution (admin)
+* `GET /admin/outputs/{id}` — inspect individual output artefact (admin)
 
 ### Analysis Bundles
 
@@ -68,8 +75,7 @@ The backend validates the token and maps it to an internal user.
 
 ### Administration
 
-* Pending jobs
-* Pending outputs
+* Pending bundles (for execution approval), Output Sets pending review (for output approval)
 * User management
 * Audit logs
 

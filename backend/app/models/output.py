@@ -1,4 +1,3 @@
-import enum
 import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
@@ -10,14 +9,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base
 
 if TYPE_CHECKING:
-    from app.models.execution_request import ExecutionRequest
-
-
-class OutputStatus(str, enum.Enum):
-    PENDING_REVIEW = "pending_review"
-    APPROVED = "approved"
-    REJECTED = "rejected"
-    RELEASED = "released"
+    from app.models.output_set import OutputSet
 
 
 class Output(Base):
@@ -26,16 +18,13 @@ class Output(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
-    execution_request_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("execution_requests.id"), nullable=False
+    output_set_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("output_sets.id"), nullable=False
     )
     filename: Mapped[str] = mapped_column(String(255), nullable=False)
     size: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    status: Mapped[OutputStatus] = mapped_column(
-        String(64), nullable=False, default=OutputStatus.PENDING_REVIEW
-    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
 
-    execution_request: Mapped["ExecutionRequest"] = relationship()
+    output_set: Mapped["OutputSet"] = relationship(back_populates="outputs")
