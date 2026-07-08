@@ -10,8 +10,10 @@ from app.db.base import Base
 
 
 class UserRole(str, enum.Enum):
-    ADMIN = "admin"
     RESEARCHER = "researcher"
+    MODERATOR = "moderator"
+    MAINTAINER = "maintainer"
+    ADMIN = "admin"
 
 
 class User(Base):

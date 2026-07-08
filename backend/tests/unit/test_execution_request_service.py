@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from app.models.analysis_bundle import AnalysisBundleStatus
 from app.services.execution_request_service import (
     create_execution_request,
     generate_request_name,
@@ -55,6 +56,7 @@ class TestCreateExecutionRequest:
         bundle.id = VALID_DATA["analysis_bundle_id"]
         bundle.project_id = uuid.uuid4()
         bundle.name = "Test Bundle"
+        bundle.status = AnalysisBundleStatus.APPROVED_FOR_EXECUTION
         db.query.return_value.filter.return_value.first.return_value = bundle
         mock_generate.return_value = "Test Bundle @ 2026-01-01 12:00"
 
@@ -79,6 +81,7 @@ class TestCreateExecutionRequest:
         bundle.id = uuid.uuid4()
         bundle.project_id = uuid.uuid4()
         bundle.name = "Auto Bundle"
+        bundle.status = AnalysisBundleStatus.APPROVED_FOR_EXECUTION
         db.query.return_value.filter.return_value.first.return_value = bundle
 
         data = VALID_DATA.copy()
@@ -99,10 +102,22 @@ class TestCreateExecutionRequest:
         bundle = MagicMock()
         bundle.id = VALID_DATA["analysis_bundle_id"]
         bundle.project_id = uuid.uuid4()  # different from the one passed
+        bundle.status = AnalysisBundleStatus.APPROVED_FOR_EXECUTION
         db.query.return_value.filter.return_value.first.return_value = bundle
 
         with pytest.raises(ValueError, match="does not belong to this project"):
             create_execution_request(db, VALID_DATA, uuid.uuid4(), uuid.uuid4())
+
+    def test_unapproved_bundle_raises(self):
+        db = MagicMock()
+        bundle = MagicMock()
+        bundle.id = VALID_DATA["analysis_bundle_id"]
+        bundle.project_id = uuid.uuid4()
+        bundle.status = AnalysisBundleStatus.DRAFT
+        db.query.return_value.filter.return_value.first.return_value = bundle
+
+        with pytest.raises(ValueError, match="approved"):
+            create_execution_request(db, VALID_DATA, bundle.project_id, uuid.uuid4())
 
 
 class TestListExecutionRequests:

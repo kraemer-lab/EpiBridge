@@ -300,6 +300,43 @@ export async function updateProjectBundle(
   });
 }
 
+export async function submitBundle(
+  projectId: string,
+  bundleId: string,
+): Promise<AnalysisBundle> {
+  return request<AnalysisBundle>(
+    `/api/projects/${projectId}/bundles/${bundleId}/submit`,
+    { method: "POST" },
+  );
+}
+
+export async function approveBundle(
+  bundleId: string,
+): Promise<AnalysisBundle> {
+  return request<AnalysisBundle>(
+    `/api/admin/bundles/${bundleId}/approve`,
+    { method: "POST" },
+  );
+}
+
+export async function rejectBundle(
+  bundleId: string,
+): Promise<AnalysisBundle> {
+  return request<AnalysisBundle>(
+    `/api/admin/bundles/${bundleId}/reject`,
+    { method: "POST" },
+  );
+}
+
+export async function supersedeBundle(
+  bundleId: string,
+): Promise<AnalysisBundle> {
+  return request<AnalysisBundle>(
+    `/api/admin/bundles/${bundleId}/supersede`,
+    { method: "POST" },
+  );
+}
+
 export async function createExecutionRequest(
   projectId: string,
   data: ExecutionRequestCreate,

@@ -17,8 +17,9 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_user
+from app.auth.policy import PolicyError, require_owner
 from app.db.session import get_db
-from app.models.analysis_bundle import AnalysisBundle, AnalysisBundleStatus
+from app.models.analysis_bundle import AnalysisBundle
 from app.models.build_request import BuildRequest
 from app.models.data_resource import DataResource
 from app.models.project import Project
@@ -60,6 +61,7 @@ from app.services.output_service import (
     stream_output,
 )
 from app.services.project_service import create_project, list_projects
+from app.workflow.bundle import submit_bundle
 
 router = APIRouter()
 
@@ -397,11 +399,7 @@ async def post_project_bundle_upload(
             detail=str(e),
         )
 
-    update_bundle(
-        db,
-        bundle.id,
-        {"source_path": store_path, "status": AnalysisBundleStatus.ACTIVE},
-    )
+    update_bundle(db, bundle.id, {"source_path": store_path})
 
     background_tasks.add_task(request_and_perform_review, bundle.id)
 
@@ -409,6 +407,54 @@ async def post_project_bundle_upload(
         logger = logging.getLogger("api.routes.projects")
         logger.info("Bundle %s registered without build request", bundle.id)
 
+    db.refresh(bundle)
+    return _bundle_to_read(bundle)
+
+
+@router.post(
+    "/projects/{project_id}/bundles/{bundle_id}/submit",
+    response_model=AnalysisBundleRead,
+    status_code=200,
+)
+def post_submit_bundle(
+    project_id: uuid.UUID,
+    bundle_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _get_owned_project(db, project_id, current_user.id)
+
+    bundle = (
+        db.query(AnalysisBundle)
+        .filter(
+            AnalysisBundle.id == bundle_id,
+            AnalysisBundle.project_id == project_id,
+        )
+        .first()
+    )
+    if bundle is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Analysis bundle not found",
+        )
+
+    try:
+        require_owner(current_user, bundle)
+    except PolicyError as e:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(e),
+        )
+
+    try:
+        submit_bundle(db, bundle)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e),
+        )
+
+    db.commit()
     db.refresh(bundle)
     return _bundle_to_read(bundle)
 

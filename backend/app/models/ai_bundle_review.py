@@ -33,7 +33,7 @@ class AIBundleReview(Base):
         nullable=False,
     )
     status: Mapped[AIBundleReviewStatus] = mapped_column(
-        String(20), nullable=False, default=AIBundleReviewStatus.PENDING
+        String(64), nullable=False, default=AIBundleReviewStatus.PENDING
     )
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     assessment: Mapped[str | None] = mapped_column(Text, nullable=True)

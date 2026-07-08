@@ -66,7 +66,10 @@ test("Golden Path: researcher creates project, uploads bundle, runs analysis, do
   await page.getByText("mex-dengue-2026").click();
 
   // 11. Upload the analysis bundle ZIP
-  const zipBuffer = createZip([{ name: "run.py", content: ANALYSIS_CODE }]);
+  const zipBuffer = createZip([
+    { name: "run.py", content: ANALYSIS_CODE },
+    { name: "requirements.txt", content: "" },
+  ]);
   await page
     .locator('input[type="file"]')
     .setInputFiles({ name: "analysis-bundle.zip", mimeType: "application/zip", buffer: zipBuffer });
@@ -78,22 +81,30 @@ test("Golden Path: researcher creates project, uploads bundle, runs analysis, do
   await expect(page.getByRole("heading", { name: "Analysis Bundles" })).toBeVisible();
   await page.getByText(`Test Analysis ${TS}`).click();
 
-  // 14. Click Run Analysis
+  // 14. Submit the bundle (DRAFT → SUBMITTED) via the Submit button
+  await page.getByRole("button", { name: "Submit" }).click();
+  await expect(page.getByText("Submitted")).toBeVisible();
+
+  // 15. Approve the bundle (SUBMITTED → APPROVED_FOR_EXECUTION) via the Approve button
+  await page.getByRole("button", { name: "Approve" }).click();
+  await expect(page.getByText("Approved for Execution")).toBeVisible();
+
+  // 16. Run Analysis button is now visible; click it
   await page.getByRole("button", { name: "Run Analysis" }).click();
 
-  // 15. Wait for the Execution Request to transition: PENDING → RUNNING → COMPLETED
+  // 17. Wait for the Execution Request to transition: PENDING → RUNNING → COMPLETED
   await expect(page.getByText("completed").first()).toBeVisible({ timeout: 180_000 });
 
-  // 16. Open the Outputs tab
+  // 18. Open the Outputs tab
   await page.getByRole("link", { name: "Outputs" }).click();
 
-  // 17. Download summary.csv
+  // 19. Download summary.csv
   const [download] = await Promise.all([
     page.waitForEvent("download"),
     page.getByRole("link", { name: "Download" }).first().click(),
   ]);
 
-  // 18. Verify the downloaded file exists and is non-empty
+  // 20. Verify the downloaded file exists and is non-empty
   expect(download.suggestedFilename()).toBe("summary.csv");
   const downloadPath = await download.path();
   expect(downloadPath).not.toBeNull();

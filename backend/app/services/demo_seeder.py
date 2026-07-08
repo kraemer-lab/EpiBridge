@@ -3,12 +3,12 @@ from sqlalchemy.orm import Session
 from app.models.analysis_bundle import (
     AnalysisBundle,
     AnalysisBundleDataResource,
-    AnalysisBundleStatus,
 )
 from app.models.data_resource import DataResource
 from app.models.execution_environment import ExecutionEnvironment
 from app.models.project import Project
 from app.models.user import User
+from app.workflow.bundle import approve_bundle, submit_bundle
 
 DEMO_PROJECT_NAME = "Dengue Analysis Demo"
 DEMO_BUNDLE_NAME = "Dengue Summary Statistics"
@@ -71,7 +71,6 @@ def seed_demo_workspace(db: Session) -> dict:
         execution_environment_id=env.id if env else None,
         name=DEMO_BUNDLE_NAME,
         source_path="demo",
-        status=AnalysisBundleStatus.ACTIVE,
         version="1.0.0",
         entrypoint="run.py",
         description=(
@@ -90,6 +89,8 @@ def seed_demo_workspace(db: Session) -> dict:
         )
         db.add(join)
 
+    submit_bundle(db, bundle)
+    approve_bundle(db, bundle)
     db.commit()
 
     return {

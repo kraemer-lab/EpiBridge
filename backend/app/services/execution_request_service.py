@@ -3,7 +3,7 @@ from datetime import datetime
 
 from sqlalchemy.orm import Session
 
-from app.models.analysis_bundle import AnalysisBundle
+from app.models.analysis_bundle import AnalysisBundle, AnalysisBundleStatus
 from app.models.execution_request import ExecutionRequest
 from app.services.analysis_bundle_service import (
     get_environment_runtime,
@@ -41,6 +41,11 @@ def create_execution_request(
         raise ValueError(f"Analysis bundle not found: {bundle_id}")
     if bundle.project_id != project_id:
         raise ValueError("Analysis bundle does not belong to this project")
+    if bundle.status != AnalysisBundleStatus.APPROVED_FOR_EXECUTION:
+        raise ValueError(
+            "Execution requests require an approved analysis bundle; "
+            f"current status: {bundle.status.value}"
+        )
 
     timeout = data.get("timeout_seconds", 3600)
     validate_timeout(timeout)

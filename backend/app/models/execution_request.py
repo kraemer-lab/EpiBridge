@@ -42,7 +42,7 @@ class ExecutionRequest(Base):
         JSON, nullable=False, default=dict
     )
     status: Mapped[ExecutionRequestStatus] = mapped_column(
-        String(20), nullable=False, default=ExecutionRequestStatus.PENDING
+        String(64), nullable=False, default=ExecutionRequestStatus.PENDING
     )
     log: Mapped[str] = mapped_column(Text, nullable=False, default="")
     requested_by_id: Mapped[uuid.UUID] = mapped_column(

@@ -6,6 +6,7 @@ from app.models.analysis_bundle import AnalysisBundle
 from app.models.data_resource import DataResource
 from app.models.execution_environment import ExecutionEnvironment
 from app.models.project import Project
+from app.workflow.bundle import approve_bundle, submit_bundle
 
 
 @pytest.fixture
@@ -46,6 +47,10 @@ def bundle(db_session, project, execution_environment):
         parameters={"threshold": 0.05},
     )
     db_session.add(b)
+    db_session.commit()
+    db_session.refresh(b)
+    submit_bundle(db_session, b)
+    approve_bundle(db_session, b)
     db_session.commit()
     db_session.refresh(b)
     return b
@@ -279,6 +284,9 @@ class TestAdminExecutionRequests:
             entrypoint="run.py",
         )
         db_session.add(b2)
+        db_session.commit()
+        submit_bundle(db_session, b2)
+        approve_bundle(db_session, b2)
         db_session.commit()
 
         client.post(

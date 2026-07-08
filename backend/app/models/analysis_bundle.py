@@ -21,7 +21,10 @@ if TYPE_CHECKING:
 
 class AnalysisBundleStatus(str, enum.Enum):
     DRAFT = "draft"
-    ACTIVE = "active"
+    SUBMITTED = "submitted"
+    APPROVED_FOR_EXECUTION = "approved_for_execution"
+    REJECTED = "rejected"
+    SUPERSEDED = "superseded"
 
 
 class AnalysisBundleBuildStatus(str, enum.Enum):
@@ -51,7 +54,7 @@ class AnalysisBundle(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     source_path: Mapped[str] = mapped_column(Text, nullable=False, default="")
     status: Mapped[AnalysisBundleStatus] = mapped_column(
-        String(20), nullable=False, default=AnalysisBundleStatus.DRAFT
+        String(64), nullable=False, default=AnalysisBundleStatus.DRAFT
     )
     version: Mapped[str] = mapped_column(String(50), nullable=False)
     entrypoint: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -68,7 +71,7 @@ class AnalysisBundle(Base):
     # This field is retained for backwards compatibility and is expected
     # to be removed in a future governance refactor.
     build_status: Mapped[AnalysisBundleBuildStatus] = mapped_column(
-        String(30),
+        String(64),
         nullable=False,
         default=AnalysisBundleBuildStatus.ENVIRONMENT_NOT_BUILT,
     )
