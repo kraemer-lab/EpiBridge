@@ -119,6 +119,21 @@ Audit Events record institutional decisions and governance-significant outcomes.
 
 The model and service are defined in `app.models.audit_event` and `app.services.audit_service`.
 
+### System Actors
+
+Autonomous platform components are represented by seeded `User` records with well-known UUIDs.
+
+These accounts have no password (`password_hash=""`) and cannot authenticate through the API. They exist solely as accountable actors referenced by Audit Events.
+
+| Actor | UUID | Email | Role |
+|---|---|---|---|
+| System | `00000000-0000-0000-0000-000000000001` | `system@epibridge.internal` | `maintainer` |
+| Execution Worker | `00000000-0000-0000-0000-000000000002` | `execution_worker@epibridge.internal` | `maintainer` |
+
+A `role` value is required by the schema; `maintainer` is used as the closest semantic match to a platform operator. No capabilities are assigned — these are audit identities, not RBAC participants.
+
+System users are seeded idempotently by `seed_auth_framework()` (`auth_framework_seeder._seed_system_users()`).
+
 ### Audit Event Taxonomy
 
 The canonical audit vocabulary for Milestone 17.

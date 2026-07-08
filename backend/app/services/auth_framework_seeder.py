@@ -1,6 +1,9 @@
+import uuid
+
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app.models.audit_event import SYSTEM_USER_ID, WORKER_USER_ID
 from app.models.capability import ALL_CAPABILITIES, Capability, CapabilityRecord
 from app.models.role import RoleRecord
 from app.models.role_capability import RoleCapability
@@ -41,10 +44,11 @@ _ROLE_CAPABILITY_MAP: dict[UserRole, set[str]] = {
 
 
 def seed_auth_framework(db: Session) -> None:
-    """Idempotently seed capabilities, roles, and role-capability mappings."""
+    """Idempotently seed capabilities, roles, role-capability mappings, and system users."""  # noqa: E501
     _seed_capabilities(db)
     _seed_roles(db)
     _seed_role_capabilities(db)
+    _seed_system_users(db)
     db.commit()
 
 
@@ -105,3 +109,33 @@ def grant_role_capabilities(db: Session, user: User) -> None:
             ),
             {"uid": user.id, "cap": cap_name},
         )
+
+
+_SYSTEM_USERS: list[tuple[uuid.UUID, str, str]] = [
+    (SYSTEM_USER_ID, "system@epibridge.internal", "System"),
+    (WORKER_USER_ID, "execution_worker@epibridge.internal", "Execution Worker"),
+]
+
+
+def _seed_system_users(db: Session) -> None:
+    """Idempotently seed system user accounts for autonomous platform components.
+
+    System users use well-known UUIDs, have no password (cannot log in),
+    and carry no capabilities. They exist solely as accountable actors
+    referenced by Audit Events.
+
+    A role value is required by the schema; MAINTAINER is used as the
+    closest semantic match to a platform operator.
+    """
+    for user_id, email, display_name in _SYSTEM_USERS:
+        existing = db.query(User).filter(User.id == user_id).first()
+        if existing is not None:
+            continue
+        user = User(
+            id=user_id,
+            email=email,
+            display_name=display_name,
+            password_hash="",
+            role=UserRole.MAINTAINER,
+        )
+        db.add(user)

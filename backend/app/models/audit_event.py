@@ -8,6 +8,9 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
 
+SYSTEM_USER_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
+WORKER_USER_ID = uuid.UUID("00000000-0000-0000-0000-000000000002")
+
 
 class AuditEventType(str, enum.Enum):
     PROJECT_CREATED = "project.created"
