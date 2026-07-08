@@ -1,7 +1,8 @@
 import uuid
-from typing import List
+from datetime import datetime
+from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_user
@@ -14,6 +15,7 @@ from app.models.data_resource import DataResource
 from app.models.execution_environment import ExecutionEnvironment
 from app.models.user import User
 from app.schemas.analysis_bundle import AnalysisBundleRead
+from app.schemas.audit_event import AuditEventList
 from app.schemas.data_resource import DataResourceRead
 from app.schemas.execution_environment import ExecutionEnvironmentRead
 from app.schemas.execution_request import ExecutionRequestRead
@@ -24,7 +26,7 @@ from app.services.analysis_bundle_service import (
     get_environment_runtime,
     get_resource_identifiers,
 )
-from app.services.audit_service import create_audit_event
+from app.services.audit_service import create_audit_event, query_audit_events
 from app.services.execution_request_service import (
     get_execution_request,
     list_execution_requests,
@@ -605,6 +607,54 @@ def post_admin_user(
         actor_id=current_user.id,
     )
     return user
+
+
+# --- Audit event query ---
+
+
+@router.get("/admin/audit-events", response_model=AuditEventList)
+def get_admin_audit_events(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    project_id: Optional[uuid.UUID] = Query(None),
+    actor_id: Optional[uuid.UUID] = Query(None),
+    resource_type: Optional[str] = Query(None),
+    resource_id: Optional[uuid.UUID] = Query(None),
+    event_type: Optional[str] = Query(None),
+    date_from: Optional[datetime] = Query(None),
+    date_to: Optional[datetime] = Query(None),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    order: str = Query("desc", pattern="^(asc|desc)$"),
+):
+    try:
+        require_capability(current_user, Capability.BUNDLE_REVIEW)
+    except PolicyError:
+        try:
+            require_capability(current_user, Capability.OUTPUT_REVIEW)
+        except PolicyError:
+            try:
+                require_capability(current_user, Capability.USER_MANAGE)
+            except PolicyError as e:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=str(e),
+                )
+
+    items, total = query_audit_events(
+        db,
+        project_id=project_id,
+        actor_id=actor_id,
+        resource_type=resource_type,
+        resource_id=resource_id,
+        event_type=event_type,
+        date_from=date_from,
+        date_to=date_to,
+        limit=limit,
+        offset=offset,
+        order=order,
+    )
+    return AuditEventList(items=items, total=total, limit=limit, offset=offset)
 
 
 def _admin_bundle_to_read(bundle: AnalysisBundle) -> AnalysisBundleRead:

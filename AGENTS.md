@@ -134,6 +134,24 @@ A `role` value is required by the schema; `maintainer` is used as the closest se
 
 System users are seeded idempotently by `seed_auth_framework()` (`auth_framework_seeder._seed_system_users()`).
 
+### Audit Query API
+
+The audit ledger is exposed through a single read-only query endpoint:
+
+```
+GET /api/admin/audit-events
+```
+
+Supports filtering by: `project_id`, `actor_id`, `resource_type`, `resource_id`, `event_type`, `date_from`, `date_to`.
+
+Supports pagination via `limit` (max 200) and `offset`, and ordering via `order` (`asc`/`desc`, default `desc`).
+
+Returns actor details (display name, email) alongside each event via a join to the `users` table.
+
+Access requires one of: `bundle.review`, `output.review`, or `user.manage` capability.
+
+Defined in `app.api.routes.admin` and `app.services.audit_service`.
+
 ### Audit Event Taxonomy
 
 The canonical audit vocabulary for Milestone 17.

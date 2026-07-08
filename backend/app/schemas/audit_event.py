@@ -10,6 +10,8 @@ class AuditEventRead(BaseModel):
     id: uuid.UUID
     event_type: AuditEventType
     actor_id: uuid.UUID
+    actor_display_name: str
+    actor_email: str
     project_id: uuid.UUID | None
     resource_type: str
     resource_id: uuid.UUID
@@ -17,3 +19,10 @@ class AuditEventRead(BaseModel):
     occurred_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class AuditEventList(BaseModel):
+    items: list[AuditEventRead]
+    total: int
+    limit: int
+    offset: int
