@@ -390,3 +390,94 @@ class TestUpdateProjectBundle:
             json={"entrypoint": "path/to/file.py"},
         )
         assert response.status_code == 422
+
+
+class TestProjectMembership:
+    def test_list_members(self, client, project, admin_user):
+        response = client.get(f"/api/projects/{project.id}/members")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["email"] == admin_user.email
+        assert data[0]["display_name"] == admin_user.display_name
+        assert data[0]["user_id"] == str(admin_user.id)
+
+    def test_list_members_not_authenticated(self, anon_client, project):
+        response = anon_client.get(f"/api/projects/{project.id}/members")
+        assert response.status_code == 401
+
+    def test_add_member(self, client, project, researcher_user):
+        response = client.post(
+            f"/api/projects/{project.id}/members",
+            json={"email": researcher_user.email},
+        )
+        assert response.status_code == 201
+        data = response.json()
+        assert data["user_id"] == str(researcher_user.id)
+        assert data["display_name"] == researcher_user.display_name
+        assert "added_at" in data
+
+    def test_add_member_idempotent(self, client, project, admin_user):
+        response = client.post(
+            f"/api/projects/{project.id}/members",
+            json={"email": admin_user.email},
+        )
+        assert response.status_code == 201
+
+    def test_add_member_not_found(self, client, project):
+        response = client.post(
+            f"/api/projects/{project.id}/members",
+            json={"email": "nonexistent@nowhere.local"},
+        )
+        assert response.status_code == 404
+
+    def test_add_member_unauthorized(
+        self, researcher_client, project, researcher_user, db_session
+    ):
+        # First add researcher to project via database
+        from app.models.project_membership import ProjectMembership
+
+        db_session.add(
+            ProjectMembership(
+                project_id=project.id,
+                user_id=researcher_user.id,
+                created_by_id=project.owner_id,
+            )
+        )
+        db_session.commit()
+
+        # Researcher lacks project.members.manage
+        response = researcher_client.post(
+            f"/api/projects/{project.id}/members",
+            json={"email": "test@test.local"},
+        )
+        assert response.status_code == 403
+
+    def test_remove_member(self, client, project, researcher_user, db_session):
+        from app.models.project_membership import ProjectMembership
+
+        db_session.add(
+            ProjectMembership(
+                project_id=project.id,
+                user_id=researcher_user.id,
+                created_by_id=project.owner_id,
+            )
+        )
+        db_session.commit()
+
+        response = client.delete(
+            f"/api/projects/{project.id}/members/{researcher_user.id}"
+        )
+        assert response.status_code == 204
+
+    def test_remove_member_not_found(self, client, project):
+        import uuid
+
+        response = client.delete(f"/api/projects/{project.id}/members/{uuid.uuid4()}")
+        assert response.status_code == 404
+
+    def test_remove_member_unauthorized(self, researcher_client, project):
+        response = researcher_client.delete(
+            f"/api/projects/{project.id}/members/{uuid.uuid4()}"
+        )
+        assert response.status_code == 403

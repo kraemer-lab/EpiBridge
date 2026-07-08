@@ -7,6 +7,7 @@ const adminTabs = [
   { href: "/admin", label: "Data Resources" },
   { href: "/admin/bundles", label: "Analysis Bundles" },
   { href: "/admin/outputs", label: "Outputs" },
+  { href: "/admin/users", label: "Users" },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

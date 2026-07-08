@@ -47,3 +47,7 @@ class User(Base):
 
     def has_capability(self, capability_name: str) -> bool:
         return any(c.capability_name == capability_name for c in self.capabilities)
+
+    @property
+    def capability_names(self) -> list[str]:
+        return [c.capability_name for c in self.capabilities]

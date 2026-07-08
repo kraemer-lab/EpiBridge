@@ -45,7 +45,7 @@ def create_project(db: Session, data: ProjectCreate, owner_id: uuid.UUID) -> Pro
 
 def add_member(
     db: Session, project_id: uuid.UUID, user: User, invited_by_id: uuid.UUID
-) -> None:
+) -> ProjectMembership:
     existing = (
         db.query(ProjectMembership)
         .filter(
@@ -55,7 +55,7 @@ def add_member(
         .first()
     )
     if existing is not None:
-        return
+        return existing
 
     membership = ProjectMembership(
         project_id=project_id,
@@ -64,6 +64,8 @@ def add_member(
     )
     db.add(membership)
     db.commit()
+    db.refresh(membership)
+    return membership
 
 
 def remove_member(db: Session, project_id: uuid.UUID, user_id: uuid.UUID) -> bool:

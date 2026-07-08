@@ -8,6 +8,7 @@ from app.auth.dependencies import get_current_user
 from app.core.config import settings
 from app.db.session import get_db
 from app.models.user import User
+from app.schemas.common import ValidEmail
 from app.schemas.user import UserRead
 from app.services.session_service import create_session, delete_session
 
@@ -15,7 +16,7 @@ router = APIRouter(prefix="/auth")
 
 
 class LoginBody(BaseModel):
-    email: str
+    email: ValidEmail
     password: str
 
 

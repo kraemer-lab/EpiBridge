@@ -1,30 +1,34 @@
 # AGENTS.md
 
-## Project status — all backend milestones complete
+## Project status — Milestone 16 complete (Identity Management)
 
 ### Exists and functional
 
 ```
-backend/         FastAPI scaffold: identity model (Users, Roles, Capabilities,
-                 Project Membership), capability-based policy, SQLAlchemy,
+backend/         FastAPI: identity model (User, Role, Capability,
+                 ProjectMembership), capability-based policy, SQLAlchemy,
                  Alembic-ready, config, Local Identity Provider auth,
-                 CLI seed-admin/seed-admin, bundle store, worker execution,
-                 Environment Builder subsystem, auth framework seeder
+                 CLI seed-admin/seed-demo, bundle store, worker execution,
+                 Environment Builder subsystem, auth framework seeder,
+                 user management API (create/list/get users), email validation
+frontend/        Next.js + React + TypeScript: login, projects, admin pages,
+                 user management UI, project members UI
 containers/      Base analysis Docker images (python-3.13, python-3.14)
 vm/              cloud-init.yaml, Caddyfile (HTTPS, HSTS, compression,
                  security headers, request size limits), runtime spec
 scripts/         bootstrap.sh, install.sh, upgrade.sh, backup.sh, restore.sh, healthcheck.sh
 docker-compose.yml  6 services + optional ollama (--profile ai),
                     internal + frontend + external networks
-docs/            Architecture, security, API, vision, AI assistance docs
+tests/           Unit (223), integration (identity validation, user management,
+                 project membership), smoke, e2e (canonical workflow)
+docs/            Architecture (current state), security, API, vision, AI assistance
 ```
 
 ### Still needs creating
 
 ```
-frontend/        Next.js + React + TypeScript (game in progress)
 shared/          Shared schemas and types (not started)
-examples/        Synthetic datasets + analysis templates (not started)
+examples/        Synthetic datasets and analysis templates (not started)
 ```
 
 ### Intended architecture (from docs/)

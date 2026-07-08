@@ -740,12 +740,12 @@ def post_project_member(
             detail="User not found",
         )
 
-    add_member(db, project_id, member, invited_by_id=current_user.id)
+    membership = add_member(db, project_id, member, invited_by_id=current_user.id)
     return {
         "user_id": member.id,
         "email": member.email,
         "display_name": member.display_name,
-        "added_at": datetime.utcnow(),
+        "added_at": membership.created_at,
     }
 
 

@@ -1,3 +1,4 @@
+import uuid
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -17,6 +18,7 @@ from app.schemas.execution_environment import ExecutionEnvironmentRead
 from app.schemas.execution_request import ExecutionRequestRead
 from app.schemas.output import OutputRead
 from app.schemas.output_set import OutputSetListItem, OutputSetRead
+from app.schemas.user import UserCreate, UserRead
 from app.services.analysis_bundle_service import (
     get_environment_runtime,
     get_resource_identifiers,
@@ -33,6 +35,7 @@ from app.services.output_set_service import (
     list_output_sets,
     list_outputs_by_set,
 )
+from app.services.user_service import create_user, get_user_by_id, list_users
 from app.workflow.bundle import approve_bundle, reject_bundle, supersede_bundle
 from app.workflow.output_set import (
     approve_output_set,
@@ -498,6 +501,77 @@ def post_admin_release_output_set(
         created_at=output_set.created_at,
         updated_at=output_set.updated_at,
     )
+
+
+# --- User management ---
+
+
+@router.get("/admin/users", response_model=List[UserRead])
+def list_admin_users(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        require_capability(current_user, Capability.USER_MANAGE)
+    except PolicyError as e:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(e),
+        )
+    return list_users(db)
+
+
+@router.get("/admin/users/{user_id}", response_model=UserRead)
+def get_admin_user(
+    user_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        require_capability(current_user, Capability.USER_MANAGE)
+    except PolicyError as e:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(e),
+        )
+    user = get_user_by_id(db, user_id)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+    return user
+
+
+@router.post("/admin/users", response_model=UserRead, status_code=201)
+def post_admin_user(
+    data: UserCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        require_capability(current_user, Capability.USER_MANAGE)
+    except PolicyError as e:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(e),
+        )
+
+    existing = db.query(User).filter(User.email == data.email).first()
+    if existing is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A user with this email already exists",
+        )
+
+    user = create_user(
+        db,
+        email=data.email,
+        display_name=data.display_name,
+        password=data.password,
+        role=data.role,
+    )
+    return user
 
 
 def _admin_bundle_to_read(bundle: AnalysisBundle) -> AnalysisBundleRead:

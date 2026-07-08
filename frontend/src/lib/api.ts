@@ -5,6 +5,7 @@ export interface User {
   email: string;
   display_name: string;
   role: string;
+  capabilities: string[];
   created_at: string;
   updated_at: string;
 }
@@ -448,4 +449,53 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     outputs: 0,
     resources: resources.length,
   };
+}
+
+// --- Identity Management ---
+
+export interface UserCreate {
+  email: string;
+  display_name: string;
+  password: string;
+  role: string;
+}
+
+export interface ProjectMember {
+  user_id: string;
+  email: string;
+  display_name: string;
+  added_at: string;
+}
+
+export async function getUsers(): Promise<User[]> {
+  return request<User[]>("/api/admin/users");
+}
+
+export async function getUser(id: string): Promise<User> {
+  return request<User>(`/api/admin/users/${id}`);
+}
+
+export async function createUser(data: UserCreate): Promise<User> {
+  return request<User>("/api/admin/users", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function getProjectMembers(projectId: string): Promise<ProjectMember[]> {
+  return request<ProjectMember[]>(`/api/projects/${projectId}/members`);
+}
+
+export async function addProjectMember(projectId: string, email: string): Promise<ProjectMember> {
+  return request<ProjectMember>(`/api/projects/${projectId}/members`, {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  });
+}
+
+export async function removeProjectMember(projectId: string, userId: string): Promise<void> {
+  await fetch(`/api/projects/${projectId}/members/${userId}`, {
+    method: "DELETE",
+    credentials: "include",
+  });
 }

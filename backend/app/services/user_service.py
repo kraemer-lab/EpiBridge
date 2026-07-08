@@ -1,3 +1,6 @@
+import uuid
+from typing import List, Optional
+
 from sqlalchemy.orm import Session
 
 from app.auth.local import hash_password
@@ -56,3 +59,11 @@ def create_user(
     db.commit()
     db.refresh(user)
     return user
+
+
+def list_users(db: Session) -> List[User]:
+    return db.query(User).order_by(User.display_name).all()
+
+
+def get_user_by_id(db: Session, user_id: uuid.UUID) -> Optional[User]:
+    return db.query(User).filter(User.id == user_id).first()
