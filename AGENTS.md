@@ -1,13 +1,15 @@
 # AGENTS.md
 
-## Project status — backend scaffolded, rest is stubs
+## Project status — all backend milestones complete
 
 ### Exists and functional
 
 ```
-backend/         FastAPI scaffold (app entrypoint, health endpoint, SQLAlchemy,
-                 Alembic, config, Local Identity Provider auth, CLI seed-admin,
-                 bundle store, worker execution, Environment Builder subsystem)
+backend/         FastAPI scaffold: identity model (Users, Roles, Capabilities,
+                 Project Membership), capability-based policy, SQLAlchemy,
+                 Alembic-ready, config, Local Identity Provider auth,
+                 CLI seed-admin/seed-admin, bundle store, worker execution,
+                 Environment Builder subsystem, auth framework seeder
 containers/      Base analysis Docker images (python-3.13, python-3.14)
 vm/              cloud-init.yaml, Caddyfile (HTTPS, HSTS, compression,
                  security headers, request size limits), runtime spec
@@ -39,11 +41,6 @@ docs/        Architecture, security, API, roadmap, vision
 
 Single monorepo. Do not add top-level directories without justification.
 
-### Foreseen conventions (documented, not yet enforced)
-
-- Backend: FastAPI dependency injection, business logic in `services/`, thin endpoints, SQLAlchemy ORM, Pydantic models
-- Frontend: App Router, TypeScript, server components where appropriate, functional components
-
 ### Security constraints (must preserve in implementation)
 
 - Researchers never get direct dataset access
@@ -54,7 +51,69 @@ Single monorepo. Do not add top-level directories without justification.
 - Use `Storage` and `Executor` interfaces (not coupling directly to Docker)
 - Only the optional AI service (Ollama) has outbound network access, and only for model downloads
 - IdentityProvider abstraction for auth, internal PostgreSQL for authorisation
+- **Capability-based authorisation**: policy checks `require_capability()`, not roles
+- **Project Membership scoping**: access requires membership + capability
 - Audit trail required for all actions
+
+### Identity model
+
+There are four independent concepts:
+
+#### User
+
+A User represents an authenticated person. Users may belong to zero or more Projects via ProjectMembership. Users possess a `role` (metadata / seeding hint) and a list of `capabilities` (authoritative).
+
+#### Role
+
+A Role is a descriptive label with a default capability template. Roles seed capabilities at user creation time. After that, capabilities become the source of truth — changing a role does **not** silently change existing users.
+
+Four roles exist: `researcher`, `moderator`, `maintainer`, `admin`.
+
+Roles and role–capability mappings are stored in the database (`roles`, `role_capabilities` tables) and seeded by `auth_framework_seeder.seed_auth_framework()`.
+
+#### Capability
+
+Capabilities are authoritative. The policy layer authorises capabilities, not roles.
+
+Capability vocabulary (defined in `app.models.capability.Capability` enum):
+
+| Capability | Purpose |
+|------------|---------|
+| `project.manage` | Create and manage projects |
+| `project.members.manage` | Add/remove project members |
+| `project.resources.manage` | Attach/detach data resources |
+| `bundle.create` | Create and edit analysis bundles |
+| `bundle.submit` | Submit bundles for review |
+| `bundle.review` | Approve/reject/supersede bundles |
+| `execution.run` | Request execution of approved bundles |
+| `output.review` | Approve/reject output sets |
+| `output.release` | Release output sets to researchers |
+| `environment.manage` | Manage execution environments |
+| `data.manage` | Manage data resources |
+| `user.manage` | Manage user accounts |
+
+The `capabilities` table is materialised from the enum during seeding (the enum is authoritative). `UserCapability` records are copied from role templates at user creation and become independent thereafter.
+
+#### Project Membership
+
+ProjectMembership answers one question only: does this User participate in this Project?
+
+- Membership is **scope**, not authorisation.
+- No roles, capabilities, or permissions are stored on membership.
+- The project creator becomes the first member automatically.
+- Access requires: (1) membership in the project, (2) the required capability.
+
+### Policy layer
+
+The policy layer (`app.auth.policy`) exposes three functions:
+
+| Function | Purpose |
+|----------|---------|
+| `require_capability(user, capability)` | Raise `PolicyError` if user lacks the capability |
+| `require_project_membership(db, user, project_id)` | Raise 404 if user is not a project member; returns the Project |
+| `require_owner(user, resource)` | Raise `PolicyError` if user is not the resource owner/creator |
+
+Policy is entirely capability-based. Roles are never consulted by the policy layer.
 
 ### Temporary development policy (domain model iteration phase)
 
@@ -73,9 +132,10 @@ Once the core schema stabilises, Alembic will be reintroduced as a dedicated mil
 ### Domain model boundary
 
 - **Institutional assets** (Data Resources, Execution Environments) are registered automatically via lifespan startup from YAML manifests.
-- **Researcher artefacts** (Projects, Analysis Bundles, Execution Requests) are created by users through the application.
+- **Researcher artefacts** (Projects, Analysis Bundles, Execution Requests) are created by users through the application. Projects have members (ProjectMembership) in addition to the owner/creator.
 - **Internal system artefacts** (AIBundleReview, BuildRequest, ExecutionImage, OutputSet) are created by background tasks and workers during platform operation.
 - **Environment Builder subsystem** transforms Analysis Bundle dependency specifications into reusable Execution Images via curated Dockerfile templates. Builds are driven by `BuildRequest` work items processed by the worker alongside execution requests. `ExecutionImage` records serve as a content-addressable cache keyed by `(execution_environment_id, dependency_hash)`.
+- **Auth framework** (capabilities, roles, role–capability mappings) is seeded by `auth_framework_seeder.seed_auth_framework()` on first use (idempotent).
 - **Demo workspace** (optional) can be created by `seed-demo` CLI command — a development tool, not application startup logic.
 - **Manifest directories** (`RESOURCE_MANIFEST_DIR`, `ENVIRONMENT_MANIFEST_DIR`) are deployment configuration, not application defaults. Docker Compose sets them for development; production points them elsewhere.
 

@@ -18,3 +18,14 @@ class ProjectRead(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class ProjectMemberRead(BaseModel):
+    user_id: uuid.UUID
+    email: str
+    display_name: str
+    added_at: datetime
+
+
+class AddProjectMemberBody(BaseModel):
+    email: str

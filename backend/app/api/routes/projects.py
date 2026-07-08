@@ -17,12 +17,17 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_user
-from app.auth.policy import PolicyError, require_owner
+from app.auth.policy import (
+    PolicyError,
+    require_capability,
+    require_owner,
+    require_project_membership,
+)
 from app.db.session import get_db
 from app.models.analysis_bundle import AnalysisBundle
 from app.models.build_request import BuildRequest
+from app.models.capability import Capability
 from app.models.data_resource import DataResource
-from app.models.project import Project
 from app.models.project_data_resource import ProjectResourceAllocation
 from app.models.user import User
 from app.schemas.ai_bundle_review import AIBundleReviewRead
@@ -39,7 +44,12 @@ from app.schemas.execution_request import (
 )
 from app.schemas.output import OutputRead
 from app.schemas.output_set import OutputSetRead
-from app.schemas.project import ProjectCreate, ProjectRead
+from app.schemas.project import (
+    AddProjectMemberBody,
+    ProjectCreate,
+    ProjectMemberRead,
+    ProjectRead,
+)
 from app.services.ai_review_service import request_and_perform_review
 from app.services.analysis_bundle_service import (
     create_bundle,
@@ -60,26 +70,16 @@ from app.services.output_set_service import (
     list_outputs_by_set,
     stream_release_package,
 )
-from app.services.project_service import create_project, list_projects
+from app.services.project_service import (
+    add_member,
+    create_project,
+    list_members,
+    list_projects,
+    remove_member,
+)
 from app.workflow.bundle import submit_bundle
 
 router = APIRouter()
-
-
-def _get_owned_project(
-    db: Session, project_id: uuid.UUID, owner_id: uuid.UUID
-) -> Project:
-    project = (
-        db.query(Project)
-        .filter(Project.id == project_id, Project.owner_id == owner_id)
-        .first()
-    )
-    if project is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Project not found",
-        )
-    return project
 
 
 def _bundle_to_read(bundle: AnalysisBundle, build_log: str = "") -> AnalysisBundleRead:
@@ -117,7 +117,7 @@ def get_projects(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return list_projects(db, owner_id=current_user.id)
+    return list_projects(db, user_id=current_user.id)
 
 
 @router.get("/projects/{project_id}", response_model=ProjectRead)
@@ -126,7 +126,7 @@ def get_project(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return _get_owned_project(db, project_id, current_user.id)
+    return require_project_membership(db, current_user, project_id)
 
 
 @router.get(
@@ -138,7 +138,7 @@ def get_project_resources(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    project = _get_owned_project(db, project_id, current_user.id)
+    project = require_project_membership(db, current_user, project_id)
     return project.data_resources
 
 
@@ -157,7 +157,14 @@ def post_project_resources(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    project = _get_owned_project(db, project_id, current_user.id)
+    project = require_project_membership(db, current_user, project_id)
+    try:
+        require_capability(current_user, Capability.PROJECT_RESOURCES_MANAGE)
+    except PolicyError as e:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(e),
+        )
     resources = (
         db.query(DataResource)
         .filter(DataResource.identifier.in_(body.resource_identifiers))
@@ -208,7 +215,14 @@ def delete_project_resource(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _get_owned_project(db, project_id, current_user.id)
+    require_project_membership(db, current_user, project_id)
+    try:
+        require_capability(current_user, Capability.PROJECT_RESOURCES_MANAGE)
+    except PolicyError as e:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(e),
+        )
     join = (
         db.query(ProjectResourceAllocation)
         .filter(
@@ -237,7 +251,7 @@ def get_project_bundles(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    project = _get_owned_project(db, project_id, current_user.id)
+    project = require_project_membership(db, current_user, project_id)
     bundles = (
         db.query(AnalysisBundle)
         .filter(AnalysisBundle.project_id == project.id)
@@ -257,7 +271,7 @@ def get_project_bundle(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _get_owned_project(db, project_id, current_user.id)
+    require_project_membership(db, current_user, project_id)
     bundle = (
         db.query(AnalysisBundle)
         .filter(
@@ -294,7 +308,14 @@ def put_project_bundle(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _get_owned_project(db, project_id, current_user.id)
+    require_project_membership(db, current_user, project_id)
+    try:
+        require_capability(current_user, Capability.BUNDLE_CREATE)
+    except PolicyError as e:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(e),
+        )
     bundle = (
         db.query(AnalysisBundle)
         .filter(
@@ -324,6 +345,13 @@ def post_project(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    try:
+        require_capability(current_user, Capability.PROJECT_MANAGE)
+    except PolicyError as e:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(e),
+        )
     return create_project(db, data, owner_id=current_user.id)
 
 
@@ -338,8 +366,14 @@ def post_project_bundle(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _get_owned_project(db, project_id, current_user.id)
-
+    require_project_membership(db, current_user, project_id)
+    try:
+        require_capability(current_user, Capability.BUNDLE_CREATE)
+    except PolicyError as e:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(e),
+        )
     bundle = create_bundle(db, data.model_dump(), project_id, current_user.id)
     return _bundle_to_read(bundle)
 
@@ -366,7 +400,14 @@ async def post_project_bundle_upload(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _get_owned_project(db, project_id, current_user.id)
+    require_project_membership(db, current_user, project_id)
+    try:
+        require_capability(current_user, Capability.BUNDLE_CREATE)
+    except PolicyError as e:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(e),
+        )
 
     if not file.filename or not file.filename.endswith(".zip"):
         raise HTTPException(
@@ -439,7 +480,14 @@ def post_submit_bundle(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _get_owned_project(db, project_id, current_user.id)
+    require_project_membership(db, current_user, project_id)
+    try:
+        require_capability(current_user, Capability.BUNDLE_SUBMIT)
+    except PolicyError as e:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(e),
+        )
 
     bundle = (
         db.query(AnalysisBundle)
@@ -488,7 +536,14 @@ def post_bundle_ai_review(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _get_owned_project(db, project_id, current_user.id)
+    require_project_membership(db, current_user, project_id)
+    try:
+        require_capability(current_user, Capability.BUNDLE_CREATE)
+    except PolicyError as e:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(e),
+        )
     bundle = (
         db.query(AnalysisBundle)
         .filter(
@@ -520,7 +575,14 @@ def post_execution_request(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _get_owned_project(db, project_id, current_user.id)
+    require_project_membership(db, current_user, project_id)
+    try:
+        require_capability(current_user, Capability.EXECUTION_RUN)
+    except PolicyError as e:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(e),
+        )
     try:
         request = create_execution_request(
             db, data.model_dump(), project_id, current_user.id
@@ -542,7 +604,7 @@ def get_project_execution_requests(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _get_owned_project(db, project_id, current_user.id)
+    require_project_membership(db, current_user, project_id)
     requests = list_execution_requests(db, project_id=project_id)
     return [request_to_read(r) for r in requests]
 
@@ -557,7 +619,7 @@ def get_project_execution_request(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _get_owned_project(db, project_id, current_user.id)
+    require_project_membership(db, current_user, project_id)
     request = get_execution_request(db, request_id)
     if request is None or request.project_id != project_id:
         raise HTTPException(
@@ -577,7 +639,7 @@ def get_execution_request_outputs(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _get_owned_project(db, project_id, current_user.id)
+    require_project_membership(db, current_user, project_id)
     request = get_execution_request(db, request_id)
     if request is None or request.project_id != project_id:
         raise HTTPException(
@@ -622,7 +684,7 @@ def download_execution_request_outputs(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _get_owned_project(db, project_id, current_user.id)
+    require_project_membership(db, current_user, project_id)
     request = get_execution_request(db, request_id)
     if request is None or request.project_id != project_id:
         raise HTTPException(
@@ -636,6 +698,82 @@ def download_execution_request_outputs(
             detail="No released outputs found for this execution request",
         )
     return stream_release_package(output_set)
+
+
+@router.get(
+    "/projects/{project_id}/members",
+    response_model=List[ProjectMemberRead],
+)
+def get_project_members(
+    project_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    require_project_membership(db, current_user, project_id)
+    return list_members(db, project_id)
+
+
+@router.post(
+    "/projects/{project_id}/members",
+    response_model=ProjectMemberRead,
+    status_code=201,
+)
+def post_project_member(
+    project_id: uuid.UUID,
+    body: AddProjectMemberBody,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    require_project_membership(db, current_user, project_id)
+    try:
+        require_capability(current_user, Capability.PROJECT_MEMBERS_MANAGE)
+    except PolicyError as e:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(e),
+        )
+
+    member = db.query(User).filter(User.email == body.email).first()
+    if member is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    add_member(db, project_id, member, invited_by_id=current_user.id)
+    return {
+        "user_id": member.id,
+        "email": member.email,
+        "display_name": member.display_name,
+        "added_at": datetime.utcnow(),
+    }
+
+
+@router.delete(
+    "/projects/{project_id}/members/{user_id}",
+    status_code=204,
+)
+def delete_project_member(
+    project_id: uuid.UUID,
+    user_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    require_project_membership(db, current_user, project_id)
+    try:
+        require_capability(current_user, Capability.PROJECT_MEMBERS_MANAGE)
+    except PolicyError as e:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(e),
+        )
+
+    removed = remove_member(db, project_id, user_id)
+    if not removed:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Member not found",
+        )
 
 
 @router.get(

@@ -11,6 +11,7 @@ from app.db.base import Base
 if TYPE_CHECKING:
     from app.models.data_resource import DataResource
     from app.models.project_data_resource import ProjectResourceAllocation
+    from app.models.project_membership import ProjectMembership
 
 
 class Project(Base):
@@ -36,6 +37,9 @@ class Project(Base):
     resource_allocations: Mapped[list["ProjectResourceAllocation"]] = relationship(
         back_populates="project",
         cascade="all, delete-orphan",
+    )
+    members: Mapped[list["ProjectMembership"]] = relationship(
+        back_populates="project", cascade="all, delete-orphan"
     )
 
     @property

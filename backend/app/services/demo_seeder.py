@@ -8,6 +8,7 @@ from app.models.data_resource import DataResource
 from app.models.execution_environment import ExecutionEnvironment
 from app.models.project import Project
 from app.models.project_data_resource import ProjectResourceAllocation
+from app.models.project_membership import ProjectMembership
 from app.models.user import User
 from app.workflow.bundle import approve_bundle, submit_bundle
 
@@ -45,6 +46,13 @@ def seed_demo_workspace(db: Session) -> dict:
     )
     db.add(project)
     db.flush()
+
+    membership = ProjectMembership(
+        project_id=project.id,
+        user_id=admin.id,
+        created_by_id=admin.id,
+    )
+    db.add(membership)
 
     resource = (
         db.query(DataResource)

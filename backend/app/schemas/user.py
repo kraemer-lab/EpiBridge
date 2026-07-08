@@ -11,6 +11,7 @@ class UserRead(BaseModel):
     email: str
     display_name: str
     role: UserRole
+    capabilities: list[str]
     created_at: datetime
     updated_at: datetime
 

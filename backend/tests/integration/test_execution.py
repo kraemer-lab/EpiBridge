@@ -12,6 +12,7 @@ from app.models.execution_request import (
 )
 from app.models.output import Output
 from app.models.project import Project
+from app.models.project_membership import ProjectMembership
 from app.services.output_service import transition_request_status
 from app.services.output_set_service import ensure_output_set, register_output
 
@@ -20,6 +21,12 @@ from app.services.output_set_service import ensure_output_set, register_output
 def project(db_session, admin_user):
     p = Project(name="Test Project", owner_id=admin_user.id)
     db_session.add(p)
+    db_session.flush()
+    db_session.add(
+        ProjectMembership(
+            project_id=p.id, user_id=admin_user.id, created_by_id=admin_user.id
+        )
+    )
     db_session.commit()
     db_session.refresh(p)
     return p

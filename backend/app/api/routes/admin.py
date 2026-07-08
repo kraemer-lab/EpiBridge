@@ -4,12 +4,13 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_user
-from app.auth.policy import PolicyError, require_any_role
+from app.auth.policy import PolicyError, require_capability
 from app.db.session import get_db
 from app.models.analysis_bundle import AnalysisBundle
+from app.models.capability import Capability
 from app.models.data_resource import DataResource
 from app.models.execution_environment import ExecutionEnvironment
-from app.models.user import User, UserRole
+from app.models.user import User
 from app.schemas.analysis_bundle import AnalysisBundleRead
 from app.schemas.data_resource import DataResourceRead
 from app.schemas.execution_environment import ExecutionEnvironmentRead
@@ -350,9 +351,7 @@ def post_admin_approve_output_set(
             detail="Output set not found",
         )
     try:
-        require_any_role(
-            current_user, UserRole.MODERATOR, UserRole.MAINTAINER, UserRole.ADMIN
-        )
+        require_capability(current_user, Capability.OUTPUT_REVIEW)
     except PolicyError as e:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -407,9 +406,7 @@ def post_admin_reject_output_set(
             detail="Output set not found",
         )
     try:
-        require_any_role(
-            current_user, UserRole.MODERATOR, UserRole.MAINTAINER, UserRole.ADMIN
-        )
+        require_capability(current_user, Capability.OUTPUT_REVIEW)
     except PolicyError as e:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -464,9 +461,7 @@ def post_admin_release_output_set(
             detail="Output set not found",
         )
     try:
-        require_any_role(
-            current_user, UserRole.MODERATOR, UserRole.MAINTAINER, UserRole.ADMIN
-        )
+        require_capability(current_user, Capability.OUTPUT_RELEASE)
     except PolicyError as e:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -553,9 +548,7 @@ def post_admin_approve_bundle(
 ):
     bundle = _get_admin_bundle(bundle_id, db)
     try:
-        require_any_role(
-            current_user, UserRole.MODERATOR, UserRole.MAINTAINER, UserRole.ADMIN
-        )
+        require_capability(current_user, Capability.BUNDLE_REVIEW)
     except PolicyError as e:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -584,9 +577,7 @@ def post_admin_reject_bundle(
 ):
     bundle = _get_admin_bundle(bundle_id, db)
     try:
-        require_any_role(
-            current_user, UserRole.MODERATOR, UserRole.MAINTAINER, UserRole.ADMIN
-        )
+        require_capability(current_user, Capability.BUNDLE_REVIEW)
     except PolicyError as e:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -616,12 +607,7 @@ def post_admin_supersede_bundle(
     bundle = _get_admin_bundle(bundle_id, db)
     try:
         if current_user.id != bundle.created_by_id:
-            require_any_role(
-                current_user,
-                UserRole.MODERATOR,
-                UserRole.MAINTAINER,
-                UserRole.ADMIN,
-            )
+            require_capability(current_user, Capability.BUNDLE_REVIEW)
     except PolicyError as e:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

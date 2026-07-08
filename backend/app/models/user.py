@@ -4,9 +4,11 @@ from datetime import datetime
 
 from sqlalchemy import DateTime, Enum, String, func
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.models.capability import UserCapability
+from app.models.project_membership import ProjectMembership
 
 
 class UserRole(str, enum.Enum):
@@ -34,3 +36,14 @@ class User(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+
+    capabilities: Mapped[list[UserCapability]] = relationship(
+        cascade="all, delete-orphan"
+    )
+    project_memberships: Mapped[list[ProjectMembership]] = relationship(
+        back_populates="user",
+        foreign_keys=[ProjectMembership.user_id],
+    )
+
+    def has_capability(self, capability_name: str) -> bool:
+        return any(c.capability_name == capability_name for c in self.capabilities)

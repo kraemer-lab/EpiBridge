@@ -1,11 +1,13 @@
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import text
 
 from app.auth.local import hash_password
 from app.core.config import settings
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.main import app
+from app.models.capability import ALL_CAPABILITIES, UserCapability
 from app.models.user import User, UserRole
 from app.services.session_service import create_session
 
@@ -67,6 +69,15 @@ def admin_user(db_session):
         role=UserRole.ADMIN,
     )
     db_session.add(user)
+    db_session.flush()
+
+    for cap_name in ALL_CAPABILITIES:
+        db_session.execute(
+            text("INSERT INTO capabilities (name) VALUES (:n) ON CONFLICT DO NOTHING"),
+            {"n": cap_name},
+        )
+        db_session.add(UserCapability(user_id=user.id, capability_name=cap_name))
+
     db_session.commit()
     db_session.refresh(user)
     return user
