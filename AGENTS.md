@@ -121,7 +121,7 @@ make test         # run tests
 **Testing** (from repo root):
 - `make test` — run unit, integration, and smoke test suites (CI compatible)
 - `make dev-test` — run full suite inside the container via SSH (requires dev stack)
-- `make playwright` — run golden-path end-to-end test (requires full stack running)
+- `make playwright` — run canonical workflow e2e test (requires full stack running)
 - `python -m pytest backend/tests/unit -v` — unit tests only
 - `python -m pytest backend/tests/integration -v` — integration tests (requires DB + Redis running)
 - `python -m pytest backend/tests/smoke -v` — smoke tests (requires full stack running)
@@ -129,7 +129,7 @@ make test         # run tests
 **CI** (from repo root, requires Docker):
 - `make ci` — bootstrap full stack (build, start, seed), same as `make bootstrap`
 - `make ci-clean` — tear down all Docker resources and remove `.env`
-- `make playwright` — run golden-path e2e test (must be run after `make ci`)
+- `make playwright` — run canonical workflow e2e test (must be run after `make ci`)
 
 **Shared bootstrap** (from repo root, requires Docker):
 - `make bootstrap` — idempotent bootstrap used by both development and CI.
@@ -151,16 +151,16 @@ make test         # run tests
 **VM / Dev environment** (see `vm/runtime.md`):
 - `scripts/orbstack.sh` — OrbStack-specific helpers (create, mount, ssh, ip)
 
-### Golden Path (end-to-end)
+### Canonical Workflow (end-to-end)
 
-The golden path is a single Playwright e2e test that proves the entire platform works from a researcher's perspective.
+The canonical workflow is a single Playwright e2e test that proves the entire platform works from a researcher's perspective.
 
 ```bash
 make dev           # bootstrap the full stack (OrbStack VM)
-make playwright    # run the golden-path e2e test
+make playwright    # run the canonical workflow e2e test
 ```
 
-The test (in `frontend/e2e/golden-path.spec.ts`) validates:
+The test (in `frontend/e2e/canonical-workflow.spec.ts`) validates:
 1. Opening EpiBridge
 2. Login with admin credentials
 3. Creating a project

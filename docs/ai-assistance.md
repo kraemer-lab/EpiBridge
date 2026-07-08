@@ -107,7 +107,7 @@ The only way to trigger another review is by explicitly clicking the button.
 ## CI
 
 CI runs without the AI profile. No AI services are started, no models are
-installed, and all tests pass without any AI dependency. The golden-path
+installed, and all tests pass without any AI dependency. The canonical workflow
 Playwright test is unaffected.
 
 ## Architecture

@@ -37,7 +37,7 @@ def seed_demo_workspace(db: Session) -> dict:
 
     project = Project(
         name=DEMO_PROJECT_NAME,
-        description="Dengue surveillance analysis demo for EpiBridge golden path.",
+        description="Dengue surveillance analysis demo for EpiBridge canonical workflow.",
         owner_id=admin.id,
     )
     db.add(project)

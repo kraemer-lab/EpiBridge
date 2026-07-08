@@ -15,7 +15,7 @@ summary.to_csv("/output/summary.csv")
 print(f"Analysis complete. Processed {len(df)} rows, {len(df.columns)} columns.")
 `;
 
-test("Golden Path: researcher creates project, uploads bundle, runs analysis, downloads output", async ({
+test("Canonical Workflow: researcher creates project, uploads bundle, runs analysis, downloads output", async ({
   page,
 }) => {
   // 1. Open EpiBridge — redirected to login
@@ -34,12 +34,12 @@ test("Golden Path: researcher creates project, uploads bundle, runs analysis, do
 
   // 5. Create a new project
   await page.getByRole("button", { name: "Create Project" }).click();
-  await page.getByPlaceholder("Project name").fill(`Golden Path Test ${TS}`);
+  await page.getByPlaceholder("Project name").fill(`Canonical Workflow Test ${TS}`);
   await page.getByPlaceholder("Optional description").fill("End-to-end test project");
   await page.getByRole("dialog").getByRole("button", { name: "Create" }).click();
 
   // 6. Open the project
-  await page.getByText(`Golden Path Test ${TS}`).click();
+  await page.getByText(`Canonical Workflow Test ${TS}`).click();
   await expect(page.getByRole("link", { name: "Overview" })).toBeVisible();
 
   // 7. Open the Resources tab and attach the Mexico dengue data resource
