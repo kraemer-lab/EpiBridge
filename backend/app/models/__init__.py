@@ -1,5 +1,6 @@
 from app.db.base import Base
 from app.models.ai_bundle_review import AIBundleReview, AIBundleReviewStatus
+from app.models.audit_event import AuditEvent, AuditEventType
 from app.models.analysis_bundle import (
     AnalysisBundle,
     AnalysisBundleBuildStatus,
@@ -25,6 +26,8 @@ from app.models.user import User, UserRole
 __all__ = [
     "AIBundleReview",
     "AIBundleReviewStatus",
+    "AuditEvent",
+    "AuditEventType",
     "AnalysisBundle",
     "AnalysisBundleBuildStatus",
     "AnalysisBundleDataResource",
