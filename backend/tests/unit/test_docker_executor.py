@@ -47,7 +47,10 @@ class TestDockerExecutorHardening:
         mock_container.get_archive.return_value = ([], None)
 
         executor = DockerExecutor(client=mock_client)
-        with patch.object(executor, "_put_directory"), patch.object(executor, "_extract_output"):
+        with (
+            patch.object(executor, "_put_directory"),
+            patch.object(executor, "_extract_output"),
+        ):
             executor.run(
                 image="test:latest",
                 analysis_dir=__import__("pathlib").Path("/tmp"),
@@ -60,7 +63,9 @@ class TestDockerExecutorHardening:
 
         kwargs = mock_client.containers.create.call_args.kwargs
         assert kwargs.get("cap_drop") == ["ALL"]
-        assert kwargs.get("read_only") is not True  # intentionally not set (see docker.py note)
+        assert (
+            kwargs.get("read_only") is not True
+        )  # intentionally not set (see docker.py note)
         assert kwargs.get("security_opt") == ["no-new-privileges:true"]
         assert "tmpfs" in kwargs
         assert "/tmp" in kwargs["tmpfs"]
@@ -78,7 +83,10 @@ class TestDockerExecutorHardening:
         mock_container.get_archive.return_value = ([], None)
 
         executor = DockerExecutor(client=mock_client)
-        with patch.object(executor, "_put_directory"), patch.object(executor, "_extract_output"):
+        with (
+            patch.object(executor, "_put_directory"),
+            patch.object(executor, "_extract_output"),
+        ):
             executor.run(
                 image="test:latest",
                 analysis_dir=__import__("pathlib").Path("/tmp"),
@@ -105,7 +113,10 @@ class TestDockerExecutorHardening:
         mock_container.get_archive.return_value = ([], None)
 
         executor = DockerExecutor(client=mock_client)
-        with patch.object(executor, "_put_directory"), patch.object(executor, "_extract_output"):
+        with (
+            patch.object(executor, "_put_directory"),
+            patch.object(executor, "_extract_output"),
+        ):
             executor.run(
                 image="test:latest",
                 analysis_dir=__import__("pathlib").Path("/tmp"),
@@ -131,7 +142,10 @@ class TestDockerExecutorHardening:
         mock_container.get_archive.return_value = ([], None)
 
         executor = DockerExecutor(client=mock_client)
-        with patch.object(executor, "_put_directory"), patch.object(executor, "_extract_output"):
+        with (
+            patch.object(executor, "_put_directory"),
+            patch.object(executor, "_extract_output"),
+        ):
             executor.run(
                 image="test:latest",
                 analysis_dir=__import__("pathlib").Path("/tmp"),

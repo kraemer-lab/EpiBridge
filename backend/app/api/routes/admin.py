@@ -122,7 +122,11 @@ def get_execution_environment(
 
 def _check_admin_view(current_user: User) -> None:
     """Allow access if user has any governance or admin capability."""
-    for cap in (Capability.BUNDLE_REVIEW, Capability.OUTPUT_REVIEW, Capability.USER_MANAGE):
+    for cap in (
+        Capability.BUNDLE_REVIEW,
+        Capability.OUTPUT_REVIEW,
+        Capability.USER_MANAGE,
+    ):
         try:
             require_capability(current_user, cap)
             return

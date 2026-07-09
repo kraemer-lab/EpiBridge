@@ -1,0 +1,12 @@
+.git
+.gitignore
+.env
+__pycache__
+*.pyc
+node_modules/
+.next/
+*.md
+Dockerfile
+e2e/
+playwright.config.ts
+

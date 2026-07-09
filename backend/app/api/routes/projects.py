@@ -68,6 +68,8 @@ def _require_capability(current_user: User, capability: Capability) -> None:
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Forbidden",
         )
+
+
 from app.services.bundle_store import get_bundle_store
 from app.services.execution_environment_service import list_environments
 from app.services.execution_request_service import (

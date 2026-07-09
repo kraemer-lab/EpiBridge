@@ -54,7 +54,7 @@ test("Canonical Workflow: researcher creates project, uploads bundle, runs analy
 
   // 8. Open the Analysis tab
   await page.getByRole("link", { name: "Analysis" }).click();
-  await expect(page.getByRole("heading", { name: "Analysis Bundles" })).toBeVisible();
+  await expect(page.getByTestId("analysis-heading")).toBeVisible();
 
   // 9. Navigate to Create Analysis
   await page.getByRole("link", { name: "Create Analysis" }).click();
@@ -80,7 +80,9 @@ test("Canonical Workflow: researcher creates project, uploads bundle, runs analy
   await page.getByRole("button", { name: "Save" }).click();
 
   // 13. Wait for redirect to analysis list, then open the bundle
-  await expect(page.getByRole("heading", { name: "Analysis Bundles" })).toBeVisible();
+  await page.waitForURL(/\/projects\/[^/]+\/analysis$/);
+  await expect(page.getByTestId("analysis-heading")).toBeVisible();
+  await expect(page.getByText(analysisName)).toBeVisible();
   await page.getByText(analysisName).click();
 
   // 14. Submit the bundle (DRAFT → SUBMITTED) via the Submit button

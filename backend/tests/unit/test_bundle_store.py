@@ -5,8 +5,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from unittest.mock import patch
+
 from app.services.bundle_store import (
-    BUNDLE_STORE_ROOT,
     LocalFileSystemBundleStore,
     get_bundle_store,
 )
@@ -29,7 +30,7 @@ def _make_zip_with_symlink(target_name: str) -> bytes:
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:
         info = zipfile.ZipInfo("evil_link")
-        info.external_attr = (0o120777 << 16)
+        info.external_attr = 0o120777 << 16
         zf.writestr(info, "/etc/passwd")
         zf.writestr("run.py", "print('hello')")
     return buf.getvalue()
@@ -68,16 +69,17 @@ class TestBundleStoreContentValidation:
 
 
 class TestBundleStoreDecompressionBomb:
-    def test_excessive_uncompressed_size_rejected(self, store):
+    def test_excessive_uncompressed_size_rejected(self, store, tmp_path):
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
             zf.writestr("small.py", b"x" * 1024)
             zf.writestr("run.py", b"print('hello')")
         content = buf.getvalue()
 
-        with patch.object(store.__class__, "MAX_SIZE", 10 * 1024 * 1024):
-            upload = _mock_upload(content)
-            store.store(uuid.uuid4(), upload, "run.py")
+        with patch("app.services.bundle_store.BUNDLE_STORE_ROOT", tmp_path):
+            with patch.object(store.__class__, "MAX_SIZE", 10 * 1024 * 1024):
+                upload = _mock_upload(content)
+                store.store(uuid.uuid4(), upload, "run.py")
 
     def test_empty_archive_rejected(self, store):
         buf = io.BytesIO()

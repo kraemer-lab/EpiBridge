@@ -151,6 +151,7 @@ def test_session_rotation(anon_client, db_session):
 def test_secure_cookie_not_set_in_dev(anon_client, db_session):
     """In development, secure=False by default."""
     from app.core.config import settings
+
     assert settings.secure_cookie is False
     hashed = hash_password("secure-test-pw")
     user = User(

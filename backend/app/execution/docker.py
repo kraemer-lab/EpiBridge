@@ -117,7 +117,9 @@ class DockerExecutor(Executor):
         with tarfile.open(fileobj=buf, mode="w") as tar:
             for item in source_dir.iterdir():
                 if item.is_symlink():
-                    raise ValueError(f"Symlink not allowed in analysis bundle: {item.name}")
+                    raise ValueError(
+                        f"Symlink not allowed in analysis bundle: {item.name}"
+                    )
                 tar.add(str(item), arcname=item.name)
         buf.seek(0)
         container.put_archive(target, buf)
@@ -151,7 +153,11 @@ class DockerExecutor(Executor):
             prefix = OUTPUT_TARGET.strip("/") + "/"
             total_size = 0
             for member in tar.getmembers():
-                member.name = member.name[len(prefix):] if member.name.startswith(prefix) else member.name
+                member.name = (
+                    member.name[len(prefix) :]
+                    if member.name.startswith(prefix)
+                    else member.name
+                )
                 resolved = (output_dir / member.name).resolve()
                 if not str(resolved).startswith(str(output_dir.resolve())):
                     raise ValueError(f"Path traversal in output archive: {member.name}")
@@ -159,5 +165,7 @@ class DockerExecutor(Executor):
                     raise ValueError(f"Symlink in output archive: {member.name}")
                 total_size += member.size
                 if total_size > MAX_EXTRACT_SIZE:
-                    raise ValueError(f"Output archive exceeds maximum size of {MAX_EXTRACT_SIZE} bytes")
+                    raise ValueError(
+                        f"Output archive exceeds maximum size of {MAX_EXTRACT_SIZE} bytes"
+                    )
             tar.extractall(path=str(output_dir))

@@ -85,7 +85,9 @@ class TestAuditEventQuery:
         for item in data["items"]:
             assert item["project_id"] == str(project.id)
 
-    def test_filter_by_actor(self, db_session, admin_user, client, moderator_user, project):
+    def test_filter_by_actor(
+        self, db_session, admin_user, client, moderator_user, project
+    ):
         _seed_audit_events(db_session, admin_user.id, project.id)
         _seed_audit_events(db_session, moderator_user.id, project.id)
 

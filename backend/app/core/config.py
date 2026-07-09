@@ -34,6 +34,7 @@ class Settings(BaseSettings):
                 "Generate one with: openssl rand -base64 32"
             )
         return v
+
     auto_create_schema: bool = True
     auto_register_resources: bool = True
     resource_manifest_dir: str = ""

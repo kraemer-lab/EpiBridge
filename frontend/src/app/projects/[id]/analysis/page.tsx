@@ -31,7 +31,7 @@ export default function ProjectAnalysisPage() {
           marginBottom: "var(--spacing-md)",
         }}
       >
-        <h2 style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: 0 }}>
+        <h2 data-testid="analysis-heading" style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: 0 }}>
           Analysis Bundles
         </h2>
         <Link href={`/projects/${projectId}/analysis/new`} className="btn btn-primary">

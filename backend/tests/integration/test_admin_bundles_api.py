@@ -50,7 +50,9 @@ def project(db_session, admin_user):
 
 @pytest.fixture
 def resource(db_session, project, admin_user):
-    return _allocated_resource(db_session, project, admin_user, "test-resource", "test_resource")
+    return _allocated_resource(
+        db_session, project, admin_user, "test-resource", "test_resource"
+    )
 
 
 @pytest.fixture

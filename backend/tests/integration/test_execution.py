@@ -179,7 +179,9 @@ class TestDockerExecutor:
         mock_container.start.assert_called_once()
         mock_container.remove.assert_called_once()
 
-    def test_timeout_execution(self, mock_docker, db_session, pending_request, tmp_path):
+    def test_timeout_execution(
+        self, mock_docker, db_session, pending_request, tmp_path
+    ):
         analysis_dir = tmp_path / "analysis"
         analysis_dir.mkdir(parents=True)
 

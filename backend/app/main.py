@@ -34,6 +34,14 @@ async def lifespan(app: FastAPI):
     finally:
         db.close()
 
+    # Ensure application storage directories exist.
+    for store_dir in (
+        Path(settings.output_dir),
+        Path(settings.bundle_store_dir),
+        Path(settings.release_dir),
+    ):
+        store_dir.mkdir(parents=True, exist_ok=True)
+
     if settings.auto_register_resources:
         manifest_path = Path(settings.resource_manifest_dir)
         if not manifest_path.is_dir():

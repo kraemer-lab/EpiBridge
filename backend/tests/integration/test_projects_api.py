@@ -284,9 +284,7 @@ class TestGetProjectBundle:
         db_session.add(bundle)
         db_session.commit()
 
-        response = client.get(
-            f"/api/projects/{other_project.id}/bundles/{bundle.id}"
-        )
+        response = client.get(f"/api/projects/{other_project.id}/bundles/{bundle.id}")
         assert response.status_code == 404
 
 

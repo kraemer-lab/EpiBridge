@@ -390,6 +390,14 @@ The test (in `frontend/e2e/canonical-workflow.spec.ts`) validates:
 
 This is a system test — not UI, not API — covering frontend, backend, database, worker, Docker executor, provider abstraction, runtime contract, output registration, download endpoint, and audit ledger.
 
+### Deployment user
+
+Platform services (backend, worker) run as the non-root `epibridge` user. The reference
+deployment provisions matching ownership: `cloud-init.yaml` creates `/var/lib/epibridge/`
+owned by UID 1000, and `scripts/bootstrap.sh` applies the same ownership at setup time.
+The container's `epibridge` user uses a matching UID (1000) so that volume-mounted storage
+directories are writable without runtime permission workarounds or world-writable fallbacks.
+
 ### Stack dependencies
 
 Backend requires Python 3.11+. No other language runtimes or build tools have been installed. Stand up each package independently before wiring integration tests.

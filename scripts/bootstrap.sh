@@ -24,6 +24,7 @@ if [ ! -f .env ]; then
   POSTGRES_PASSWORD=$(openssl rand -base64 32 | tr -d '\n')
   REDIS_PASSWORD=$(openssl rand -base64 32 | tr -d '\n')
   SECRET_KEY=$(openssl rand -base64 64 | tr -d '\n')
+  ADMIN_PASSWORD=$(openssl rand -base64 32 | tr -d '\n')
 
   python3 -c "
 import os
@@ -33,6 +34,7 @@ with open(path) as f:
 c = c.replace('POSTGRES_PASSWORD=__GENERATED__', 'POSTGRES_PASSWORD=$POSTGRES_PASSWORD')
 c = c.replace('REDIS_PASSWORD=__GENERATED__', 'REDIS_PASSWORD=$REDIS_PASSWORD')
 c = c.replace('SECRET_KEY=__GENERATED__', 'SECRET_KEY=$SECRET_KEY')
+c = c.replace('ADMIN_PASSWORD=__GENERATED__', 'ADMIN_PASSWORD=$ADMIN_PASSWORD')
 with open(path, 'w') as f:
     f.write(c)
 "
@@ -41,7 +43,31 @@ with open(path, 'w') as f:
 fi
 
 ###############################################################################
-# 2. Set HOST_DATA_ROOT for Docker-outside-of-Docker bind mounts
+# 2. Discover deployment environment
+###############################################################################
+DOCKER_GID="$(getent group docker | cut -d: -f3)"
+if [ -z "$DOCKER_GID" ]; then
+  echo "ERROR: Docker group not found. Is Docker installed?"
+  exit 1
+fi
+export DOCKER_GID
+echo "Docker group GID: $DOCKER_GID"
+
+# Persist DOCKER_GID to .env so that all subsequent docker compose
+# invocations (make clean-db, make reset, CI, etc.) automatically
+# consume it without shell exports or hardcoded fallbacks.
+#
+# DOCKER_GID is deployment metadata discovered from the local
+# environment.  It is generated automatically by bootstrap.sh and
+# is not intended to be manually edited.
+if grep -q "^DOCKER_GID=" .env 2>/dev/null; then
+  sed -i.bak "s/^DOCKER_GID=.*/DOCKER_GID=$DOCKER_GID/" .env && rm -f .env.bak
+else
+  echo "DOCKER_GID=$DOCKER_GID" >> .env
+fi
+
+###############################################################################
+# 3. Set HOST_DATA_ROOT for Docker-outside-of-Docker bind mounts
 #
 # The worker runs in a container, so provider mount sources like
 # /read-only-data/* are not visible to Docker Engine on the host.
@@ -56,7 +82,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 export HOST_DATA_ROOT="${HOST_DATA_ROOT:-${REPO_ROOT}/examples/resources}"
 
 ###############################################################################
-# 3. Build Docker images
+# 4. Build Docker images
 ###############################################################################
 echo "Building application images..."
 docker compose build
@@ -69,13 +95,20 @@ for dir in containers/*/; do
 done
 
 ###############################################################################
-# 4. Start services
+# 4. Provision application storage
+###############################################################################
+echo "Provisioning storage directories..."
+mkdir -p /var/lib/epibridge/bundles /var/lib/epibridge/outputs /var/lib/epibridge/releases
+chown -R epibridge:epibridge /var/lib/epibridge 2>/dev/null || chown -R 1000:1000 /var/lib/epibridge
+
+###############################################################################
+# 5. Start services
 ###############################################################################
 echo "Starting services..."
 docker compose up -d
 
 ###############################################################################
-# 5. Wait for PostgreSQL
+# 6. Wait for PostgreSQL
 ###############################################################################
 echo "Waiting for PostgreSQL..."
 until docker compose exec -T postgres pg_isready -U epibridge 2>/dev/null; do
@@ -84,7 +117,7 @@ done
 echo "PostgreSQL is ready."
 
 ###############################################################################
-# 6. Wait for backend API to be ready
+# 7. Wait for backend API to be ready
 ###############################################################################
 echo "Waiting for backend API..."
 until docker compose exec -T backend python3 -c "
@@ -100,19 +133,19 @@ done
 echo "Backend API is ready."
 
 ###############################################################################
-# 7. Create test database
+# 8. Create test database
 ###############################################################################
 echo "Creating test database..."
 docker compose exec -T postgres psql -U epibridge -c "CREATE DATABASE epibridge_test;" 2>/dev/null || true
 
 ###############################################################################
-# 8. Seed admin account
+# 9. Seed admin account
 ###############################################################################
 echo "Seeding administrator account..."
 docker compose exec -T backend python -m app.cli seed-admin
 
 ###############################################################################
-# 9. Health check
+# 10. Health check
 ###############################################################################
 echo "Running health checks..."
 ./scripts/healthcheck.sh
