@@ -50,11 +50,22 @@ from app.workflow.output_set import (
 router = APIRouter()
 
 
+def _require_capability(current_user: User, capability: Capability) -> None:
+    try:
+        require_capability(current_user, capability)
+    except PolicyError as e:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden",
+        )
+
+
 @router.get("/admin/resources", response_model=List[DataResourceRead])
 def list_resources(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    _require_capability(current_user, Capability.DATA_MANAGE)
     return db.query(DataResource).order_by(DataResource.name).all()
 
 
@@ -64,6 +75,7 @@ def get_resource(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    _require_capability(current_user, Capability.DATA_MANAGE)
     resource = db.query(DataResource).filter(DataResource.id == resource_id).first()
     if resource is None:
         raise HTTPException(
@@ -81,6 +93,7 @@ def list_execution_environments(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    _require_capability(current_user, Capability.ENVIRONMENT_MANAGE)
     return db.query(ExecutionEnvironment).order_by(ExecutionEnvironment.name).all()
 
 
@@ -93,6 +106,7 @@ def get_execution_environment(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    _require_capability(current_user, Capability.ENVIRONMENT_MANAGE)
     env = (
         db.query(ExecutionEnvironment)
         .filter(ExecutionEnvironment.id == environment_id)
@@ -106,11 +120,23 @@ def get_execution_environment(
     return env
 
 
+def _check_admin_view(current_user: User) -> None:
+    """Allow access if user has any governance or admin capability."""
+    for cap in (Capability.BUNDLE_REVIEW, Capability.OUTPUT_REVIEW, Capability.USER_MANAGE):
+        try:
+            require_capability(current_user, cap)
+            return
+        except PolicyError:
+            continue
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+
+
 @router.get("/admin/bundles", response_model=List[AnalysisBundleRead])
 def list_bundles(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    _check_admin_view(current_user)
     bundles = db.query(AnalysisBundle).order_by(AnalysisBundle.name).all()
     result = []
     for b in bundles:
@@ -147,6 +173,7 @@ def get_bundle(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    _check_admin_view(current_user)
     bundle = db.query(AnalysisBundle).filter(AnalysisBundle.id == bundle_id).first()
     if bundle is None:
         raise HTTPException(
@@ -183,6 +210,7 @@ def list_admin_execution_requests(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    _check_admin_view(current_user)
     requests = list_execution_requests(db)
     return [request_to_read(r) for r in requests]
 
@@ -196,6 +224,7 @@ def get_admin_execution_request(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    _check_admin_view(current_user)
     request = get_execution_request(db, request_id)
     if request is None:
         raise HTTPException(
@@ -213,6 +242,7 @@ def list_admin_output_sets(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    _require_capability(current_user, Capability.OUTPUT_REVIEW)
     sets = list_output_sets(db)
     result: list[OutputSetListItem] = []
     for s in sets:
@@ -241,6 +271,7 @@ def get_admin_output_set(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    _require_capability(current_user, Capability.OUTPUT_REVIEW)
     output_set = get_output_set(db, output_set_id)
     if output_set is None:
         raise HTTPException(
@@ -280,6 +311,7 @@ def list_admin_execution_request_outputs(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    _require_capability(current_user, Capability.OUTPUT_REVIEW)
     request = get_execution_request(db, request_id)
     if request is None:
         raise HTTPException(
@@ -324,6 +356,7 @@ def get_admin_output(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    _require_capability(current_user, Capability.OUTPUT_REVIEW)
     output = get_output(db, output_id)
     if output is None:
         raise HTTPException(
@@ -357,13 +390,7 @@ def post_admin_approve_output_set(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Output set not found",
         )
-    try:
-        require_capability(current_user, Capability.OUTPUT_REVIEW)
-    except PolicyError as e:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=str(e),
-        )
+    _require_capability(current_user, Capability.OUTPUT_REVIEW)
     try:
         approve_output_set(db, output_set)
     except ValueError as e:
@@ -421,13 +448,7 @@ def post_admin_reject_output_set(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Output set not found",
         )
-    try:
-        require_capability(current_user, Capability.OUTPUT_REVIEW)
-    except PolicyError as e:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=str(e),
-        )
+    _require_capability(current_user, Capability.OUTPUT_REVIEW)
     try:
         reject_output_set(db, output_set)
     except ValueError as e:
@@ -485,13 +506,7 @@ def post_admin_release_output_set(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Output set not found",
         )
-    try:
-        require_capability(current_user, Capability.OUTPUT_RELEASE)
-    except PolicyError as e:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=str(e),
-        )
+    _require_capability(current_user, Capability.OUTPUT_RELEASE)
     try:
         release_output_set(db, output_set)
     except (ValueError, OSError) as e:
@@ -545,13 +560,7 @@ def list_admin_users(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    try:
-        require_capability(current_user, Capability.USER_MANAGE)
-    except PolicyError as e:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=str(e),
-        )
+    _require_capability(current_user, Capability.USER_MANAGE)
     return list_users(db)
 
 
@@ -561,13 +570,7 @@ def get_admin_user(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    try:
-        require_capability(current_user, Capability.USER_MANAGE)
-    except PolicyError as e:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=str(e),
-        )
+    _require_capability(current_user, Capability.USER_MANAGE)
     user = get_user_by_id(db, user_id)
     if user is None:
         raise HTTPException(
@@ -583,13 +586,7 @@ def post_admin_user(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    try:
-        require_capability(current_user, Capability.USER_MANAGE)
-    except PolicyError as e:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=str(e),
-        )
+    _require_capability(current_user, Capability.USER_MANAGE)
 
     existing = db.query(User).filter(User.email == data.email).first()
     if existing is not None:
@@ -627,19 +624,7 @@ def get_admin_audit_events(
     offset: int = Query(0, ge=0),
     order: str = Query("desc", pattern="^(asc|desc)$"),
 ):
-    try:
-        require_capability(current_user, Capability.BUNDLE_REVIEW)
-    except PolicyError:
-        try:
-            require_capability(current_user, Capability.OUTPUT_REVIEW)
-        except PolicyError:
-            try:
-                require_capability(current_user, Capability.USER_MANAGE)
-            except PolicyError as e:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail=str(e),
-                )
+    _check_admin_view(current_user)
 
     items, total = query_audit_events(
         db,
@@ -704,13 +689,7 @@ def post_admin_approve_bundle(
     current_user: User = Depends(get_current_user),
 ):
     bundle = _get_admin_bundle(bundle_id, db)
-    try:
-        require_capability(current_user, Capability.BUNDLE_REVIEW)
-    except PolicyError as e:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=str(e),
-        )
+    _require_capability(current_user, Capability.BUNDLE_REVIEW)
     try:
         approve_bundle(db, bundle)
     except ValueError as e:
@@ -742,13 +721,7 @@ def post_admin_reject_bundle(
     current_user: User = Depends(get_current_user),
 ):
     bundle = _get_admin_bundle(bundle_id, db)
-    try:
-        require_capability(current_user, Capability.BUNDLE_REVIEW)
-    except PolicyError as e:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=str(e),
-        )
+    _require_capability(current_user, Capability.BUNDLE_REVIEW)
     try:
         reject_bundle(db, bundle)
     except ValueError as e:
@@ -780,14 +753,8 @@ def post_admin_supersede_bundle(
     current_user: User = Depends(get_current_user),
 ):
     bundle = _get_admin_bundle(bundle_id, db)
-    try:
-        if current_user.id != bundle.created_by_id:
-            require_capability(current_user, Capability.BUNDLE_REVIEW)
-    except PolicyError as e:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=str(e),
-        )
+    if current_user.id != bundle.created_by_id:
+        _require_capability(current_user, Capability.BUNDLE_REVIEW)
     try:
         supersede_bundle(db, bundle)
     except ValueError as e:

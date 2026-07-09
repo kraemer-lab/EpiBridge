@@ -20,11 +20,10 @@ from app.auth.dependencies import get_current_user
 from app.auth.policy import (
     PolicyError,
     require_capability,
-    require_owner,
     require_project_membership,
 )
 from app.db.session import get_db
-from app.models.analysis_bundle import AnalysisBundle
+from app.models.analysis_bundle import AnalysisBundle, AnalysisBundleStatus
 from app.models.audit_event import AuditEventType
 from app.models.build_request import BuildRequest
 from app.models.capability import Capability
@@ -59,6 +58,16 @@ from app.services.analysis_bundle_service import (
     update_bundle,
 )
 from app.services.audit_service import create_audit_event
+
+
+def _require_capability(current_user: User, capability: Capability) -> None:
+    try:
+        require_capability(current_user, capability)
+    except PolicyError:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden",
+        )
 from app.services.bundle_store import get_bundle_store
 from app.services.execution_environment_service import list_environments
 from app.services.execution_request_service import (
@@ -160,13 +169,7 @@ def post_project_resources(
     current_user: User = Depends(get_current_user),
 ):
     project = require_project_membership(db, current_user, project_id)
-    try:
-        require_capability(current_user, Capability.PROJECT_RESOURCES_MANAGE)
-    except PolicyError as e:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=str(e),
-        )
+    _require_capability(current_user, Capability.PROJECT_RESOURCES_MANAGE)
     resources = (
         db.query(DataResource)
         .filter(DataResource.identifier.in_(body.resource_identifiers))
@@ -231,13 +234,7 @@ def delete_project_resource(
     current_user: User = Depends(get_current_user),
 ):
     require_project_membership(db, current_user, project_id)
-    try:
-        require_capability(current_user, Capability.PROJECT_RESOURCES_MANAGE)
-    except PolicyError as e:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=str(e),
-        )
+    _require_capability(current_user, Capability.PROJECT_RESOURCES_MANAGE)
     join = (
         db.query(ProjectResourceAllocation)
         .filter(
@@ -338,13 +335,7 @@ def put_project_bundle(
     current_user: User = Depends(get_current_user),
 ):
     require_project_membership(db, current_user, project_id)
-    try:
-        require_capability(current_user, Capability.BUNDLE_CREATE)
-    except PolicyError as e:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=str(e),
-        )
+    _require_capability(current_user, Capability.BUNDLE_CREATE)
     bundle = (
         db.query(AnalysisBundle)
         .filter(
@@ -357,6 +348,16 @@ def put_project_bundle(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Analysis bundle not found",
+        )
+    if current_user.id != bundle.created_by_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden",
+        )
+    if bundle.status != AnalysisBundleStatus.DRAFT.value:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Cannot edit bundle in state: {bundle.status}",
         )
     try:
         updated = update_bundle(db, bundle_id, data.model_dump(exclude_none=True))
@@ -374,13 +375,7 @@ def post_project(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    try:
-        require_capability(current_user, Capability.PROJECT_MANAGE)
-    except PolicyError as e:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=str(e),
-        )
+    _require_capability(current_user, Capability.PROJECT_MANAGE)
     return create_project(db, data, owner_id=current_user.id)
 
 
@@ -396,13 +391,7 @@ def post_project_bundle(
     current_user: User = Depends(get_current_user),
 ):
     require_project_membership(db, current_user, project_id)
-    try:
-        require_capability(current_user, Capability.BUNDLE_CREATE)
-    except PolicyError as e:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=str(e),
-        )
+    _require_capability(current_user, Capability.BUNDLE_CREATE)
     bundle = create_bundle(db, data.model_dump(), project_id, current_user.id)
     return _bundle_to_read(bundle)
 
@@ -430,13 +419,7 @@ async def post_project_bundle_upload(
     current_user: User = Depends(get_current_user),
 ):
     require_project_membership(db, current_user, project_id)
-    try:
-        require_capability(current_user, Capability.BUNDLE_CREATE)
-    except PolicyError as e:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=str(e),
-        )
+    _require_capability(current_user, Capability.BUNDLE_CREATE)
 
     if not file.filename or not file.filename.endswith(".zip"):
         raise HTTPException(
@@ -510,13 +493,7 @@ def post_submit_bundle(
     current_user: User = Depends(get_current_user),
 ):
     require_project_membership(db, current_user, project_id)
-    try:
-        require_capability(current_user, Capability.BUNDLE_SUBMIT)
-    except PolicyError as e:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=str(e),
-        )
+    _require_capability(current_user, Capability.BUNDLE_SUBMIT)
 
     bundle = (
         db.query(AnalysisBundle)
@@ -532,12 +509,10 @@ def post_submit_bundle(
             detail="Analysis bundle not found",
         )
 
-    try:
-        require_owner(current_user, bundle)
-    except PolicyError as e:
+    if current_user.id != bundle.created_by_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=str(e),
+            detail="Forbidden",
         )
 
     try:
@@ -575,13 +550,7 @@ def post_bundle_ai_review(
     current_user: User = Depends(get_current_user),
 ):
     require_project_membership(db, current_user, project_id)
-    try:
-        require_capability(current_user, Capability.BUNDLE_CREATE)
-    except PolicyError as e:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=str(e),
-        )
+    _require_capability(current_user, Capability.BUNDLE_CREATE)
     bundle = (
         db.query(AnalysisBundle)
         .filter(
@@ -614,13 +583,7 @@ def post_execution_request(
     current_user: User = Depends(get_current_user),
 ):
     require_project_membership(db, current_user, project_id)
-    try:
-        require_capability(current_user, Capability.EXECUTION_RUN)
-    except PolicyError as e:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=str(e),
-        )
+    _require_capability(current_user, Capability.EXECUTION_RUN)
     try:
         request = create_execution_request(
             db, data.model_dump(), project_id, current_user.id
@@ -763,13 +726,7 @@ def post_project_member(
     current_user: User = Depends(get_current_user),
 ):
     require_project_membership(db, current_user, project_id)
-    try:
-        require_capability(current_user, Capability.PROJECT_MEMBERS_MANAGE)
-    except PolicyError as e:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=str(e),
-        )
+    _require_capability(current_user, Capability.PROJECT_MEMBERS_MANAGE)
 
     member = db.query(User).filter(User.email == body.email).first()
     if member is None:
@@ -798,13 +755,7 @@ def delete_project_member(
     current_user: User = Depends(get_current_user),
 ):
     require_project_membership(db, current_user, project_id)
-    try:
-        require_capability(current_user, Capability.PROJECT_MEMBERS_MANAGE)
-    except PolicyError as e:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=str(e),
-        )
+    _require_capability(current_user, Capability.PROJECT_MEMBERS_MANAGE)
 
     removed = remove_member(db, project_id, user_id, actor_id=current_user.id)
     if not removed:

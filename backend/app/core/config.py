@@ -18,7 +18,6 @@ class Settings(BaseSettings):
     domain: str = "localhost"
     admin_email: str = "admin@epibridge.local"
     admin_password: str = "admin"
-    dev_auth: bool = False
     session_ttl_seconds: int = 86400
     auto_create_schema: bool = True
     auto_register_resources: bool = True

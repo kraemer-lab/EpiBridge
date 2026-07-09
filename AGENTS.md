@@ -220,6 +220,28 @@ The policy layer (`app.auth.policy`) exposes three functions:
 
 Policy is entirely capability-based. Roles are never consulted by the policy layer.
 
+### Admin endpoint capability requirements (enforced server-side)
+
+Every `/api/admin/*` endpoint enforces a capability check. The requirements are:
+
+| Endpoint | Required Capability |
+|---|---|
+| `GET /admin/resources`, `GET /admin/resources/{id}` | `data.manage` |
+| `GET /admin/execution-environments`, `GET /admin/execution-environments/{id}` | `environment.manage` |
+| `GET /admin/bundles`, `GET /admin/bundles/{id}` | Tiered: `bundle.review` / `output.review` / `user.manage` |
+| `GET /admin/execution-requests`, `GET /admin/execution-requests/{id}` | Tiered: `bundle.review` / `output.review` / `user.manage` |
+| `GET /admin/output-sets`, `GET /admin/output-sets/{id}` | `output.review` |
+| `GET /admin/execution-requests/{id}/outputs` | `output.review` |
+| `GET /admin/outputs/{id}` | `output.review` |
+| `GET /admin/users`, `GET /admin/users/{id}`, `POST /admin/users` | `user.manage` |
+| `GET /admin/audit-events` | Tiered: `bundle.review` / `output.review` / `user.manage` |
+| `POST /admin/bundles/{id}/approve`, `/reject` | `bundle.review` |
+| `POST /admin/bundles/{id}/supersede` | `bundle.review` (unless owner) |
+| `POST /admin/output-sets/{id}/approve`, `/reject` | `output.review` |
+| `POST /admin/output-sets/{id}/release` | `output.release` |
+
+All project-scoped endpoints additionally enforce `require_project_membership` and appropriate capabilities (`project.manage`, `bundle.create`, `bundle.submit`, `execution.run`, `project.members.manage`, `project.resources.manage`).
+
 ### Temporary development policy (domain model iteration phase)
 
 While the core domain schema is still being discovered (Projects, Jobs, Outputs, etc.):

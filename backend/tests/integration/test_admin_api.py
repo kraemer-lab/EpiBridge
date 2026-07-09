@@ -81,6 +81,58 @@ class TestAdminResources:
         assert names == sorted(names)
 
 
+class TestAdminAuthorisation:
+    def test_resources_unauthorized(self, researcher_client):
+        response = researcher_client.get("/api/admin/resources")
+        assert response.status_code == 403
+
+    def test_resource_by_id_unauthorized(self, researcher_client):
+        import uuid
+        response = researcher_client.get(f"/api/admin/resources/{uuid.uuid4()}")
+        assert response.status_code == 403
+
+    def test_execution_environments_unauthorized(self, researcher_client):
+        response = researcher_client.get("/api/admin/execution-environments")
+        assert response.status_code == 403
+
+    def test_execution_environment_by_id_unauthorized(self, researcher_client):
+        import uuid
+        response = researcher_client.get(f"/api/admin/execution-environments/{uuid.uuid4()}")
+        assert response.status_code == 403
+
+    def test_bundles_unauthorized(self, researcher_client):
+        response = researcher_client.get("/api/admin/bundles")
+        assert response.status_code == 403
+
+    def test_bundle_by_id_unauthorized(self, researcher_client):
+        import uuid
+        response = researcher_client.get(f"/api/admin/bundles/{uuid.uuid4()}")
+        assert response.status_code == 403
+
+    def test_execution_requests_unauthorized(self, researcher_client):
+        response = researcher_client.get("/api/admin/execution-requests")
+        assert response.status_code == 403
+
+    def test_execution_request_by_id_unauthorized(self, researcher_client):
+        import uuid
+        response = researcher_client.get(f"/api/admin/execution-requests/{uuid.uuid4()}")
+        assert response.status_code == 403
+
+    def test_output_sets_unauthorized(self, researcher_client):
+        response = researcher_client.get("/api/admin/output-sets")
+        assert response.status_code == 403
+
+    def test_output_set_by_id_unauthorized(self, researcher_client):
+        import uuid
+        response = researcher_client.get(f"/api/admin/output-sets/{uuid.uuid4()}")
+        assert response.status_code == 403
+
+    def test_output_by_id_unauthorized(self, researcher_client):
+        import uuid
+        response = researcher_client.get(f"/api/admin/outputs/{uuid.uuid4()}")
+        assert response.status_code == 403
+
+
 class TestAdminUsers:
     def test_list_users(self, client, admin_user, researcher_user, moderator_user):
         response = client.get("/api/admin/users")
