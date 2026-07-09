@@ -5,8 +5,8 @@ import { createZip } from "./helpers/zip";
 
 const TS = Date.now();
 
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "admin@epibridge.local";
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin";
+const MAINTAINER_EMAIL = process.env.MAINTAINER_EMAIL || "maintainer@epibridge.local";
+const MAINTAINER_PASSWORD = process.env.MAINTAINER_PASSWORD || "maintainer";
 
 /*
  * This analysis proves the custom Dockerfile was genuinely used during image construction.
@@ -52,12 +52,13 @@ test("Custom Build Workflow: researcher creates project with Custom Build strate
   const projectName = `Custom Build Test ${TS}`;
   const analysisName = `Custom Build Analysis ${TS}`;
 
-  // 1. Login as admin (has build.customize capability)
+  // 1. Login as maintainer (has build.customize capability via role seeding)
   await page.goto("/login");
-  await page.fill("#email", ADMIN_EMAIL);
-  await page.fill("#password", ADMIN_PASSWORD);
+  await page.fill("#email", MAINTAINER_EMAIL);
+  await page.fill("#password", MAINTAINER_PASSWORD);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page.getByTestId("header-user-name")).toHaveText("Administrator");
+  await page.waitForURL("/", { timeout: 15000 });
+  await expect(page.getByTestId("header-user-name")).toHaveText("Maintainer");
 
   // 2. Create project
   await page.getByRole("link", { name: "Projects" }).click();

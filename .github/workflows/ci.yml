@@ -46,7 +46,10 @@ jobs:
         cd frontend
         npm ci
         npx playwright install --with-deps chromium
-        ADMIN_PASSWORD=$(grep ^ADMIN_PASSWORD= ../.env | sed 's/^ADMIN_PASSWORD=//') npx playwright test
+        ADMIN_PASSWORD=$(grep ^ADMIN_PASSWORD= ../.env | sed 's/^ADMIN_PASSWORD=//') \
+        MAINTAINER_EMAIL=maintainer@epibridge.local \
+        MAINTAINER_PASSWORD=maintainer \
+        npx playwright test
 
     - name: Collect logs on failure
       if: failure()

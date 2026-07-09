@@ -29,6 +29,7 @@ test("Canonical Workflow: researcher creates project, uploads bundle, runs analy
   await page.fill("#email", ADMIN_EMAIL);
   await page.fill("#password", ADMIN_PASSWORD);
   await page.getByRole("button", { name: "Sign in" }).click();
+  await page.waitForURL("/", { timeout: 15000 });
 
   // 3. Verify admin is shown in header
   await expect(page.getByTestId("header-user-name")).toHaveText("Administrator");

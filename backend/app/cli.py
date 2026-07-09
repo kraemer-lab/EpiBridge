@@ -3,7 +3,11 @@ import sys
 from app.db.session import SessionLocal
 from app.models.user import UserRole
 from app.services.demo_seeder import seed_demo_workspace
-from app.services.user_service import create_user, get_or_create_admin
+from app.services.user_service import (
+    create_user,
+    get_or_create_admin,
+    get_or_create_user,
+)
 
 
 def seed_admin():
@@ -62,6 +66,37 @@ def create_researcher():
         db.close()
 
 
+def seed_maintainer():
+    email = "maintainer@epibridge.local"
+    password = "maintainer"
+    display_name = "Maintainer"
+
+    if len(sys.argv) >= 4:
+        email = sys.argv[2]
+        password = sys.argv[3]
+    if len(sys.argv) >= 5:
+        display_name = sys.argv[4]
+
+    db = SessionLocal()
+    try:
+        user = get_or_create_user(
+            db,
+            email=email,
+            display_name=display_name,
+            password=password,
+            role=UserRole.MAINTAINER,
+        )
+        print(
+            f"seed-maintainer: Created/verified maintainer user: "
+            f"{user.email} (id={user.id})"
+        )
+    except Exception as e:
+        print(f"seed-maintainer: ERROR — {e}")
+        sys.exit(1)
+    finally:
+        db.close()
+
+
 def seed_demo():
     db = SessionLocal()
     try:
@@ -93,6 +128,8 @@ def main():
     command = sys.argv[1]
     if command == "seed-admin":
         seed_admin()
+    elif command == "seed-maintainer":
+        seed_maintainer()
     elif command == "seed-demo":
         seed_demo()
     elif command == "create-user":

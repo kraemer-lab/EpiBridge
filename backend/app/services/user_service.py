@@ -40,6 +40,38 @@ def get_or_create_admin(db: Session) -> User:
     return user
 
 
+def get_or_create_user(
+    db: Session, email: str, display_name: str, password: str, role: UserRole
+) -> User:
+    user = db.query(User).filter(User.email == email).first()
+    if user is not None:
+        return user
+
+    seed_auth_framework(db)
+
+    user = User(
+        email=email,
+        display_name=display_name,
+        password_hash=hash_password(password),
+        role=role,
+    )
+    db.add(user)
+    db.flush()
+    grant_role_capabilities(db, user)
+    create_audit_event(
+        db,
+        event_type=AuditEventType.USER_CREATED,
+        actor_id=SYSTEM_USER_ID,
+        project_id=None,
+        resource_type="user",
+        resource_id=user.id,
+        metadata={"user_email": email, "role": role.value},
+    )
+    db.commit()
+    db.refresh(user)
+    return user
+
+
 def create_user(
     db: Session,
     email: str,
