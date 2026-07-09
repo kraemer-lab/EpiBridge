@@ -64,6 +64,12 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import http.client; c=http.client.HTTPConnection('localhost',8000,timeout=5); c.request('GET','/api/health'); assert c.getresponse().status==200"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
     env_file:
       - .env
     environment:
@@ -96,6 +102,8 @@ services:
       dockerfile: worker/Dockerfile
     restart: unless-stopped
     depends_on:
+      backend:
+        condition: service_healthy
       postgres:
         condition: service_healthy
       redis:
