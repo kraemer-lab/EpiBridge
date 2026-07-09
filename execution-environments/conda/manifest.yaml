@@ -1,0 +1,6 @@
+identifier: conda
+name: Conda (Micromamba 2.x)
+runtime: conda
+description: "Conda environment builder via Micromamba 2.8.1 — language and packages defined by researcher's environment.yml"
+status: active
+image_reference: "epibridge/conda:latest"

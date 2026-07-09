@@ -1,0 +1,6 @@
+identifier: python-3.14
+name: Python 3.14
+runtime: python-3.14
+description: "Python 3.14 (slim) with NumPy and Pandas"
+status: active
+image_reference: "epibridge/python-3.14:latest"

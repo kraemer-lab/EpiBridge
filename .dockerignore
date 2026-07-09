@@ -12,7 +12,7 @@ node_modules/
 *.md
 Dockerfile
 docker-compose.yml
-containers/
+execution-environments/
 docs/
 examples/
 scripts/

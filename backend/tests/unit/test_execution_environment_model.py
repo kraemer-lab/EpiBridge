@@ -34,6 +34,23 @@ class TestExecutionEnvironmentModel:
         )
         assert env.image_reference is None  # server_default, not in-memory
 
+    def test_default_definition_path(self):
+        env = ExecutionEnvironment(
+            identifier="test-env",
+            name="Test",
+            runtime="python-3.13",
+        )
+        assert env.definition_path is None  # nullable, no default
+
+    def test_definition_path_set(self):
+        env = ExecutionEnvironment(
+            identifier="python-3.14",
+            name="Python 3.14",
+            runtime="python-3.14",
+            definition_path="python-3.14",
+        )
+        assert env.definition_path == "python-3.14"
+
     def test_default_description(self):
         env = ExecutionEnvironment(
             identifier="test-env",

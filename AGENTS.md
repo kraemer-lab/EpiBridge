@@ -16,7 +16,7 @@ backend/         FastAPI: identity model (User, Role, Capability,
 frontend/        Next.js + React + TypeScript: login, projects, admin pages,
                  user management UI, project members UI, audit log tab,
                  per-project and per-resource audit views
-containers/      Base analysis Docker images (python-3.13, python-3.14)
+execution-environments/      Execution Environment artefacts (base images, manifests)
 vm/              cloud-init.yaml, Caddyfile (HTTPS, HSTS, compression,
                  security headers, request size limits), runtime spec
 scripts/         bootstrap.sh, install.sh, upgrade.sh, backup.sh, restore.sh, healthcheck.sh
@@ -41,7 +41,7 @@ frontend/    Next.js + React + TypeScript
 backend/     FastAPI + SQLAlchemy + Alembic + PostgreSQL
 worker/      Python job executor
 shared/      Shared schemas and types across packages
-containers/  Base analysis Docker images
+execution-environments/  Execution Environment artefacts
 examples/    Synthetic datasets and analysis templates
 docs/        Architecture, security, API, roadmap, vision
 ```

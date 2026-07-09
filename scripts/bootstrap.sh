@@ -90,7 +90,7 @@ echo "Building application images..."
 docker compose build
 
 echo "Building analysis container images..."
-for dir in containers/*/; do
+for dir in execution-environments/*/; do
     tag="epibridge/$(basename "$dir"):latest"
     echo "  Building $tag..."
     docker build -t "$tag" "$dir"

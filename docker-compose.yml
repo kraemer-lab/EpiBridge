@@ -74,7 +74,7 @@ services:
       - .env
     environment:
       RESOURCE_MANIFEST_DIR: /examples/resources
-      ENVIRONMENT_MANIFEST_DIR: /examples/environments
+      ENVIRONMENT_MANIFEST_DIR: /execution-environments
       # Persistent output store shared between backend and worker.
       # Execution containers write to their own local /output directory.
       # The worker imports those outputs here after execution; the backend
@@ -90,8 +90,8 @@ services:
       # Development manifest directories for lifespan auto-registration.
       # Production deployments should configure RESOURCE_MANIFEST_DIR
       # and ENVIRONMENT_MANIFEST_DIR env vars directly instead.
+      - ./execution-environments:/execution-environments:ro
       - ./examples/resources:/examples/resources:ro
-      - ./examples/environments:/examples/environments:ro
     networks:
       - internal
       - frontend
