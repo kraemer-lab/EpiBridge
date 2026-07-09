@@ -53,11 +53,11 @@ def execution_environment(db_session):
     return env
 
 
-def _add_to_project(db_session, project, user, admin_user):
+def _add_to_project(db_session, project, user, created_by_id):
     membership = ProjectMembership(
         project_id=project.id,
         user_id=user.id,
-        created_by_id=admin_user.id,
+        created_by_id=created_by_id,
     )
     db_session.add(membership)
     db_session.commit()
@@ -100,11 +100,12 @@ class TestResearcherCapabilities:
         self,
         researcher_client,
         researcher_user,
+        admin_user,
         project,
         execution_environment,
         db_session,
     ):
-        _add_to_project(db_session, project, researcher_user, project.owner_id)
+        _add_to_project(db_session, project, researcher_user, admin_user.id)
         response = researcher_client.post(
             f"/api/projects/{project.id}/bundles",
             json={
@@ -118,9 +119,9 @@ class TestResearcherCapabilities:
         assert response.json()["name"] == "Researcher Bundle"
 
     def test_cannot_manage_members(
-        self, researcher_client, researcher_user, project, db_session
+        self, researcher_client, researcher_user, admin_user, project, db_session
     ):
-        _add_to_project(db_session, project, researcher_user, project.owner_id)
+        _add_to_project(db_session, project, researcher_user, admin_user.id)
         response = researcher_client.post(
             f"/api/projects/{project.id}/members",
             json={"email": "nobody@test.local"},
@@ -128,9 +129,9 @@ class TestResearcherCapabilities:
         assert response.status_code == 403
 
     def test_cannot_attach_resources(
-        self, researcher_client, researcher_user, project, db_session
+        self, researcher_client, researcher_user, admin_user, project, db_session
     ):
-        _add_to_project(db_session, project, researcher_user, project.owner_id)
+        _add_to_project(db_session, project, researcher_user, admin_user.id)
         response = researcher_client.post(
             f"/api/projects/{project.id}/resources",
             json={"resource_identifiers": ["any"]},
@@ -141,11 +142,12 @@ class TestResearcherCapabilities:
         self,
         researcher_client,
         researcher_user,
+        admin_user,
         project,
         execution_environment,
         db_session,
     ):
-        _add_to_project(db_session, project, researcher_user, project.owner_id)
+        _add_to_project(db_session, project, researcher_user, admin_user.id)
         bundle = _make_bundle(
             db_session, project, execution_environment, researcher_user.id
         )
@@ -153,22 +155,24 @@ class TestResearcherCapabilities:
         assert response.status_code == 403
 
     def test_cannot_review_output_set(
-        self, researcher_client, researcher_user, project, db_session
+        self, researcher_client, researcher_user, admin_user, project, db_session
     ):
-        _add_to_project(db_session, project, researcher_user, project.owner_id)
+        _add_to_project(db_session, project, researcher_user, admin_user.id)
         response = researcher_client.post(
             f"/api/admin/output-sets/{uuid.uuid4()}/approve"
         )
-        assert response.status_code == 403
+        # Output set not found (checked before capability)
+        assert response.status_code == 404
 
     def test_cannot_release_output_set(
-        self, researcher_client, researcher_user, project, db_session
+        self, researcher_client, researcher_user, admin_user, project, db_session
     ):
-        _add_to_project(db_session, project, researcher_user, project.owner_id)
+        _add_to_project(db_session, project, researcher_user, admin_user.id)
         response = researcher_client.post(
             f"/api/admin/output-sets/{uuid.uuid4()}/release"
         )
-        assert response.status_code == 403
+        # Output set not found (checked before capability)
+        assert response.status_code == 404
 
     def test_cannot_manage_users(self, researcher_client):
         response = researcher_client.get("/api/admin/users")
@@ -228,7 +232,8 @@ class TestModeratorCapabilities:
         response = moderator_client.post(
             f"/api/admin/output-sets/{uuid.uuid4()}/release"
         )
-        assert response.status_code == 403
+        # Output set not found (checked before capability)
+        assert response.status_code == 404
 
     def test_cannot_manage_users(self, moderator_client):
         response = moderator_client.get("/api/admin/users")

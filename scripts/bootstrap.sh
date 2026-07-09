@@ -100,13 +100,19 @@ done
 echo "Backend API is ready."
 
 ###############################################################################
-# 7. Seed admin account
+# 7. Create test database
+###############################################################################
+echo "Creating test database..."
+docker compose exec -T postgres psql -U epibridge -c "CREATE DATABASE epibridge_test;" 2>/dev/null || true
+
+###############################################################################
+# 8. Seed admin account
 ###############################################################################
 echo "Seeding administrator account..."
 docker compose exec -T backend python -m app.cli seed-admin
 
 ###############################################################################
-# 8. Health check
+# 9. Health check
 ###############################################################################
 echo "Running health checks..."
 ./scripts/healthcheck.sh

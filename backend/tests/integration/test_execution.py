@@ -141,8 +141,11 @@ class TestOutputRegistration:
 @patch("app.execution.docker.docker")
 class TestDockerExecutor:
     def test_successful_execution(
-        self, mock_docker, db_session, pending_request, bundle
+        self, mock_docker, db_session, pending_request, bundle, tmp_path
     ):
+        analysis_dir = tmp_path / "analysis"
+        analysis_dir.mkdir(parents=True)
+
         mock_client = MagicMock()
         mock_docker.from_env.return_value = mock_client
         mock_container = MagicMock()
@@ -158,16 +161,17 @@ class TestDockerExecutor:
         from app.execution.docker import DockerExecutor
 
         executor = DockerExecutor(client=mock_client)
-        output_dir = Path("/tmp/test-outputs") / str(pending_request.id)
-        result = executor.run(
-            image="python:3.13-slim",
-            analysis_dir=Path("/tmp/fake-analysis"),
-            command=["python", "/analysis/run.py"],
-            mounts=[("/src/data.csv", "/data/test_data/data.csv", True)],
-            output_dir=output_dir,
-            timeout=3600,
-            env={},
-        )
+        output_dir = tmp_path / "outputs" / str(pending_request.id)
+        with patch.object(executor, "_extract_output"):
+            result = executor.run(
+                image="python:3.13-slim",
+                analysis_dir=analysis_dir,
+                command=["python", "/analysis/run.py"],
+                mounts=[("/src/data.csv", "/data/test_data/data.csv", True)],
+                output_dir=output_dir,
+                timeout=3600,
+                env={},
+            )
 
         assert result.exit_code == 0
         assert "stdout output" in result.stdout
@@ -175,8 +179,9 @@ class TestDockerExecutor:
         mock_container.start.assert_called_once()
         mock_container.remove.assert_called_once()
 
-    def test_timeout_execution(self, mock_docker, db_session, pending_request):
-        from docker.errors import TimeoutError as DockerTimeoutError
+    def test_timeout_execution(self, mock_docker, db_session, pending_request, tmp_path):
+        analysis_dir = tmp_path / "analysis"
+        analysis_dir.mkdir(parents=True)
 
         mock_client = MagicMock()
         mock_docker.from_env.return_value = mock_client
@@ -184,17 +189,18 @@ class TestDockerExecutor:
 
         mock_client.images.get.return_value = MagicMock()
         mock_client.containers.create.return_value = mock_container
-        mock_container.wait.side_effect = DockerTimeoutError("timed out")
+        mock_docker.errors.TimeoutError = TimeoutError
+        mock_container.wait.side_effect = TimeoutError("timed out")
 
         from app.execution.docker import DockerExecutor
 
         executor = DockerExecutor(client=mock_client)
-        output_dir = Path("/tmp/test-outputs") / str(pending_request.id)
+        output_dir = tmp_path / "outputs" / str(pending_request.id)
 
         with pytest.raises(TimeoutError, match="timed out"):
             executor.run(
                 image="python:3.13-slim",
-                analysis_dir=Path("/tmp/fake-analysis"),
+                analysis_dir=analysis_dir,
                 command=["python", "/analysis/run.py"],
                 mounts=[],
                 output_dir=output_dir,
@@ -204,7 +210,10 @@ class TestDockerExecutor:
         mock_container.stop.assert_called_once()
         mock_container.remove.assert_called_once()
 
-    def test_failed_execution(self, mock_docker, db_session, pending_request):
+    def test_failed_execution(self, mock_docker, db_session, pending_request, tmp_path):
+        analysis_dir = tmp_path / "analysis"
+        analysis_dir.mkdir(parents=True)
+
         mock_client = MagicMock()
         mock_docker.from_env.return_value = mock_client
         mock_container = MagicMock()
@@ -220,16 +229,17 @@ class TestDockerExecutor:
         from app.execution.docker import DockerExecutor
 
         executor = DockerExecutor(client=mock_client)
-        output_dir = Path("/tmp/test-outputs") / str(pending_request.id)
-        result = executor.run(
-            image="python:3.13-slim",
-            analysis_dir=Path("/tmp/fake-analysis"),
-            command=["python", "/analysis/run.py"],
-            mounts=[],
-            output_dir=output_dir,
-            timeout=3600,
-            env={},
-        )
+        output_dir = tmp_path / "outputs" / str(pending_request.id)
+        with patch.object(executor, "_extract_output"):
+            result = executor.run(
+                image="python:3.13-slim",
+                analysis_dir=analysis_dir,
+                command=["python", "/analysis/run.py"],
+                mounts=[],
+                output_dir=output_dir,
+                timeout=3600,
+                env={},
+            )
 
         assert result.exit_code == 1
         assert "division by zero" in result.stderr

@@ -2,8 +2,20 @@
 
 import uuid
 
+import pytest
+
 from app.models.audit_event import AuditEvent, AuditEventType
+from app.models.project import Project
 from app.services.audit_service import create_audit_event
+
+
+@pytest.fixture
+def project(db_session, admin_user):
+    p = Project(name="Audit API Project", owner_id=admin_user.id)
+    db_session.add(p)
+    db_session.commit()
+    db_session.refresh(p)
+    return p
 
 
 def _seed_audit_events(db_session, user_id, project_id):
@@ -39,8 +51,8 @@ def _seed_audit_events(db_session, user_id, project_id):
 
 
 class TestAuditEventQuery:
-    def test_list_all_events(self, db_session, admin_user, client):
-        _seed_audit_events(db_session, admin_user.id, uuid.uuid4())
+    def test_list_all_events(self, db_session, admin_user, client, project):
+        _seed_audit_events(db_session, admin_user.id, project.id)
 
         response = client.get("/api/admin/audit-events")
 
@@ -49,9 +61,8 @@ class TestAuditEventQuery:
         assert data["total"] == 3
         assert len(data["items"]) == 3
 
-    def test_filter_by_event_type(self, db_session, admin_user, client):
-        project_id = uuid.uuid4()
-        _seed_audit_events(db_session, admin_user.id, project_id)
+    def test_filter_by_event_type(self, db_session, admin_user, client, project):
+        _seed_audit_events(db_session, admin_user.id, project.id)
 
         response = client.get(
             "/api/admin/audit-events", params={"event_type": "bundle.submitted"}
@@ -62,25 +73,21 @@ class TestAuditEventQuery:
         assert data["total"] == 1
         assert data["items"][0]["event_type"] == "bundle.submitted"
 
-    def test_filter_by_project_id(self, db_session, admin_user, client):
-        project_a = uuid.uuid4()
-        project_b = uuid.uuid4()
-        _seed_audit_events(db_session, admin_user.id, project_a)
-        _seed_audit_events(db_session, admin_user.id, project_b)
+    def test_filter_by_project_id(self, db_session, admin_user, client, project):
+        _seed_audit_events(db_session, admin_user.id, project.id)
 
         response = client.get(
-            "/api/admin/audit-events", params={"project_id": str(project_a)}
+            "/api/admin/audit-events", params={"project_id": str(project.id)}
         )
 
         assert response.status_code == 200
         data = response.json()
         for item in data["items"]:
-            assert item["project_id"] == str(project_a)
+            assert item["project_id"] == str(project.id)
 
-    def test_filter_by_actor(self, db_session, admin_user, client, moderator_user):
-        project_id = uuid.uuid4()
-        _seed_audit_events(db_session, admin_user.id, project_id)
-        _seed_audit_events(db_session, moderator_user.id, project_id)
+    def test_filter_by_actor(self, db_session, admin_user, client, moderator_user, project):
+        _seed_audit_events(db_session, admin_user.id, project.id)
+        _seed_audit_events(db_session, moderator_user.id, project.id)
 
         response = client.get(
             "/api/admin/audit-events", params={"actor_id": str(admin_user.id)}
@@ -91,15 +98,14 @@ class TestAuditEventQuery:
         for item in data["items"]:
             assert item["actor_id"] == str(admin_user.id)
 
-    def test_filter_by_resource(self, db_session, admin_user, client):
-        project_id = uuid.uuid4()
+    def test_filter_by_resource(self, db_session, admin_user, client, project):
         bundle_id = uuid.uuid4()
 
         db_session.add(
             AuditEvent(
                 event_type=AuditEventType.BUNDLE_APPROVED.value,
                 actor_id=admin_user.id,
-                project_id=project_id,
+                project_id=project.id,
                 resource_type="analysis_bundle",
                 resource_id=bundle_id,
             )
@@ -119,16 +125,15 @@ class TestAuditEventQuery:
         assert data["total"] == 1
         assert data["items"][0]["resource_id"] == str(bundle_id)
 
-    def test_pagination(self, db_session, admin_user, client):
-        project_id = uuid.uuid4()
+    def test_pagination(self, db_session, admin_user, client, project):
         for i in range(5):
             db_session.add(
                 AuditEvent(
                     event_type=AuditEventType.PROJECT_CREATED.value,
                     actor_id=admin_user.id,
-                    project_id=project_id,
+                    project_id=project.id,
                     resource_type="project",
-                    resource_id=project_id,
+                    resource_id=project.id,
                     event_metadata={"project_name": f"Project {i}"},
                 )
             )
@@ -145,15 +150,14 @@ class TestAuditEventQuery:
         assert data["limit"] == 2
         assert data["offset"] == 0
 
-    def test_actor_info_returned(self, db_session, admin_user, client):
-        project_id = uuid.uuid4()
+    def test_actor_info_returned(self, db_session, admin_user, client, project):
         create_audit_event(
             db_session,
             event_type=AuditEventType.PROJECT_CREATED,
             actor_id=admin_user.id,
-            project_id=project_id,
+            project_id=project.id,
             resource_type="project",
-            resource_id=project_id,
+            resource_id=project.id,
             metadata={"project_name": "Test"},
         )
         db_session.commit()

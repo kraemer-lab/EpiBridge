@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     redis_password: str
     redis_host: str = "localhost"
     redis_port: int = 6379
+    redis_db: int = 0
 
     secret_key: str
 

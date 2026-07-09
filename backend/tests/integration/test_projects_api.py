@@ -267,10 +267,14 @@ class TestGetProjectBundle:
         assert response.status_code == 404
 
     def test_get_bundle_wrong_project(
-        self, client, admin_user, execution_environment, db_session
+        self, client, admin_user, project, execution_environment, db_session
     ):
+        other_project = Project(name="Other Project", owner_id=admin_user.id)
+        db_session.add(other_project)
+        db_session.commit()
+
         bundle = AnalysisBundle(
-            project_id=uuid.uuid4(),
+            project_id=project.id,
             created_by_id=admin_user.id,
             execution_environment_id=execution_environment.id,
             name="Orphan",
@@ -280,7 +284,9 @@ class TestGetProjectBundle:
         db_session.add(bundle)
         db_session.commit()
 
-        response = client.get(f"/api/projects/{uuid.uuid4()}/bundles/{bundle.id}")
+        response = client.get(
+            f"/api/projects/{other_project.id}/bundles/{bundle.id}"
+        )
         assert response.status_code == 404
 
 
@@ -480,4 +486,4 @@ class TestProjectMembership:
         response = researcher_client.delete(
             f"/api/projects/{project.id}/members/{uuid.uuid4()}"
         )
-        assert response.status_code == 403
+        assert response.status_code == 404

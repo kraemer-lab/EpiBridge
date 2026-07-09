@@ -5,6 +5,8 @@ def test_settings_loads_with_minimal_env():
     s = Settings(
         _env_file=None,
         postgres_password="test-pw",
+        postgres_host="localhost",
+        postgres_db="epibridge",
         redis_password="test-redis",
         secret_key="test-key",
     )

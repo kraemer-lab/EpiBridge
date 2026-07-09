@@ -3,45 +3,49 @@ from app.core.config import settings
 from app.models.user import User, UserRole
 
 
-def test_login_success(client, db_session):
-    hashed = hash_password(settings.admin_password)
+LOGIN_TEST_EMAIL = "logintest@epibridge.local"
+LOGIN_TEST_PASSWORD = "login-test-pw"
+
+
+def test_login_success(anon_client, db_session):
+    hashed = hash_password(LOGIN_TEST_PASSWORD)
     user = User(
-        email=settings.admin_email,
-        display_name="Administrator",
+        email=LOGIN_TEST_EMAIL,
+        display_name="Login Test",
         password_hash=hashed,
         role=UserRole.ADMIN,
     )
     db_session.add(user)
     db_session.commit()
 
-    response = client.post(
+    response = anon_client.post(
         "/api/auth/login",
         json={
-            "email": settings.admin_email,
-            "password": settings.admin_password,
+            "email": LOGIN_TEST_EMAIL,
+            "password": LOGIN_TEST_PASSWORD,
         },
     )
     assert response.status_code == 200
     data = response.json()
-    assert data["email"] == settings.admin_email
+    assert data["email"] == LOGIN_TEST_EMAIL
     assert "session_id" in response.cookies
 
 
-def test_login_invalid_password(client, db_session):
-    hashed = hash_password(settings.admin_password)
+def test_login_invalid_password(anon_client, db_session):
+    hashed = hash_password(LOGIN_TEST_PASSWORD)
     user = User(
-        email=settings.admin_email,
-        display_name="Administrator",
+        email=LOGIN_TEST_EMAIL,
+        display_name="Login Test",
         password_hash=hashed,
         role=UserRole.ADMIN,
     )
     db_session.add(user)
     db_session.commit()
 
-    response = client.post(
+    response = anon_client.post(
         "/api/auth/login",
         json={
-            "email": settings.admin_email,
+            "email": LOGIN_TEST_EMAIL,
             "password": "wrong-password",
         },
     )

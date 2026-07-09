@@ -284,12 +284,19 @@ make test         # run tests
 - `make fix` — auto-fix all fixable issues (run this most often)
 
 **Testing** (from repo root):
-- `make test` — run unit, integration, and smoke test suites (CI compatible)
-- `make dev-test` — run full suite inside the container via SSH (requires dev stack)
+- `make dev-test` — run full suite inside the container via SSH (recommended developer workflow; requires OrbStack VM + Docker stack)
+- `make test` — run unit, integration, and smoke test suites natively (requires PostgreSQL + Redis on localhost; the `epibridge_test` database must exist)
 - `make playwright` — run canonical workflow e2e test (requires full stack running)
-- `python -m pytest backend/tests/unit -v` — unit tests only
-- `python -m pytest backend/tests/integration -v` — integration tests (requires DB + Redis running)
+- `python -m pytest backend/tests/unit -v` — unit tests only (no database required)
+- `python -m pytest backend/tests/integration -v` — integration tests (requires PostgreSQL + Redis on localhost + `epibridge_test` database)
 - `python -m pytest backend/tests/smoke -v` — smoke tests (requires full stack running)
+
+Integration tests use a dedicated `epibridge_test` PostgreSQL database for isolation.
+The bootstrap process (`bootstrap.sh`) creates this database automatically.
+For local native runs, create it manually:
+```
+createdb epibridge_test
+```
 
 **CI** (from repo root, requires Docker):
 - `make ci` — bootstrap full stack (build, start, seed), same as `make bootstrap`

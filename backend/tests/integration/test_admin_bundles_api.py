@@ -5,7 +5,32 @@ import pytest
 from app.models.data_resource import DataResource
 from app.models.execution_environment import ExecutionEnvironment
 from app.models.project import Project
+from app.models.project_data_resource import ProjectResourceAllocation
 from app.models.project_membership import ProjectMembership
+
+
+def _allocated_resource(db_session, project, admin_user, identifier, alias):
+    r = DataResource(
+        identifier=identifier,
+        name=identifier.replace("-", " ").title(),
+        alias=alias,
+        provider_type="csv",
+        endpoint={"path": "data.csv"},
+        version="1.0.0",
+        status="active",
+    )
+    db_session.add(r)
+    db_session.flush()
+    db_session.add(
+        ProjectResourceAllocation(
+            project_id=project.id,
+            data_resource_id=r.id,
+            created_by_id=admin_user.id,
+        )
+    )
+    db_session.commit()
+    db_session.refresh(r)
+    return r
 
 
 @pytest.fixture
@@ -24,20 +49,8 @@ def project(db_session, admin_user):
 
 
 @pytest.fixture
-def resource(db_session):
-    r = DataResource(
-        identifier="test-resource",
-        name="Test Resource",
-        alias="test_resource",
-        provider_type="csv",
-        endpoint={"path": "data.csv"},
-        version="1.0.0",
-        status="active",
-    )
-    db_session.add(r)
-    db_session.commit()
-    db_session.refresh(r)
-    return r
+def resource(db_session, project, admin_user):
+    return _allocated_resource(db_session, project, admin_user, "test-resource", "test_resource")
 
 
 @pytest.fixture
@@ -143,17 +156,12 @@ class TestAdminBundlesAPI:
     def test_get_bundle_includes_resource_identifiers(
         self, client, admin_user, project, execution_environment, db_session
     ):
-        r2 = DataResource(
-            identifier="second-resource",
-            name="Second",
-            alias="second",
-            provider_type="csv",
-            endpoint={"path": "data.csv"},
-            version="1.0.0",
-            status="active",
+        _allocated_resource(
+            db_session, project, admin_user, "test-resource", "test_resource"
         )
-        db_session.add(r2)
-        db_session.commit()
+        r2 = _allocated_resource(
+            db_session, project, admin_user, "second-resource", "second"
+        )
 
         payload = {
             "name": "Multi Resource Bundle",

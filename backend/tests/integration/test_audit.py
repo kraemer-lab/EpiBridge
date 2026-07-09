@@ -5,6 +5,7 @@ import uuid
 import pytest
 
 from app.models.audit_event import AuditEvent, AuditEventType
+from app.models.project import Project
 from app.models.user import User, UserRole
 from app.services.audit_service import create_audit_event
 
@@ -22,13 +23,22 @@ def user(db_session):
     return user
 
 
+@pytest.fixture
+def project(db_session, user):
+    project = Project(name="Audit Test Project", owner_id=user.id)
+    db_session.add(project)
+    db_session.commit()
+    db_session.refresh(project)
+    return project
+
+
 class TestAuditEventPersistence:
-    def test_create_and_retrieve(self, db_session, user):
+    def test_create_and_retrieve(self, db_session, user, project):
         event = create_audit_event(
             db_session,
             event_type=AuditEventType.BUNDLE_SUBMITTED,
             actor_id=user.id,
-            project_id=uuid.uuid4(),
+            project_id=project.id,
             resource_type="analysis_bundle",
             resource_id=uuid.uuid4(),
             metadata={"bundle_name": "Test"},

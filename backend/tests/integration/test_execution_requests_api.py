@@ -113,10 +113,18 @@ class TestCreateExecutionRequest:
         assert data["name"].startswith("Survival Analysis @ ")
 
     def test_bundle_not_in_project_returns_422(
-        self, client, project, bundle, db_session
+        self, client, project, bundle, db_session, admin_user
     ):
         other_project = Project(name="Other", owner_id=project.owner_id)
         db_session.add(other_project)
+        db_session.flush()
+        db_session.add(
+            ProjectMembership(
+                project_id=other_project.id,
+                user_id=admin_user.id,
+                created_by_id=admin_user.id,
+            )
+        )
         db_session.commit()
 
         response = client.post(
@@ -212,9 +220,17 @@ class TestListExecutionRequests:
         assert data[0]["name"] == "Second"
         assert data[1]["name"] == "First"
 
-    def test_project_isolation(self, client, project, bundle, db_session):
+    def test_project_isolation(self, client, project, bundle, db_session, admin_user):
         other_project = Project(name="Other", owner_id=project.owner_id)
         db_session.add(other_project)
+        db_session.flush()
+        db_session.add(
+            ProjectMembership(
+                project_id=other_project.id,
+                user_id=admin_user.id,
+                created_by_id=admin_user.id,
+            )
+        )
         db_session.commit()
 
         client.post(
@@ -280,6 +296,14 @@ class TestAdminExecutionRequests:
     def test_admin_list_all(self, client, admin_user, project, bundle, db_session):
         p2 = Project(name="Project 2", owner_id=admin_user.id)
         db_session.add(p2)
+        db_session.flush()
+        db_session.add(
+            ProjectMembership(
+                project_id=p2.id,
+                user_id=admin_user.id,
+                created_by_id=admin_user.id,
+            )
+        )
         db_session.commit()
 
         b2 = AnalysisBundle(
