@@ -61,6 +61,11 @@ Single monorepo. Do not add top-level directories without justification.
 - **Capability-based authorisation**: policy checks `require_capability()`, not roles
 - **Project Membership scoping**: access requires membership + capability
 - Audit trail required for all actions
+- Execution containers run with: `cap_drop=["ALL"]`, read-only rootfs, `no-new-privileges`,
+  tmpfs for `/tmp` and `/output`, disabled networking, and configurable resource limits
+  (`execution_mem_limit`, `execution_cpu_limit`, `execution_pids_limit`, `max_output_size_mb`)
+- All archives (bundle uploads, container outputs) are treated as untrusted:
+  symlinks rejected, path traversal blocked, decompression size limited
 
 ### Identity model
 

@@ -649,7 +649,7 @@ Output files are written to the execution container's local `/output` directory 
 1. Retrieves them via the Docker API (`get_archive`) — a **pull** operation from inside the container (trust boundary preserved)
 2. Persists them to a shared filesystem volume at `/outputs/{execution_request_id}/{filename}`
 3. Creates an `OutputSet` record and registers each file as an `Output` record linked to that set
-4. Release Packages are written to `/tmp/epibridge-releases/` during the Release transition
+4. Release Packages are written to `/var/lib/epibridge/releases/` during the Release transition
 
 ---
 

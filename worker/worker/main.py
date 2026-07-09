@@ -106,10 +106,16 @@ def resolve_data_mounts(
         provider = registry.get(provider_type)
         runtime = provider.prepare_runtime(dr.endpoint)
         for mount in runtime.mounts:
-            host_source = str(DATA_ROOT / mount.source)
+            mount_path = Path(mount.source).resolve()
+            data_root_resolved = DATA_ROOT.resolve()
+            if not str(mount_path).startswith(str(data_root_resolved)):
+                raise ValueError(
+                    f"Mount source {mount.source} escapes data root {DATA_ROOT}"
+                )
+            host_source = str(mount_path)
             target = f"/data/{dr.alias}"
-            if not os.path.isdir(host_source):
-                target = os.path.join(target, os.path.basename(host_source))
+            if not mount_path.is_dir():
+                target = os.path.join(target, mount_path.name)
             mounts.append((host_source, target, mount.read_only))
     return mounts
 

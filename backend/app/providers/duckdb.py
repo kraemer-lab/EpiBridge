@@ -1,7 +1,11 @@
-import os
 from typing import Any
 
-from app.providers.base import Mount, ResourceProvider, RuntimeConfig
+from app.providers.base import (
+    Mount,
+    ResourceProvider,
+    RuntimeConfig,
+    normalize_mount_source,
+)
 
 RUNTIME_ROOT = "/read-only-data"
 
@@ -14,7 +18,7 @@ class DuckDBProvider(ResourceProvider):
         return {"path": path}
 
     def prepare_runtime(self, endpoint: dict[str, Any]) -> RuntimeConfig:
-        source = os.path.join(RUNTIME_ROOT, endpoint["path"])
+        source = normalize_mount_source(RUNTIME_ROOT, endpoint["path"])
         return RuntimeConfig(
             mounts=[Mount(source=source, read_only=True)],
         )

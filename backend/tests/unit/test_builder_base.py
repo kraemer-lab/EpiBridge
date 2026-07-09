@@ -1,6 +1,6 @@
 import pytest
 
-from app.builders.base import BuildPolicy, BuildResult, EnvironmentBuilder
+from app.builders.base import BuildResult, EnvironmentBuilder
 
 
 class TestBuildResult:
@@ -27,20 +27,6 @@ class TestBuildResult:
         assert r.image_reference == "epibridge/builds/python-3.13:abc123"
         assert r.build_log == "Step 1: ..."
         assert r.duration_seconds == 12.5
-
-
-class TestBuildPolicy:
-    def test_defaults(self):
-        p = BuildPolicy()
-        assert p.network_access is True
-        assert p.privileged is False
-        assert p.allowed_mounts == []
-
-    def test_custom(self):
-        p = BuildPolicy(network_access=False, privileged=True, allowed_mounts=["/data"])
-        assert p.network_access is False
-        assert p.privileged is True
-        assert p.allowed_mounts == ["/data"]
 
 
 class TestEnvironmentBuilder:

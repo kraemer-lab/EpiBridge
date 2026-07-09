@@ -40,7 +40,7 @@ export default function Header() {
             >
               Sign out
             </button>
-            <span>{user.display_name}</span>
+            <span data-testid="header-user-name">{user.display_name}</span>
             <div className={styles.avatar}>
               {user.display_name.charAt(0).toUpperCase()}
             </div>

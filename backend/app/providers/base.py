@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 
@@ -13,6 +14,14 @@ class Mount:
 class RuntimeConfig:
     mounts: list[Mount] = field(default_factory=list)
     env: dict[str, str] = field(default_factory=dict)
+
+
+def normalize_mount_source(root: str, path: str) -> str:
+    resolved = (Path(root) / path).resolve()
+    root_resolved = Path(root).resolve()
+    if not str(resolved).startswith(str(root_resolved)):
+        raise ValueError(f"Mount path escapes data root: {path}")
+    return str(resolved)
 
 
 class ResourceProvider(ABC):

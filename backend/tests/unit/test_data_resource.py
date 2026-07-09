@@ -2,8 +2,13 @@ import uuid
 
 import pytest
 
+import os
+
+import pytest
+
 from app.models.data_resource import DataResource
 from app.models.project import Project
+from app.providers.base import normalize_mount_source
 from app.providers.csv import CsvProvider
 from app.providers.registry import registry
 from app.providers.types import ProviderType
@@ -191,6 +196,26 @@ class TestProviderRegistry:
         assert ProviderType.EXCEL in types
         assert ProviderType.PARQUET in types
         assert len(types) == 5
+
+    def test_provider_mount_source_normalized(self):
+        provider = CsvProvider()
+        runtime = provider.prepare_runtime({"path": "study123/data.csv"})
+        source = runtime.mounts[0].source
+        assert source == "/read-only-data/study123/data.csv"
+        assert os.path.isabs(source)
+
+    def test_provider_mount_source_rejects_traversal(self):
+        provider = CsvProvider()
+        with pytest.raises(ValueError, match="escapes data root"):
+            provider.prepare_runtime({"path": "../../etc/passwd"})
+
+    def test_normalize_mount_source_valid(self):
+        result = normalize_mount_source("/data", "subdir/file.csv")
+        assert result == "/data/subdir/file.csv"
+
+    def test_normalize_mount_source_rejects_escape(self):
+        with pytest.raises(ValueError, match="escapes data root"):
+            normalize_mount_source("/data", "../../etc/passwd")
 
     def test_registry_returns_new_instance(self):
         a = registry.get(ProviderType.CSV)

@@ -7,12 +7,13 @@ from pathlib import Path
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.models.execution_request import ExecutionRequest
 from app.models.output import Output
 from app.models.output_set import OutputSet, OutputSetStatus
 from app.services.output_service import OUTPUT_ROOT
 
-RELEASE_ROOT = Path(os.environ.get("RELEASE_DIR", "/tmp/epibridge-releases"))
+RELEASE_ROOT = Path(settings.release_dir)
 
 
 def ensure_release_root():

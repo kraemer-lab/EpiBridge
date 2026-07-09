@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 
@@ -9,13 +9,6 @@ class BuildResult:
     image_reference: str = ""
     build_log: str = ""
     duration_seconds: float = 0.0
-
-
-@dataclass
-class BuildPolicy:
-    network_access: bool = True
-    privileged: bool = False
-    allowed_mounts: list[str] = field(default_factory=list)
 
 
 class EnvironmentBuilder(ABC):

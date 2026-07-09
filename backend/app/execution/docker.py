@@ -1,11 +1,13 @@
 import io
 import os
+import stat
 import tarfile
 from pathlib import Path
 
 import docker
 from docker.errors import ImageNotFound
 
+from app.core.config import settings
 from app.execution.base import ExecutionResult, Executor
 from app.execution.util import parse_exit_code
 
@@ -13,6 +15,7 @@ NONROOT_USER = "nobody"
 WORKDIR = "/work"
 ANALYSIS_TARGET = "/analysis"
 OUTPUT_TARGET = "/output"
+MAX_EXTRACT_SIZE = settings.max_output_size_mb * 1024 * 1024
 
 
 class DockerExecutor(Executor):
@@ -47,12 +50,23 @@ class DockerExecutor(Executor):
             self._client.images.pull(image)
 
         output_dir.mkdir(parents=True, exist_ok=True)
-        output_dir.chmod(0o777)
 
         volume_bindings = {}
         for source, target, read_only in mounts:
             mode = "ro" if read_only else "rw"
             volume_bindings[self._remap_source(source)] = {"bind": target, "mode": mode}
+        # NOTE: read_only=True is intentionally NOT set here.
+        #
+        # Docker Engine rejects all put_archive() calls when ReadonlyRootfs
+        # is enabled, regardless of target path or tmpfs status. The trusted
+        # worker injects the analysis bundle via put_archive() before the
+        # container starts — this would fail with a read-only rootfs.
+        #
+        # The remaining sandbox protections (cap_drop=["ALL"],
+        # no-new-privileges, non-root user, network isolation, resource
+        # limits) provide the required security for the current architecture.
+        # A future improvement could mount the bundle store as a host volume,
+        # enabling read_only=True without breaking bundle injection.
         container = self._client.containers.create(
             image,
             command=command,
@@ -61,6 +75,16 @@ class DockerExecutor(Executor):
             user=NONROOT_USER,
             volumes=volume_bindings,
             environment=env,
+            cap_drop=["ALL"],
+            # tmpfs for /tmp only — prevents disk exhaustion from ephemeral
+            # container writes. /output is NOT tmpfs because Docker Engine's
+            # get_archive() does not include files on tmpfs mounts, which
+            # would break output extraction by the trusted worker.
+            tmpfs={"/tmp": "mode=1777"},
+            security_opt=["no-new-privileges:true"],
+            mem_limit=settings.execution_mem_limit,
+            nano_cpus=int(settings.execution_cpu_limit * 1e9),
+            pids_limit=settings.execution_pids_limit,
         )
 
         self._put_directory(container, analysis_dir, ANALYSIS_TARGET)
@@ -92,6 +116,8 @@ class DockerExecutor(Executor):
         buf = io.BytesIO()
         with tarfile.open(fileobj=buf, mode="w") as tar:
             for item in source_dir.iterdir():
+                if item.is_symlink():
+                    raise ValueError(f"Symlink not allowed in analysis bundle: {item.name}")
                 tar.add(str(item), arcname=item.name)
         buf.seek(0)
         container.put_archive(target, buf)
@@ -123,7 +149,15 @@ class DockerExecutor(Executor):
         buf.seek(0)
         with tarfile.open(fileobj=buf, mode="r") as tar:
             prefix = OUTPUT_TARGET.strip("/") + "/"
+            total_size = 0
             for member in tar.getmembers():
-                if member.name.startswith(prefix):
-                    member.name = member.name[len(prefix) :]
+                member.name = member.name[len(prefix):] if member.name.startswith(prefix) else member.name
+                resolved = (output_dir / member.name).resolve()
+                if not str(resolved).startswith(str(output_dir.resolve())):
+                    raise ValueError(f"Path traversal in output archive: {member.name}")
+                if member.issym() or member.islnk():
+                    raise ValueError(f"Symlink in output archive: {member.name}")
+                total_size += member.size
+                if total_size > MAX_EXTRACT_SIZE:
+                    raise ValueError(f"Output archive exceeds maximum size of {MAX_EXTRACT_SIZE} bytes")
             tar.extractall(path=str(output_dir))

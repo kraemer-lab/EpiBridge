@@ -1,6 +1,7 @@
 import io
 import os
 import shutil
+import stat
 import uuid
 import zipfile
 from abc import ABC, abstractmethod
@@ -11,6 +12,7 @@ from fastapi import UploadFile
 from app.core.config import settings
 
 BUNDLE_STORE_ROOT = Path(settings.bundle_store_dir)
+MAX_DECOMPRESSED_SIZE = 500 * 1024 * 1024
 
 
 class BundleStore(ABC):
@@ -47,23 +49,33 @@ class LocalFileSystemBundleStore(BundleStore):
         except Exception as e:
             raise ValueError(f"Invalid ZIP archive: {e}")
 
-        bad_names = zf.infolist()
-        if not bad_names:
+        entries = zf.infolist()
+        if not entries:
             raise ValueError("ZIP archive is empty (no entries)")
 
-        has_files = any(not zi.is_dir() for zi in bad_names)
+        has_files = any(not zi.is_dir() for zi in entries)
         if not has_files:
             raise ValueError("ZIP archive contains only directories, no files")
 
-        for zi in bad_names:
+        total_uncompressed = 0
+        for zi in entries:
             name = zi.filename
             cleaned = os.path.normpath(name)
             if cleaned != name:
                 raise ValueError(f"Path traversal detected: {name}")
-            if name.startswith("/") or name.startswith(".."):
+            if name.startswith("/") or name.startswith("..") or os.path.isabs(name):
                 raise ValueError(f"Path traversal detected: {name}")
-            if os.path.isabs(name):
-                raise ValueError(f"Path traversal detected: {name}")
+
+            external_attr = zi.external_attr >> 16
+            if stat.S_ISLNK(external_attr):
+                raise ValueError(f"Symlinks are not allowed in bundles: {name}")
+
+            total_uncompressed += zi.file_size
+            if total_uncompressed > MAX_DECOMPRESSED_SIZE:
+                raise ValueError(
+                    f"Archive too large when decompressed "
+                    f"(exceeds {MAX_DECOMPRESSED_SIZE // (1024 * 1024)} MB)"
+                )
 
         store_path.mkdir(parents=True, exist_ok=True)
         try:

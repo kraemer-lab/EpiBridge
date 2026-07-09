@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     resource_manifest_dir: str = ""
     auto_register_environments: bool = True
     environment_manifest_dir: str = ""
-    output_dir: str = "/tmp/epibridge-outputs"
+    output_dir: str = "/var/lib/epibridge/outputs"
     analysis_bundle_root: str = ""
     bundle_store_dir: str = "/var/lib/epibridge/bundles"
     data_root: str = "/read-only-data"
@@ -36,6 +36,13 @@ class Settings(BaseSettings):
 
     build_context_dir: str = ""
     image_registry_prefix: str = "epibridge/builds"
+
+    release_dir: str = "/var/lib/epibridge/releases"
+
+    execution_mem_limit: str = "4g"
+    execution_cpu_limit: float = 2.0
+    execution_pids_limit: int = 256
+    max_output_size_mb: int = 1024
 
     @property
     def database_url(self) -> str:

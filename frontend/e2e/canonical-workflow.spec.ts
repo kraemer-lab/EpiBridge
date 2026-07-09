@@ -31,7 +31,7 @@ test("Canonical Workflow: researcher creates project, uploads bundle, runs analy
   await page.getByRole("button", { name: "Sign in" }).click();
 
   // 3. Verify admin is shown in header
-  await expect(page.getByText("Administrator")).toBeVisible();
+  await expect(page.getByTestId("header-user-name")).toHaveText("Administrator");
 
   // 4. Navigate to Projects page
   await page.getByRole("link", { name: "Projects" }).click();
@@ -128,13 +128,14 @@ test("Canonical Workflow: researcher creates project, uploads bundle, runs analy
   await page.getByRole("link", { name: "Admin" }).click();
   await page.getByRole("link", { name: "Audit Log" }).click();
   await expect(page.getByText("Audit Log")).toBeVisible();
-  await expect(page.getByText("project.created")).toBeVisible({ timeout: 10_000 });
-  await expect(page.getByText("bundle.submitted")).toBeVisible();
-  await expect(page.getByText("bundle.approved")).toBeVisible();
-  await expect(page.getByText("execution.requested")).toBeVisible();
-  await expect(page.getByText("execution.completed")).toBeVisible();
-  await expect(page.getByText("output_set.approved")).toBeVisible();
-  await expect(page.getByText("output_set.released")).toBeVisible();
+  const auditTable = page.locator(".table");
+  await expect(auditTable.getByText("project.created").first()).toBeVisible({ timeout: 10_000 });
+  await expect(auditTable.getByText("bundle.submitted").first()).toBeVisible();
+  await expect(auditTable.getByText("bundle.approved").first()).toBeVisible();
+  await expect(auditTable.getByText("execution.requested").first()).toBeVisible();
+  await expect(auditTable.getByText("execution.completed").first()).toBeVisible();
+  await expect(auditTable.getByText("output_set.approved").first()).toBeVisible();
+  await expect(auditTable.getByText("output_set.released").first()).toBeVisible();
 
   // 24. Verify the downloaded file is a ZIP containing summary.csv
   expect(download.suggestedFilename()).toMatch(/\.zip$/);

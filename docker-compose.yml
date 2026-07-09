@@ -77,6 +77,7 @@ services:
     volumes:
       - /var/lib/epibridge/outputs:/outputs:ro
       - /var/lib/epibridge/bundles:/var/lib/epibridge/bundles:rw
+      - /var/lib/epibridge/releases:/var/lib/epibridge/releases
       - /var/log/epibridge:/var/log/epibridge
       - ./examples/resources:/read-only-data:ro
       # Development manifest directories for lifespan auto-registration.
