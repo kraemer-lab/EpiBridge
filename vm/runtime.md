@@ -203,6 +203,9 @@ Never clones repositories, builds images, or runs application code.
 
 ### 2. Application — `install.sh`
 
+Assumes infrastructure phase has completed (directories exist,
+ownership correct).
+
 Owns the application lifecycle:
 
 - clones or updates the repository

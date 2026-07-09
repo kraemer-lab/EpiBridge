@@ -172,7 +172,7 @@ Local Sensitive Data
 
 - FastAPI
 - SQLAlchemy
-- Alembic (planned for schema stabilisation)
+- Alembic
 
 ### Authentication
 
@@ -903,16 +903,11 @@ Identity validation (capability boundaries for each role) is maintained as separ
 
 ## Future Direction
 
-### Near-term
+### Post-MVP
 
-- Alembic migrations (once the core schema stabilises)
-- Role and capability management UI
-- Audit trail implementation
-
-### Longer-term
-
-- OIDC / enterprise IAM integration
 - Pagination on list endpoints
+- Role and capability management UI (read-only currently available)
+- OIDC / enterprise IAM integration
 - Statistical disclosure control automation
 - Kubernetes execution backend
 - Federation (cross-institution analysis)

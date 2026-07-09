@@ -19,9 +19,17 @@ git fetch origin
 git checkout main
 git pull origin main
 
-# Rebuild images
-echo "Rebuilding Docker images..."
+# Rebuild application images
+echo "Rebuilding application images..."
 docker compose -f "$COMPOSE_FILE" build
+
+# Rebuild analysis container images
+echo "Rebuilding analysis container images..."
+for dir in containers/*/; do
+    tag="epibridge/$(basename "$dir"):latest"
+    echo "  Building $tag..."
+    docker build -t "$tag" "$dir"
+done
 
 # Restart services
 echo "Restarting services..."

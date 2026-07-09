@@ -1,4 +1,4 @@
-import httpx2 as httpx
+import httpx
 
 
 def test_health_endpoint_over_https():

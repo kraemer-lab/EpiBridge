@@ -3,16 +3,18 @@ set -euo pipefail
 
 # bootstrap.sh — shared EpiBridge bootstrap
 #
+# bootstrap.sh initialises the application.
+# It is NOT an infrastructure provisioning script.
+#
 # Idempotent application initialisation. Safe to run multiple times.
 #
 # Environment contract:
 #   - Current directory is the repository root.
 #   - Docker and Docker Compose are available.
+#   - Infrastructure provisioning has completed — storage directories
+#     (/var/lib/epibridge/...) exist with correct ownership.
 #   - Any required environment variables are already configured
 #     (otherwise .env will be generated from .env.example).
-#
-# Assumes nothing about: OrbStack, GitHub Actions, SSH, VM paths,
-# or local machine layout.
 
 ###############################################################################
 # 1. Generate .env if not present
@@ -96,10 +98,16 @@ done
 
 ###############################################################################
 # 4. Provision application storage
+#
+# The mkdir below is a defensive measure — it ensures the directories
+# exist even if infrastructure provisioning (cloud-init.yaml or CI)
+# hasn't run yet.  Ownership is an infrastructure responsibility and
+# is never modified here.  If the application user cannot write to
+# these directories, the containers will fail with a clear permission
+# error, correctly directing the operator to check provisioning.
 ###############################################################################
 echo "Provisioning storage directories..."
 mkdir -p /var/lib/epibridge/bundles /var/lib/epibridge/outputs /var/lib/epibridge/releases
-chown -R epibridge:epibridge /var/lib/epibridge 2>/dev/null || chown -R 1000:1000 /var/lib/epibridge
 
 ###############################################################################
 # 5. Start services

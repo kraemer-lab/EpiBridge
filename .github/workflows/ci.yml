@@ -35,6 +35,9 @@ jobs:
         cd backend
         python -m pytest tests/unit -v --cov=app --cov-report=term-missing
 
+    - name: Create storage directories
+      run: sudo mkdir -p /var/lib/epibridge/{bundles,outputs,releases} /var/log/epibridge && sudo chown -R 1000:1000 /var/lib/epibridge /var/log/epibridge
+
     - name: Bootstrap EpiBridge
       run: make ci
 

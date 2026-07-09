@@ -66,4 +66,4 @@ See the `docs/` directory for:
 
 # Status
 
-Current stage: MVP development.
+Current stage: MVP release.

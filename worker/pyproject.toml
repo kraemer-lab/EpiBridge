@@ -3,4 +3,5 @@ name = "epibridge-worker"
 version = "0.1.0"
 description = "EpiBridge job executor"
 requires-python = ">=3.11"
-dependencies = []
+# Dependencies are inherited from the backend package, which is
+# installed first in the Docker build (see worker/Dockerfile).

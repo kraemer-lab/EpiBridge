@@ -3,6 +3,10 @@ set -euo pipefail
 
 # install.sh — full system installation
 #
+# Prerequisite: infrastructure provisioning must have completed
+# before this script runs — storage directories must exist with
+# correct ownership (see vm/runtime.md for the two-phase architecture).
+#
 # Handles environment setup (clone, directory provisioning) then
 # delegates all application-level initialisation to bootstrap.sh.
 
@@ -16,7 +20,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 EPIBRIDGE_HOME="${EPIBRIDGE_HOME:-/opt/epibridge}"
-REPO_URL="${REPO_URL:-https://github.com/example/epibridge.git}"
+REPO_URL="${REPO_URL:-https://github.com/kraemer-lab/EpiBridge.git}"
 BRANCH="${BRANCH:-main}"
 
 echo "=== EpiBridge Install ==="
