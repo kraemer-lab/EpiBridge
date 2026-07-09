@@ -58,6 +58,7 @@ export interface AnalysisBundle {
   execution_environment_id: string;
   name: string;
   status: string;
+  build_strategy: string;
   build_status: string;
   build_error: string;
   build_log: string;
@@ -89,6 +90,7 @@ export interface AnalysisBundleCreate {
   resource_identifiers?: string[];
   outputs?: string[];
   parameters?: Record<string, unknown>;
+  build_strategy?: string;
   status?: string;
 }
 
@@ -103,6 +105,7 @@ export interface AnalysisBundleUpdate {
   resource_identifiers?: string[];
   outputs?: string[];
   parameters?: Record<string, unknown>;
+  build_strategy?: string;
 }
 
 export interface ExecutionRequest {

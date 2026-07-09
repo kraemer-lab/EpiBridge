@@ -34,6 +34,11 @@ class AnalysisBundleBuildStatus(str, enum.Enum):
     ENVIRONMENT_BUILD_FAILED = "environment_build_failed"
 
 
+class BuildStrategy(str, enum.Enum):
+    INSTITUTIONAL = "institutional"
+    CUSTOM = "custom"
+
+
 class AnalysisBundle(Base):
     __tablename__ = "analysis_bundles"
 
@@ -65,6 +70,9 @@ class AnalysisBundle(Base):
     description: Mapped[str] = mapped_column(Text, nullable=False, default="")
     outputs: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
     parameters: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    build_strategy: Mapped[str] = mapped_column(
+        String(20), nullable=False, default=BuildStrategy.INSTITUTIONAL
+    )
     # NOTE:
     # This field mirrors the BuildRequest lifecycle for historical reasons.
     # Environment preparation is owned by BuildRequest, not AnalysisBundle.

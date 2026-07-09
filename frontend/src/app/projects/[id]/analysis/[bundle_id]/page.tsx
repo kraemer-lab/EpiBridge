@@ -301,6 +301,21 @@ export default function AnalysisDetailPage() {
 
         <div style={{ marginBottom: "var(--spacing-md)" }}>
           <div style={{ fontSize: "0.8rem", color: "var(--color-text-secondary)", marginBottom: "var(--spacing-xs)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+            Build Strategy
+          </div>
+          <div>
+            {bundle.build_strategy === "custom" ? (
+              <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: "4px", fontSize: "0.8rem", fontWeight: 600, background: "#e3f2fd", color: "#1565c0" }}>
+                Custom Build
+              </span>
+            ) : (
+              <span>Institutional Build</span>
+            )}
+          </div>
+        </div>
+
+        <div style={{ marginBottom: "var(--spacing-md)" }}>
+          <div style={{ fontSize: "0.8rem", color: "var(--color-text-secondary)", marginBottom: "var(--spacing-xs)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
             Version
           </div>
           <div>{bundle.version}</div>

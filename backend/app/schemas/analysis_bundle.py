@@ -36,6 +36,7 @@ class AnalysisBundleCreate(BaseModel):
     resource_identifiers: list[str] = []
     outputs: list[str] = []
     parameters: dict = {}
+    build_strategy: str = "institutional"
 
 
 class AnalysisBundleRead(BaseModel):
@@ -52,6 +53,7 @@ class AnalysisBundleRead(BaseModel):
     interpreter: str = "python"
     arguments: str = ""
     description: str
+    build_strategy: str = "institutional"
     build_status: AnalysisBundleBuildStatus = (
         AnalysisBundleBuildStatus.ENVIRONMENT_NOT_BUILT
     )
@@ -84,3 +86,4 @@ class AnalysisBundleUpdate(BaseModel):
     resource_identifiers: list[str] | None = None
     outputs: list[str] | None = None
     parameters: dict | None = None
+    build_strategy: str | None = None

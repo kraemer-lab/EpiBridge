@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { useAuth } from "@/lib/AuthContext";
 import {
   DataResource,
   ExecutionEnvironment,
@@ -14,6 +15,7 @@ import {
 export default function CreateAnalysisPage() {
   const params = useParams();
   const router = useRouter();
+  const { user } = useAuth();
   const projectId = params.id as string;
 
   const [resources, setResources] = useState<DataResource[]>([]);
@@ -27,6 +29,7 @@ export default function CreateAnalysisPage() {
   const [argumentsStr, setArgumentsStr] = useState("");
   const [selectedResources, setSelectedResources] = useState<string[]>([]);
   const [file, setFile] = useState<File | null>(null);
+  const [buildStrategy, setBuildStrategy] = useState("institutional");
   const [saving, setSaving] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
@@ -73,6 +76,7 @@ export default function CreateAnalysisPage() {
     formData.append("arguments", argumentsStr.trim());
     formData.append("description", description.trim());
     formData.append("resource_identifiers", JSON.stringify(selectedResources));
+    formData.append("build_strategy", buildStrategy);
 
     setSaving(true);
     try {
@@ -316,6 +320,37 @@ export default function CreateAnalysisPage() {
                   </span>
                 </label>
               ))}
+            </div>
+          )}
+        </div>
+
+        <div style={{ marginBottom: "var(--spacing-md)" }}>
+          <label htmlFor="analysis-build-strategy" style={{ display: "block", fontWeight: 600, marginBottom: "var(--spacing-xs)", fontSize: "0.9rem" }}>
+            Build Strategy
+          </label>
+          <select
+            id="analysis-build-strategy"
+            value={buildStrategy}
+            onChange={(e) => setBuildStrategy(e.target.value)}
+            style={{
+              width: "100%",
+              padding: "var(--spacing-sm) var(--spacing-md)",
+              border: "1px solid var(--color-border)",
+              borderRadius: "var(--radius-md)",
+              fontSize: "0.9rem",
+              background: "var(--color-bg)",
+            }}
+          >
+            <option value="institutional">Institutional Build</option>
+            {user?.capabilities.includes("build.customize") && (
+              <option value="custom">Custom Build</option>
+            )}
+          </select>
+          {buildStrategy === "custom" && (
+            <div style={{ color: "var(--color-text-secondary)", fontSize: "0.85rem", marginTop: "var(--spacing-sm)", lineHeight: 1.5, padding: "var(--spacing-sm)", border: "1px solid #e3f2fd", borderRadius: "var(--radius-md)", background: "#f5f9ff" }}>
+              Include a <code>build/Dockerfile</code> in your Analysis Bundle ZIP to
+              customise how the execution environment is built.
+              The institutional base image is available as the <code>BASE_IMAGE</code> build argument.
             </div>
           )}
         </div>

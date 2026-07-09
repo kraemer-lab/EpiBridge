@@ -236,6 +236,7 @@ Capability vocabulary:
 | `environment.manage` | Manage execution environments |
 | `data.manage` | Manage data resources |
 | `user.manage` | Manage user accounts |
+| `build.customize` | Use Custom Build strategy for analysis bundles |
 
 The `capabilities` table is materialised from the enum during seeding (the enum is authoritative). `UserCapability` records are copied from role templates at user creation and become independent thereafter.
 
@@ -245,8 +246,8 @@ Role templates:
 |------|-------------|
 | researcher | `project.manage`, `bundle.create`, `bundle.submit`, `execution.run` |
 | moderator | All researcher + `project.members.manage`, `project.resources.manage`, `bundle.review`, `output.review` |
-| maintainer | All moderator + `output.release`, `environment.manage`, `data.manage` |
-| admin | All 12 capabilities |
+| maintainer | All moderator + `output.release`, `environment.manage`, `data.manage`, `build.customize` |
+| admin | All capabilities |
 
 ### Project Membership
 
@@ -389,11 +390,58 @@ A **Project** represents permission to analyse one or more Data Resources. Proje
 
 An **Execution Environment** is an institutional asset representing an approved runtime in which an analysis may execute. Like Data Resources, they are curated by the institution — researchers select from available environments rather than specifying arbitrary runtime strings.
 
-Execution Environments are not merely language versions. They represent curated environments with specific packages and tooling:
+Execution Environments define the **institutional execution contract** — they guarantee a specific runtime, filesystem layout, and set of conventions required for governed execution:
 
-- Python 3.13 (slim, NumPy, Pandas)
-- Python 3.14 (slim, NumPy, Pandas)
-- Conda (Micromamba 2.x)
+- `/analysis` — bundle injection target
+- `/data` — resource mount namespace
+- `/output` — writable results directory
+- `/work` — temporary storage
+- `nobody` user — least-privilege execution identity
+
+An Execution Environment is more than a language runtime. It represents an institutional commitment that analyses targeting that environment will execute correctly and securely.
+
+### Execution Environment Artefacts
+
+Each Execution Environment is defined by a directory of artefacts in the `execution-environments/` directory:
+
+```text
+execution-environments/
+├── python-3.13/
+│   ├── Dockerfile           # Base image definition
+│   ├── manifest.yaml        # Registration manifest
+│   └── ...                  # Supporting artefacts
+├── python-3.14/
+│   └── ...
+└── conda/
+    └── ...
+```
+
+The **filesystem is the authoritative source of truth** for execution environments. The database indexes and caches this information for runtime use, but the artefacts directory is the canonical record. Registration reconciles the database against the filesystem on startup — not the reverse.
+
+Researchers do not create execution environments. They select from the institutional catalogue.
+
+### Researcher Discovery
+
+Researchers can discover available execution environments through the application UI:
+
+- **List page** — all active environments with runtime, description, and image reference
+- **Detail page** — full environment details including the curated Dockerfile, local development commands, and published artefact downloads
+- **During bundle creation** — environment selector with display names and linked detail pages
+
+This enables researchers to prepare their analysis locally against the institutional runtime before uploading a bundle. The environment detail page provides concrete guidance:
+
+```
+docker pull {image_reference}
+docker run --rm -it {image_reference} /bin/bash
+```
+
+### Currently Supported Environments
+
+| Name | Runtime | Base Image |
+|------|---------|------------|
+| Python 3.13 | `python-3.13` | `python:3.13-slim` (NumPy, Pandas) |
+| Python 3.14 | `python-3.14` | `python:3.14-slim` (NumPy, Pandas) |
+| Conda | `conda` | `mambaorg/micromamba:2.8.1` |
 
 ### Environment Model
 
@@ -406,13 +454,14 @@ ExecutionEnvironment
 ├── description     (curated package summary)
 ├── status          ("active", "deprecated")
 ├── image_reference (Docker image tag)
+├── definition_path (path to artefact directory, for debugging)
 ├── created_at
 └── updated_at
 ```
 
 ### Registration
 
-Execution Environments are seeded from YAML manifests on startup, following the same pattern as Data Resources. Registration is idempotent.
+Execution Environments are seeded from YAML manifests on startup, following the same pattern as Data Resources. Registration is idempotent — the manifest directory is rescanned on each startup and new or updated environments are reconciled automatically.
 
 ---
 
@@ -456,9 +505,45 @@ AnalysisBundle
 ├── description
 ├── outputs                 (JSON list of expected paths)
 ├── parameters              (JSON, reserved for future use)
+├── build_strategy          ("institutional" | "custom")
 ├── created_at
 └── updated_at
 ```
+
+### Build Strategy
+
+Every Analysis Bundle declares an explicit **Build Strategy**. This is a researcher decision, not an inference from bundle contents. The platform never inspects bundle files to determine how the image should be built — the strategy is part of the bundle's metadata and becomes part of its immutable provenance.
+
+Two strategies are currently supported:
+
+| Strategy | Behaviour |
+|----------|-----------|
+| **Institutional Build** | Uses the curated builder template for the selected Execution Environment. The standard, default path. |
+| **Custom Build** | Uses a `build/Dockerfile` provided inside the Analysis Bundle. Required for this strategy; rejected for Institutional Build. |
+
+The strategy is enforced at submission time:
+
+- **Institutional Build**: the bundle must **not** contain a `build/` directory.
+- **Custom Build**: the bundle **must** contain `build/Dockerfile`.
+
+These are validated explicitly by the service layer. No inference, no fallback, no detection.
+
+#### Custom Build Convention
+
+Custom Build extends the institutional Execution Environment. The supported pattern is:
+
+```dockerfile
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+```
+
+`BASE_IMAGE` is the image reference of the selected Execution Environment. A researcher using Custom Build is expected to extend this image. Technically, the Dockerfile could ignore `BASE_IMAGE` and start from any base, but doing so breaks the execution contract — the resulting image may lack required directories (`/analysis`, `/data`, `/output`), the `nobody` user, and other runtime assumptions. Execution failures from this are self-correcting: the researcher updates their Dockerfile to match the contract.
+
+The platform does not parse or validate Dockerfile content. The execution contract is enforced through natural execution failure, not static analysis.
+
+#### Capability
+
+Custom Build requires the `build.customize` capability. This is granted to trusted roles (maintainer, admin) and can be assigned to individual users through the admin user management interface. Researchers without this capability see only "Institutional Build" as an option.
 
 ### Governance Lifecycle
 
@@ -478,8 +563,8 @@ APPROVED_FOR_EXECUTION
   └──→ SUPERSEDED
 ```
 
-- **DRAFT** — The bundle is being created/edited. Only the owner can modify it.
-- **SUBMITTED** — The owner has submitted the bundle for review. No further edits allowed.
+- **DRAFT** — The bundle is being created/edited. Only the owner can modify it. Strategy may be changed and bundle contents may not yet be consistent with the strategy.
+- **SUBMITTED** — The owner has submitted the bundle for review. Strategy and contents are validated for consistency at this transition point. No further edits allowed.
 - **APPROVED_FOR_EXECUTION** — A reviewer (moderator or above) has approved the bundle. Execution requests can now reference it.
 - **REJECTED** — A reviewer has rejected the bundle.
 - **SUPERSEDED** — A previously approved bundle has been replaced by a newer version.
@@ -764,41 +849,89 @@ Data Resources use the Provider abstraction. The worker calls `provider.prepare_
 
 ## Environment Builder
 
-The **Environment Builder** subsystem transforms an Analysis Bundle's dependency specification into a reusable Docker image (Execution Image) via curated Dockerfile templates. This separates environment construction from analysis execution.
+The **Environment Builder** subsystem transforms an Analysis Bundle (its dependency specification and, optionally, a custom build definition) into a reusable Docker image (Execution Image). This separates environment construction from analysis execution.
+
+### Architectural relationship
+
+The Builder is one stage in a pipeline that connects researcher intent to governed execution:
+
+```
+Execution Environment        ← institutional runtime contract
+        +
+Build Strategy               ← researcher decision (explicit metadata)
+        +
+Analysis Bundle              ← researcher artefact (immutable on submit)
+        ↓
+Execution Image               ← built artefact (cached by dependency hash)
+        ↓
+Governed Execution            ← isolated container, least privilege
+        ↓
+Output Set → Release          ← governed results delivery
+```
+
+Each stage is independently governed. The Execution Environment is an institutional asset. The Build Strategy and Analysis Bundle are researcher artefacts. The Execution Image is a system artefact produced by the builder and cached for reuse. Governed Execution and Release are institutional oversight functions.
 
 ### Builder abstraction
+
+The builder is a policy-free execution engine. It receives a Dockerfile path and dependency files, builds the image, and returns the result. The builder never decides which Dockerfile to use or whether to apply a custom build — that responsibility belongs to the orchestration layer.
 
 ```python
 class EnvironmentBuilder(ABC):
     def identifier(self) -> str: ...
     def dependency_hash(self, bundle_path: Path) -> str: ...
-    def build(self, *, bundle_path, base_image, image_tag) -> BuildResult: ...
+    def default_dependency_filename(self) -> str: ...
+    @classmethod
+    def get_template_dockerfile(cls) -> Path: ...
+    def build(self, *, bundle_path, dockerfile, base_image, image_tag) -> BuildResult: ...
+```
+
+The orchestration layer (in the worker) selects the Dockerfile:
+
+```
+bundle.build_strategy == "custom"
+    → dockerfile = bundle_path / "build" / "Dockerfile"
+bundle.build_strategy == "institutional"
+    → dockerfile = builder.get_template_dockerfile()
 ```
 
 ### Curated Dockerfile templates
 
-Builders use institutional Dockerfile templates, never user-supplied ones. Templates live in `backend/builder_templates/{builder_type}/Dockerfile`.
+Institutional templates live in `backend/builder_templates/{builder_type}/Dockerfile`. These are used only when the Build Strategy is Institutional.
 
 ### Build pipeline
 
 ```
-Analysis Bundle
+Execution Environment
+        +
+Build Strategy
+        +
+Analysis Bundle (dependency + optional build/Dockerfile)
      ↓
 Environment Builder selection (by runtime prefix)
      ↓
-builder.dependency_hash(bundle_path) → dependency_hash
+Compute dependency hash:
+  Institutional → hash(dependency_file)
+  Custom       → hash(dependency_file + build/Dockerfile)
      ↓
 Cache lookup: (execution_environment_id, dependency_hash)
      ├── HIT → nothing to do
      └── MISS → Create BuildRequest(status=PENDING)
-                  ↓
-           Worker polls PENDING → BUILDING
-                  ↓
-           builder.build(bundle_path, base_image, image_tag)
-                  ↓
-           ExecutionImage record created (cache)
-                  ↓
-           BuildRequest → COMPLETED
+                   ↓
+            Worker polls PENDING → BUILDING
+                   ↓
+            Orchestration layer selects Dockerfile
+              by build_strategy
+                   ↓
+            builder.build(
+                bundle_path=bundle_path,
+                dockerfile=dockerfile,   ← explicit, not inferred
+                base_image=env.image_reference,
+                image_tag=tag,
+            )
+                   ↓
+            ExecutionImage record created (cache)
+                   ↓
+            BuildRequest → COMPLETED
 ```
 
 ### Two distinct models
@@ -807,6 +940,10 @@ Cache lookup: (execution_environment_id, dependency_hash)
 |-------|------|
 | `BuildRequest` | Work item. Status: PENDING → BUILDING → COMPLETED / FAILED. |
 | `ExecutionImage` | Cached artefact. Keyed by `(execution_environment_id, dependency_hash)`. |
+
+### Provenance
+
+The Build Strategy is recorded on the Analysis Bundle as explicit metadata (`build_strategy`). The dependency hash captures the content of both the dependency file and (for Custom Build) the custom Dockerfile. The `ExecutionImage` record captures the build outcome. Together, these provide a complete provenance chain for every execution image, regardless of strategy.
 
 ---
 
@@ -831,6 +968,8 @@ The canonical workflow demonstrates the complete governed lifecycle from a resea
 ```
 
 The canonical workflow is validated by the Playwright e2e test in `frontend/e2e/canonical-workflow.spec.ts`. It is a system test covering frontend, backend, database, worker, Docker executor, provider abstraction, runtime contract, output registration, and download endpoint.
+
+An additional e2e test in `frontend/e2e/custom-build-workflow.spec.ts` validates the Custom Build path — from strategy selection through custom Dockerfile execution to output verification — proving that the custom image construction was genuinely used rather than merely checking UI state.
 
 ---
 
@@ -898,6 +1037,9 @@ Identity validation (capability boundaries for each role) is maintained as separ
 12. Two-stage governance: execution approval (bundle review) then output approval (output set review and release).
 13. The Release Package is the sole delivery mechanism for research outputs.
 14. The Environment Builder is a separate subsystem — execution does not depend on build.
+15. **Build Strategy is explicit researcher metadata on the Analysis Bundle. The platform never infers build behaviour from bundle contents.**
+16. **The Execution Environment defines the institutional execution contract. Custom Build extends it; it does not create new execution environments.**
+17. **Capability enforcement happens at creation and submission, not during approval. The reviewer evaluates the immutable artefact, not the entitlement.**
 
 ---
 

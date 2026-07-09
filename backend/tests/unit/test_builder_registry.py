@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 from app.builders.base import EnvironmentBuilder
@@ -11,7 +13,14 @@ class _TestBuilder(EnvironmentBuilder):
     def dependency_hash(self, bundle_path) -> str:
         return "d1" + "0" * 62
 
-    def build(self, *, bundle_path, base_image, image_tag):
+    def default_dependency_filename(self) -> str:
+        return "requirements.txt"
+
+    @classmethod
+    def get_template_dockerfile(cls) -> Path:
+        return Path("/nonexistent/Dockerfile")
+
+    def build(self, *, bundle_path, dockerfile, base_image, image_tag):
         raise NotImplementedError
 
 
@@ -22,7 +31,14 @@ class _OtherBuilder(EnvironmentBuilder):
     def dependency_hash(self, bundle_path) -> str:
         return "d2" + "0" * 62
 
-    def build(self, *, bundle_path, base_image, image_tag):
+    def default_dependency_filename(self) -> str:
+        return "environment.yml"
+
+    @classmethod
+    def get_template_dockerfile(cls) -> Path:
+        return Path("/nonexistent/Dockerfile")
+
+    def build(self, *, bundle_path, dockerfile, base_image, image_tag):
         raise NotImplementedError
 
 

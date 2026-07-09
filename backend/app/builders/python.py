@@ -29,16 +29,23 @@ class PythonBuilder(EnvironmentBuilder):
             return hashlib.sha256(dep_file.read_bytes()).hexdigest()
         return hashlib.sha256(b"").hexdigest()
 
+    def default_dependency_filename(self) -> str:
+        return DEPENDENCY_FILE
+
+    @classmethod
+    def get_template_dockerfile(cls) -> Path:
+        return TEMPLATE_DIR / DOCKERFILE_NAME
+
     def build(
         self,
         *,
         bundle_path: Path,
+        dockerfile: Path,
         base_image: str,
         image_tag: str,
     ) -> BuildResult:
-        dockerfile = TEMPLATE_DIR / DOCKERFILE_NAME
         if not dockerfile.exists():
-            raise RuntimeError(f"Python builder template not found: {dockerfile}")
+            raise RuntimeError(f"Dockerfile not found: {dockerfile}")
 
         dep_file = bundle_path / DEPENDENCY_FILE
         if not dep_file.exists() or not dep_file.is_file():

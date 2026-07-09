@@ -15,6 +15,14 @@ class TestPythonBuilder:
     def test_identifier(self):
         assert self.builder.identifier() == "python"
 
+    def test_default_dependency_filename(self):
+        assert self.builder.default_dependency_filename() == "requirements.txt"
+
+    def test_get_template_dockerfile(self):
+        path = PythonBuilder.get_template_dockerfile()
+        assert path.name == "Dockerfile"
+        assert path.exists()
+
     def test_dependency_hash_with_requirements(self):
         with tempfile.TemporaryDirectory() as tmp:
             req_path = Path(tmp) / "requirements.txt"
@@ -50,9 +58,11 @@ class TestPythonBuilder:
         with tempfile.TemporaryDirectory() as tmp:
             bundle_path = Path(tmp)
             (bundle_path / "requirements.txt").write_text("numpy")
+            dockerfile = PythonBuilder.get_template_dockerfile()
 
             result = self.builder.build(
                 bundle_path=bundle_path,
+                dockerfile=dockerfile,
                 base_image="epibridge/python-3.13:latest",
                 image_tag="epibridge/builds/test:abc",
             )
@@ -73,9 +83,11 @@ class TestPythonBuilder:
         with tempfile.TemporaryDirectory() as tmp:
             bundle_path = Path(tmp)
             (bundle_path / "requirements.txt").write_text("numpy")
+            dockerfile = PythonBuilder.get_template_dockerfile()
 
             result = self.builder.build(
                 bundle_path=bundle_path,
+                dockerfile=dockerfile,
                 base_image="epibridge/python-3.13:latest",
                 image_tag="epibridge/builds/test:abc",
             )
@@ -86,23 +98,25 @@ class TestPythonBuilder:
     def test_build_fails_without_requirements(self):
         with tempfile.TemporaryDirectory() as tmp:
             bundle_path = Path(tmp)
+            dockerfile = PythonBuilder.get_template_dockerfile()
             result = self.builder.build(
                 bundle_path=bundle_path,
+                dockerfile=dockerfile,
                 base_image="epibridge/python-3.13:latest",
                 image_tag="epibridge/builds/test:abc",
             )
         assert result.success is False
         assert "requirements.txt" in result.build_log
 
-    def test_build_raises_when_template_missing(self):
-        with (
-            patch("app.builders.python.TEMPLATE_DIR", Path("/nonexistent")),
-            tempfile.TemporaryDirectory() as tmp,
-        ):
+    def test_build_raises_when_dockerfile_missing(self):
+        with tempfile.TemporaryDirectory() as tmp:
             bundle_path = Path(tmp)
-            with pytest.raises(RuntimeError, match="template not found"):
+            (bundle_path / "requirements.txt").write_text("numpy")
+            missing_dockerfile = Path(tmp) / "nonexistent.Dockerfile"
+            with pytest.raises(RuntimeError, match="Dockerfile not found"):
                 self.builder.build(
                     bundle_path=bundle_path,
+                    dockerfile=missing_dockerfile,
                     base_image="epibridge/python-3.13:latest",
                     image_tag="epibridge/builds/test:abc",
                 )
@@ -120,8 +134,37 @@ class TestPythonBuilder:
         with tempfile.TemporaryDirectory() as tmp:
             bundle_path = Path(tmp)
             (bundle_path / "requirements.txt").write_text("numpy")
+            dockerfile = PythonBuilder.get_template_dockerfile()
             self.builder.build(
                 bundle_path=bundle_path,
+                dockerfile=dockerfile,
                 base_image="epibridge/python-3.13:latest",
                 image_tag="test:tag",
             )
+
+    @patch("app.builders.python.docker.from_env")
+    @patch("app.builders.python.shutil.copy2")
+    def test_build_with_custom_dockerfile(self, mock_copy2, mock_docker_from_env):
+        mock_client = MagicMock()
+        mock_image = MagicMock()
+        mock_image.tags = ["epibridge/builds/test:custom"]
+        mock_client.images.build.return_value = (mock_image, [])
+        mock_client.images.get.return_value = None
+        mock_docker_from_env.return_value = mock_client
+
+        with tempfile.TemporaryDirectory() as tmp:
+            bundle_path = Path(tmp)
+            (bundle_path / "requirements.txt").write_text("numpy")
+            custom_df = bundle_path / "my.Dockerfile"
+            custom_df.write_text("FROM custom-base\nRUN echo hello")
+
+            result = self.builder.build(
+                bundle_path=bundle_path,
+                dockerfile=custom_df,
+                base_image="epibridge/python-3.13:latest",
+                image_tag="epibridge/builds/test:custom",
+            )
+
+        assert result.image_reference == "epibridge/builds/test:custom"
+        assert result.success
+        mock_client.images.build.assert_called_once()

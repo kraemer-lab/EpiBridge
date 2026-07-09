@@ -19,10 +19,18 @@ class EnvironmentBuilder(ABC):
     def dependency_hash(self, bundle_path: Path) -> str: ...
 
     @abstractmethod
+    def default_dependency_filename(self) -> str: ...
+
+    @classmethod
+    @abstractmethod
+    def get_template_dockerfile(cls) -> Path: ...
+
+    @abstractmethod
     def build(
         self,
         *,
         bundle_path: Path,
+        dockerfile: Path,
         base_image: str,
         image_tag: str,
     ) -> BuildResult: ...

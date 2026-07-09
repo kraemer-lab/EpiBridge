@@ -14,6 +14,7 @@ def test_capability_enum_values():
     assert Capability.ENVIRONMENT_MANAGE.value == "environment.manage"
     assert Capability.DATA_MANAGE.value == "data.manage"
     assert Capability.USER_MANAGE.value == "user.manage"
+    assert Capability.BUILD_CUSTOMIZE.value == "build.customize"
 
 
 def test_all_values_contains_all():
@@ -22,4 +23,4 @@ def test_all_values_contains_all():
 
 
 def test_all_values_count():
-    assert len(ALL_CAPABILITIES) == 12
+    assert len(ALL_CAPABILITIES) == 13

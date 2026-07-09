@@ -15,6 +15,14 @@ class TestCondaBuilder:
     def test_identifier(self):
         assert self.builder.identifier() == "conda"
 
+    def test_default_dependency_filename(self):
+        assert self.builder.default_dependency_filename() == "environment.yml"
+
+    def test_get_template_dockerfile(self):
+        path = CondaBuilder.get_template_dockerfile()
+        assert path.name == "Dockerfile"
+        assert path.exists()
+
     def test_dependency_hash_with_environment_yml(self):
         with tempfile.TemporaryDirectory() as tmp:
             dep_path = Path(tmp) / "environment.yml"
@@ -77,9 +85,11 @@ class TestCondaBuilder:
             (bundle_path / "environment.yml").write_text(
                 "name: base\ndependencies:\n  - python=3.13\n  - numpy\n"
             )
+            dockerfile = CondaBuilder.get_template_dockerfile()
 
             result = self.builder.build(
                 bundle_path=bundle_path,
+                dockerfile=dockerfile,
                 base_image="epibridge/conda:latest",
                 image_tag="epibridge/builds/test:abc",
             )
@@ -103,8 +113,11 @@ class TestCondaBuilder:
             (bundle_path / "environment.yaml").write_text(
                 "name: base\ndependencies:\n  - python=3.13\n"
             )
+            dockerfile = CondaBuilder.get_template_dockerfile()
+
             result = self.builder.build(
                 bundle_path=bundle_path,
+                dockerfile=dockerfile,
                 base_image="epibridge/conda:latest",
                 image_tag="epibridge/builds/test:def",
             )
@@ -126,9 +139,11 @@ class TestCondaBuilder:
             (bundle_path / "environment.yml").write_text(
                 "name: base\ndependencies:\n  - python=3.13\n  - numpy\n"
             )
+            dockerfile = CondaBuilder.get_template_dockerfile()
 
             result = self.builder.build(
                 bundle_path=bundle_path,
+                dockerfile=dockerfile,
                 base_image="epibridge/conda:latest",
                 image_tag="epibridge/builds/test:abc",
             )
@@ -139,8 +154,10 @@ class TestCondaBuilder:
     def test_build_fails_without_environment_yml(self):
         with tempfile.TemporaryDirectory() as tmp:
             bundle_path = Path(tmp)
+            dockerfile = CondaBuilder.get_template_dockerfile()
             result = self.builder.build(
                 bundle_path=bundle_path,
+                dockerfile=dockerfile,
                 base_image="epibridge/conda:latest",
                 image_tag="epibridge/builds/test:abc",
             )
@@ -148,15 +165,15 @@ class TestCondaBuilder:
         assert "environment.yml" in result.build_log
         assert "environment.yaml" in result.build_log
 
-    def test_build_raises_when_template_missing(self):
-        with (
-            patch("app.builders.conda.TEMPLATE_DIR", Path("/nonexistent")),
-            tempfile.TemporaryDirectory() as tmp,
-        ):
+    def test_build_raises_when_dockerfile_missing(self):
+        with tempfile.TemporaryDirectory() as tmp:
             bundle_path = Path(tmp)
-            with pytest.raises(RuntimeError, match="template not found"):
+            (bundle_path / "environment.yml").write_text("name: base")
+            missing_dockerfile = Path(tmp) / "nonexistent.Dockerfile"
+            with pytest.raises(RuntimeError, match="Dockerfile not found"):
                 self.builder.build(
                     bundle_path=bundle_path,
+                    dockerfile=missing_dockerfile,
                     base_image="epibridge/conda:latest",
                     image_tag="epibridge/builds/test:abc",
                 )
@@ -176,8 +193,39 @@ class TestCondaBuilder:
             (bundle_path / "environment.yml").write_text(
                 "name: base\ndependencies:\n  - python=3.13\n"
             )
+            dockerfile = CondaBuilder.get_template_dockerfile()
             self.builder.build(
                 bundle_path=bundle_path,
+                dockerfile=dockerfile,
                 base_image="epibridge/conda:latest",
                 image_tag="test:tag",
             )
+
+    @patch("app.builders.conda.docker.from_env")
+    @patch("app.builders.conda.shutil.copy2")
+    def test_build_with_custom_dockerfile(self, mock_copy2, mock_docker_from_env):
+        mock_client = MagicMock()
+        mock_image = MagicMock()
+        mock_image.tags = ["epibridge/builds/test:custom"]
+        mock_client.images.build.return_value = (mock_image, [])
+        mock_client.images.get.return_value = None
+        mock_docker_from_env.return_value = mock_client
+
+        with tempfile.TemporaryDirectory() as tmp:
+            bundle_path = Path(tmp)
+            (bundle_path / "environment.yml").write_text(
+                "name: base\ndependencies:\n  - python=3.13\n"
+            )
+            custom_df = bundle_path / "my.Dockerfile"
+            custom_df.write_text("FROM custom-base\nRUN echo hello")
+
+            result = self.builder.build(
+                bundle_path=bundle_path,
+                dockerfile=custom_df,
+                base_image="epibridge/conda:latest",
+                image_tag="epibridge/builds/test:custom",
+            )
+
+        assert result.image_reference == "epibridge/builds/test:custom"
+        assert result.success
+        mock_client.images.build.assert_called_once()

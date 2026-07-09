@@ -23,7 +23,11 @@ from app.auth.policy import (
     require_project_membership,
 )
 from app.db.session import get_db
-from app.models.analysis_bundle import AnalysisBundle, AnalysisBundleStatus
+from app.models.analysis_bundle import (
+    AnalysisBundle,
+    AnalysisBundleStatus,
+    BuildStrategy,
+)
 from app.models.audit_event import AuditEventType
 from app.models.build_request import BuildRequest
 from app.models.capability import Capability
@@ -55,6 +59,7 @@ from app.services.analysis_bundle_service import (
     get_environment_runtime,
     get_resource_identifiers,
     update_bundle,
+    validate_build_strategy,
 )
 from app.services.audit_service import create_audit_event
 from app.services.bundle_store import get_bundle_store
@@ -113,6 +118,7 @@ def _bundle_to_read(bundle: AnalysisBundle, build_log: str = "") -> AnalysisBund
         resource_identifiers=get_resource_identifiers(bundle),
         outputs=bundle.outputs,
         parameters=bundle.parameters,
+        build_strategy=bundle.build_strategy,
         build_status=bundle.build_status,
         build_error=bundle.build_error,
         build_log=build_log,
@@ -358,6 +364,10 @@ def put_project_bundle(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Cannot edit bundle in state: {bundle.status}",
         )
+
+    if data.build_strategy == BuildStrategy.CUSTOM.value:
+        _require_capability(current_user, Capability.BUILD_CUSTOMIZE)
+
     try:
         updated = update_bundle(db, bundle_id, data.model_dump(exclude_none=True))
     except ValueError as e:
@@ -391,6 +401,8 @@ def post_project_bundle(
 ):
     require_project_membership(db, current_user, project_id)
     _require_capability(current_user, Capability.BUNDLE_CREATE)
+    if data.build_strategy == BuildStrategy.CUSTOM.value:
+        _require_capability(current_user, Capability.BUILD_CUSTOMIZE)
     bundle = create_bundle(db, data.model_dump(), project_id, current_user.id)
     return _bundle_to_read(bundle)
 
@@ -414,11 +426,15 @@ async def post_project_bundle_upload(
     resource_identifiers: str = Form("[]"),
     outputs: str = Form("[]"),
     parameters: str = Form("{}"),
+    build_strategy: str = Form("institutional"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     require_project_membership(db, current_user, project_id)
     _require_capability(current_user, Capability.BUNDLE_CREATE)
+
+    if build_strategy == BuildStrategy.CUSTOM.value:
+        _require_capability(current_user, Capability.BUILD_CUSTOMIZE)
 
     if not file.filename or not file.filename.endswith(".zip"):
         raise HTTPException(
@@ -457,6 +473,7 @@ async def post_project_bundle_upload(
         "resource_identifiers": ri,
         "outputs": outs,
         "parameters": params,
+        "build_strategy": build_strategy,
     }
 
     bundle = create_bundle(db, bundle_data, project_id, current_user.id)
@@ -512,6 +529,17 @@ def post_submit_bundle(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Forbidden",
+        )
+
+    if bundle.build_strategy == BuildStrategy.CUSTOM.value:
+        _require_capability(current_user, Capability.BUILD_CUSTOMIZE)
+
+    bundle_path = get_bundle_store().get_path(bundle.id) if bundle.source_path else None
+    strategy_error = validate_build_strategy(bundle, bundle_path)
+    if strategy_error:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=strategy_error,
         )
 
     try:

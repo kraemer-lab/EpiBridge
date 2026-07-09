@@ -13,7 +13,7 @@ from app.core.config import settings
 from app.core.logging import configure_logging
 from app.db.session import SessionLocal
 from app.execution.docker import DockerExecutor
-from app.models.analysis_bundle import AnalysisBundle, AnalysisBundleBuildStatus
+from app.models.analysis_bundle import AnalysisBundle, AnalysisBundleBuildStatus, BuildStrategy
 from app.models.audit_event import WORKER_USER_ID, AuditEventType
 from app.schemas.analysis_bundle import Interpreter
 from app.models.build_request import BuildRequest, BuildRequestStatus
@@ -218,9 +218,15 @@ def process_build(db: Session, build: BuildRequest) -> None:
     bundle.build_status = AnalysisBundleBuildStatus.ENVIRONMENT_BUILDING
     build_transition_to(db, build, BuildRequestStatus.BUILDING)
 
+    if bundle.build_strategy == BuildStrategy.CUSTOM.value:
+        dockerfile = bundle_path / "build" / "Dockerfile"
+    else:
+        dockerfile = builder.get_template_dockerfile()
+
     try:
         result = builder.build(
             bundle_path=bundle_path,
+            dockerfile=dockerfile,
             base_image=env.image_reference,
             image_tag=tag,
         )

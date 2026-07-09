@@ -1,4 +1,5 @@
 import uuid
+from pathlib import Path
 
 from sqlalchemy.orm import Session
 
@@ -6,6 +7,7 @@ from app.models.analysis_bundle import (
     AnalysisBundle,
     AnalysisBundleDataResource,
     AnalysisBundleStatus,
+    BuildStrategy,
 )
 from app.models.audit_event import AuditEventType
 from app.models.data_resource import DataResource
@@ -107,6 +109,41 @@ def validate_resources(
     return resources
 
 
+CUSTOM_BUILD_DIR = "build"
+
+
+def validate_build_strategy(
+    bundle: AnalysisBundle,
+    bundle_path: Path | None,
+) -> str | None:
+    """Validate that the bundle contents match the selected Build Strategy.
+
+    Returns None if valid, or an error message string if invalid.
+    bundle_path may be None if the bundle has not yet been uploaded.
+    """
+    if bundle_path is None:
+        return None
+
+    build_dir = bundle_path / CUSTOM_BUILD_DIR
+    custom_dockerfile = build_dir / "Dockerfile"
+
+    if bundle.build_strategy == BuildStrategy.CUSTOM.value:
+        if not custom_dockerfile.exists() or not custom_dockerfile.is_file():
+            return (
+                "Custom Build Strategy requires a build/Dockerfile "
+                "in the Analysis Bundle"
+            )
+        return None
+
+    if build_dir.exists():
+        return (
+            "Institutional Build Strategy does not allow a build/ directory "
+            "in the Analysis Bundle"
+        )
+
+    return None
+
+
 def validate_execution_environment(
     execution_environment_id: uuid.UUID, db: Session
 ) -> ExecutionEnvironment:
@@ -148,6 +185,7 @@ def create_bundle(
         description=data.get("description", ""),
         outputs=data.get("outputs", []),
         parameters=data.get("parameters", {}),
+        build_strategy=data.get("build_strategy", BuildStrategy.INSTITUTIONAL.value),
     )
     db.add(bundle)
     db.flush()
@@ -246,6 +284,13 @@ def update_bundle(db: Session, bundle_id: uuid.UUID, data: dict) -> AnalysisBund
         if not isinstance(update_data["status"], AnalysisBundleStatus):
             raise ValueError("'status' must be a valid AnalysisBundleStatus")
         bundle.status = update_data["status"]
+
+    if "build_strategy" in update_data:
+        strategy = update_data["build_strategy"]
+        valid = {BuildStrategy.INSTITUTIONAL.value, BuildStrategy.CUSTOM.value}
+        if strategy not in valid:
+            raise ValueError(f"Invalid build strategy: {strategy}")
+        bundle.build_strategy = strategy
 
     if "resource_identifiers" in update_data:
         resources = validate_resources(
