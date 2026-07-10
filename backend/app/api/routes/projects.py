@@ -81,6 +81,10 @@ from app.services.project_service import (
     list_projects,
     remove_member,
 )
+from app.services.terms_service import (
+    get_current_resource_terms,
+    has_accepted_latest,
+)
 from app.workflow.bundle import submit_bundle
 
 
@@ -95,6 +99,23 @@ def _require_capability(current_user: User, capability: Capability) -> None:
 
 
 router = APIRouter()
+
+
+def _require_resource_terms_accepted(
+    db: Session,
+    user: User,
+    resources: list[DataResource],
+) -> None:
+    unaccepted = []
+    for r in resources:
+        terms = get_current_resource_terms(db, r.id)
+        if terms is not None and not has_accepted_latest(db, user.id, terms.id):
+            unaccepted.append(r.name)
+    if unaccepted:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=("Terms not accepted for resource(s): " + ", ".join(unaccepted)),
+        )
 
 
 def _bundle_to_read(bundle: AnalysisBundle, build_log: str = "") -> AnalysisBundleRead:
@@ -187,6 +208,8 @@ def post_project_resources(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Data resources not found: {', '.join(sorted(missing))}",
         )
+    _require_resource_terms_accepted(db, current_user, resources)
+
     existing_resources = {
         a.data_resource_id
         for a in db.query(ProjectResourceAllocation).filter(
@@ -533,6 +556,8 @@ def post_submit_bundle(
 
     if bundle.build_strategy == BuildStrategy.CUSTOM.value:
         _require_capability(current_user, Capability.BUILD_CUSTOMIZE)
+
+    _require_resource_terms_accepted(db, current_user, bundle.data_resources)
 
     bundle_path = get_bundle_store().get_path(bundle.id) if bundle.source_path else None
     strategy_error = validate_build_strategy(bundle, bundle_path)

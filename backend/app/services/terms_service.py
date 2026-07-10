@@ -160,7 +160,7 @@ def get_current_resource_terms(
     )
 
 
-def has_accepted_terms(
+def has_accepted_latest(
     db: Session, user_id: uuid.UUID, terms_of_service_id: uuid.UUID
 ) -> bool:
     return (
@@ -180,7 +180,7 @@ def get_acceptance_status(db: Session, user_id: uuid.UUID) -> dict:
     platform_version = None
     if platform_terms is not None:
         platform_version = platform_terms.version
-        platform_accepted = has_accepted_terms(db, user_id, platform_terms.id)
+        platform_accepted = has_accepted_latest(db, user_id, platform_terms.id)
 
     resource_id_rows = (
         db.query(TermsOfService.data_resource_id)
@@ -196,7 +196,7 @@ def get_acceptance_status(db: Session, user_id: uuid.UUID) -> dict:
     for (rid,) in resource_id_rows:
         terms = get_current_resource_terms(db, rid)
         if terms is not None:
-            accepted = has_accepted_terms(db, user_id, terms.id)
+            accepted = has_accepted_latest(db, user_id, terms.id)
             dataset_terms.append(
                 {
                     "resource_id": str(rid),

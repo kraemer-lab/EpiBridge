@@ -359,14 +359,14 @@ class TestGetCurrentResourceTerms:
         assert result is None
 
 
-class TestHasAcceptedTerms:
+class TestHasAcceptedLatest:
     def test_returns_true_when_accepted(self):
         db = MagicMock()
         db.query.return_value.filter.return_value.first.return_value = MagicMock(
             spec=TermsAcceptance
         )
 
-        result = svc.has_accepted_terms(
+        result = svc.has_accepted_latest(
             db, user_id=uuid.uuid4(), terms_of_service_id=uuid.uuid4()
         )
 
@@ -376,7 +376,7 @@ class TestHasAcceptedTerms:
         db = MagicMock()
         db.query.return_value.filter.return_value.first.return_value = None
 
-        result = svc.has_accepted_terms(
+        result = svc.has_accepted_latest(
             db, user_id=uuid.uuid4(), terms_of_service_id=uuid.uuid4()
         )
 

@@ -21,6 +21,7 @@ from app.schemas.execution_environment import ExecutionEnvironmentAdminRead
 from app.schemas.execution_request import ExecutionRequestRead
 from app.schemas.output import OutputRead
 from app.schemas.output_set import OutputSetListItem, OutputSetRead
+from app.schemas.terms import TermsOfServicePublish, TermsOfServiceRead
 from app.schemas.user import UserCreate, UserRead
 from app.services.analysis_bundle_service import (
     get_environment_runtime,
@@ -38,6 +39,11 @@ from app.services.output_set_service import (
     get_output_set_by_execution,
     list_output_sets,
     list_outputs_by_set,
+)
+from app.services.terms_service import (
+    get_current_platform_terms,
+    publish_platform_terms,
+    publish_resource_terms,
 )
 from app.services.user_service import create_user, get_user_by_id, list_users
 from app.workflow.bundle import approve_bundle, reject_bundle, supersede_bundle
@@ -781,3 +787,68 @@ def post_admin_supersede_bundle(
     db.commit()
     db.refresh(bundle)
     return _admin_bundle_to_read(bundle)
+
+
+@router.post(
+    "/admin/terms/platform",
+    response_model=TermsOfServiceRead,
+    status_code=201,
+)
+def post_admin_publish_platform_terms(
+    body: TermsOfServicePublish,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _require_capability(current_user, Capability.TERMS_MANAGE)
+    return publish_platform_terms(
+        db,
+        published_by=current_user,
+        title=body.title,
+        content=body.content,
+        version=body.version,
+    )
+
+
+@router.post(
+    "/admin/resources/{resource_id}/terms/publish",
+    response_model=TermsOfServiceRead,
+    status_code=201,
+)
+def post_admin_publish_resource_terms(
+    resource_id: uuid.UUID,
+    body: TermsOfServicePublish,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _require_capability(current_user, Capability.TERMS_MANAGE)
+    try:
+        return publish_resource_terms(
+            db,
+            published_by=current_user,
+            data_resource_id=resource_id,
+            title=body.title,
+            content=body.content,
+            version=body.version,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        )
+
+
+@router.get("/admin/terms/status")
+def get_admin_terms_status(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _require_capability(current_user, Capability.TERMS_MANAGE)
+    platform = get_current_platform_terms(db)
+    return {
+        "platform": {
+            "has_terms": platform is not None,
+            "version": platform.version if platform else None,
+            "title": platform.title if platform else None,
+            "published_at": platform.published_at if platform else None,
+        },
+    }
