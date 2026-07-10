@@ -8,7 +8,9 @@ import {
   getAdminResources,
   attachProjectResources,
   detachProjectResource,
+  getResourceTermsCurrent,
 } from "@/lib/api";
+import { TermsDialog } from "@/components/TermsDialog";
 
 export default function ProjectResourcesPage() {
   const params = useParams();
@@ -18,6 +20,8 @@ export default function ProjectResourcesPage() {
   const [available, setAvailable] = useState<DataResource[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [termsResource, setTermsResource] = useState<DataResource | null>(null);
+  const [pendingIdentifier, setPendingIdentifier] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -42,12 +46,41 @@ export default function ProjectResourcesPage() {
   }, [load]);
 
   const handleAttach = async (identifier: string) => {
+    const resource = available.find((r) => r.identifier === identifier);
+    if (!resource) return;
+    try {
+      const terms = await getResourceTermsCurrent(resource.id);
+      if (terms) {
+        setPendingIdentifier(identifier);
+        setTermsResource(resource);
+        return;
+      }
+    } catch {
+      // No terms published — proceed directly
+    }
+    await doAttach(identifier);
+  };
+
+  const doAttach = async (identifier: string) => {
     try {
       await attachProjectResources(projectId, [identifier]);
       await load();
     } catch {
       setError("Failed to attach resource");
     }
+  };
+
+  const handleTermsAccept = () => {
+    setTermsResource(null);
+    if (pendingIdentifier) {
+      doAttach(pendingIdentifier);
+      setPendingIdentifier(null);
+    }
+  };
+
+  const handleTermsCancel = () => {
+    setTermsResource(null);
+    setPendingIdentifier(null);
   };
 
   const handleDetach = async (resourceId: string) => {
@@ -61,6 +94,15 @@ export default function ProjectResourcesPage() {
 
   return (
     <div>
+      {termsResource && (
+        <TermsDialog
+          resourceId={termsResource.id}
+          resourceName={termsResource.name}
+          onAccept={handleTermsAccept}
+          onCancel={handleTermsCancel}
+        />
+      )}
+
       <h2 style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: "var(--spacing-lg)" }}>
         Configure Resources
       </h2>

@@ -13,9 +13,11 @@ import {
   supersedeBundle,
   createExecutionRequest,
   triggerAiReview,
+  checkResourceTerms,
 } from "@/lib/api";
 import { formatBundleStatus, bundleStatusStyle } from "@/lib/status";
 import LogViewer from "@/components/LogViewer";
+import { TermsDialog } from "@/components/TermsDialog";
 
 const TERMINAL_STATUSES = ["completed", "failed", "unavailable"];
 
@@ -31,6 +33,8 @@ export default function AnalysisDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [reviewing, setReviewing] = useState(false);
+  const [termsResourceId, setTermsResourceId] = useState<string | null>(null);
+  const [termsResourceName, setTermsResourceName] = useState<string>("");
 
   const fetchBundle = useCallback(async () => {
     const b = await getProjectBundle(projectId, bundleId);
@@ -133,8 +137,35 @@ export default function AnalysisDetailPage() {
     setActionLoading(null);
   };
 
-  const handleSubmit = () =>
+  const handleSubmit = async () => {
+    if (bundle && bundle.resource_identifiers.length > 0) {
+      try {
+        const result = await checkResourceTerms(bundle.resource_identifiers);
+        const unaccepted = result.results.filter(
+          (r) => r.has_terms && !r.accepted,
+        );
+        if (unaccepted.length > 0) {
+          setTermsResourceId(unaccepted[0].resource_id);
+          setTermsResourceName(unaccepted[0].title || "");
+          return;
+        }
+      } catch {
+        // If terms check unavailable, proceed to backend enforcement
+      }
+    }
     performAction("Submit", () => submitBundle(projectId, bundleId));
+  };
+
+  const handleTermsAccept = () => {
+    setTermsResourceId(null);
+    setTermsResourceName("");
+    performAction("Submit", () => submitBundle(projectId, bundleId));
+  };
+
+  const handleTermsCancel = () => {
+    setTermsResourceId(null);
+    setTermsResourceName("");
+  };
 
   const handleApprove = () =>
     performAction("Approve", () => approveBundle(bundleId));
@@ -180,6 +211,15 @@ export default function AnalysisDetailPage() {
 
   return (
     <div>
+      {termsResourceId && (
+        <TermsDialog
+          resourceId={termsResourceId}
+          resourceName={termsResourceName}
+          onAccept={handleTermsAccept}
+          onCancel={handleTermsCancel}
+        />
+      )}
+
       <Link
         href={`/projects/${projectId}/analysis`}
         style={{ color: "var(--color-text-secondary)", fontSize: "0.85rem", textDecoration: "none" }}

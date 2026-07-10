@@ -9,6 +9,33 @@ export interface User {
   capabilities: string[];
   created_at: string;
   updated_at: string;
+  needs_platform_terms_acceptance?: boolean;
+  platform_terms_version?: string | null;
+}
+
+export interface TermsOfService {
+  id: string;
+  terms_type: string;
+  data_resource_id: string | null;
+  version: string;
+  title: string;
+  content: string;
+  published_by_id: string;
+  published_at: string;
+}
+
+export interface TermsAcceptanceStatus {
+  platform: {
+    has_terms: boolean;
+    version: string | null;
+    accepted: boolean;
+  };
+  dataset_terms: {
+    resource_id: string;
+    version: string;
+    title: string;
+    accepted: boolean;
+  }[];
 }
 
 export interface Project {
@@ -201,6 +228,17 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     ) {
       window.location.href = "/login";
       throw new Error("Session expired");
+    }
+    if (res.status === 403
+        && typeof window !== "undefined"
+        && window.location.pathname !== "/terms"
+        && !path.includes("/api/terms/")
+    ) {
+      const detail = await res.json().then((b) => b.detail).catch(() => "");
+      if (detail === "Platform terms not accepted") {
+        window.location.href = "/terms";
+        throw new Error("Platform terms not accepted");
+      }
     }
     if (!res.ok) {
       const detail = await res.json().then((b) => b.detail).catch(() => res.statusText);
@@ -585,4 +623,50 @@ export async function removeProjectMember(projectId: string, userId: string): Pr
     method: "DELETE",
     credentials: "include",
   });
+}
+
+// --- Terms of Service ---
+
+export async function getPlatformTermsCurrent(): Promise<TermsOfService> {
+  return request<TermsOfService>("/api/terms/platform/current");
+}
+
+export async function acceptPlatformTerms(): Promise<{ status: string }> {
+  return request<{ status: string }>("/api/terms/platform/accept", { method: "POST" });
+}
+
+export async function getResourceTermsCurrent(resourceId: string): Promise<TermsOfService> {
+  return request<TermsOfService>(`/api/terms/resources/${resourceId}/current`);
+}
+
+export async function acceptResourceTerms(resourceId: string): Promise<{ status: string }> {
+  return request<{ status: string }>(`/api/terms/resources/${resourceId}/accept`, { method: "POST" });
+}
+
+export async function getTermsStatus(): Promise<TermsAcceptanceStatus> {
+  return request<TermsAcceptanceStatus>("/api/terms/status");
+}
+
+export async function publishPlatformTerms(data: { version: string; title: string; content: string }): Promise<TermsOfService> {
+  return request<TermsOfService>("/api/admin/terms/platform", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function publishResourceTerms(resourceId: string, data: { version: string; title: string; content: string }): Promise<TermsOfService> {
+  return request<TermsOfService>(`/api/admin/resources/${resourceId}/terms/publish`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function getAdminTermsStatus(): Promise<{ platform: { has_terms: boolean; version: string | null; title: string | null; published_at: string | null } }> {
+  return request("/api/admin/terms/status");
+}
+
+export async function checkResourceTerms(resourceIds: string[]): Promise<{
+  results: { resource_id: string; has_terms: boolean; version?: string; title?: string; accepted?: boolean }[];
+}> {
+  return request(`/api/terms/check?resource_ids=${resourceIds.join(",")}`);
 }

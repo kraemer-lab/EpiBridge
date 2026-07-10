@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_user
@@ -51,6 +51,32 @@ def get_terms_status(
     current_user: User = Depends(get_current_user),
 ):
     return terms_service.get_acceptance_status(db, current_user.id)
+
+
+@router.get("/terms/check")
+def check_resource_terms(
+    resource_ids: str = Query(description="Comma-separated list of resource UUIDs"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    ids = [uuid.UUID(id_str.strip()) for id_str in resource_ids.split(",")]
+    results = []
+    for rid in ids:
+        terms = terms_service.get_current_resource_terms(db, rid)
+        if terms is None:
+            results.append({"resource_id": str(rid), "has_terms": False})
+        else:
+            accepted = terms_service.has_accepted_latest(db, current_user.id, terms.id)
+            results.append(
+                {
+                    "resource_id": str(rid),
+                    "has_terms": True,
+                    "version": terms.version,
+                    "title": terms.title,
+                    "accepted": accepted,
+                }
+            )
+    return {"results": results}
 
 
 @router.get(
