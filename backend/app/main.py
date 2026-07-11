@@ -21,6 +21,10 @@ from app.core.config import settings
 from app.core.logging import configure_logging
 from app.db.migration import ensure_migrated
 from app.db.session import SessionLocal
+from app.services.directory_publication import (
+    DirectoryPublication,
+    create_publication_router,
+)
 from app.services.environment_manifest_loader import load_environment_directory
 from app.services.execution_environment_service import (
     register_from_manifest as register_environments,
@@ -110,6 +114,24 @@ app.include_router(
     dependencies=[Depends(require_platform_terms_accepted)],
 )
 app.include_router(terms_router, prefix="/api")
+
+if settings.example_analysis_dir:
+    examples_dir = Path(settings.example_analysis_dir)
+    if examples_dir.is_dir():
+        examples_pub = DirectoryPublication(examples_dir)
+        app.include_router(
+            create_publication_router("/api/examples", examples_pub),
+            dependencies=[Depends(require_platform_terms_accepted)],
+        )
+
+if settings.template_dir:
+    templates_dir = Path(settings.template_dir)
+    if templates_dir.is_dir():
+        templates_pub = DirectoryPublication(templates_dir)
+        app.include_router(
+            create_publication_router("/api/templates", templates_pub),
+            dependencies=[Depends(require_platform_terms_accepted)],
+        )
 
 
 @app.exception_handler(PolicyError)

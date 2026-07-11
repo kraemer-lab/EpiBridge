@@ -39,6 +39,8 @@ class Settings(BaseSettings):
     resource_manifest_dir: str = ""
     auto_register_environments: bool = True
     environment_manifest_dir: str = ""
+    example_analysis_dir: str = ""
+    template_dir: str = ""
     output_dir: str = "/var/lib/epibridge/outputs"
     analysis_bundle_root: str = ""
     bundle_store_dir: str = "/var/lib/epibridge/bundles"

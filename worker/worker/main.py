@@ -13,7 +13,11 @@ from app.core.config import settings
 from app.core.logging import configure_logging
 from app.db.session import SessionLocal
 from app.execution.docker import DockerExecutor
-from app.models.analysis_bundle import AnalysisBundle, AnalysisBundleBuildStatus, BuildStrategy
+from app.models.analysis_bundle import (
+    AnalysisBundle,
+    AnalysisBundleBuildStatus,
+    BuildStrategy,
+)
 from app.models.audit_event import WORKER_USER_ID, AuditEventType
 from app.schemas.analysis_bundle import Interpreter
 from app.models.build_request import BuildRequest, BuildRequestStatus
@@ -143,7 +147,9 @@ def process_build(db: Session, build: BuildRequest) -> None:
     ts = _timestamp()
     bundle = db.query(AnalysisBundle).get(build.analysis_bundle_id)
     if bundle is None:
-        build.log = f"[{ts}] BUILD FAILED: bundle not found (id={build.analysis_bundle_id})"
+        build.log = (
+            f"[{ts}] BUILD FAILED: bundle not found (id={build.analysis_bundle_id})"
+        )
         build_transition_to(db, build, BuildRequestStatus.FAILED, "bundle not found")
         return
 
@@ -161,8 +167,7 @@ def process_build(db: Session, build: BuildRequest) -> None:
     builder = builder_registry.get_for_runtime(env.runtime)
     if builder is None:
         build.log = (
-            f"[{ts}] BUILD FAILED: no builder registered for runtime "
-            f"'{env.runtime}'"
+            f"[{ts}] BUILD FAILED: no builder registered for runtime '{env.runtime}'"
         )
         build_transition_to(
             db, build, BuildRequestStatus.FAILED, "no builder for runtime"
@@ -172,8 +177,7 @@ def process_build(db: Session, build: BuildRequest) -> None:
     bundle_path = get_bundle_store().get_path(bundle.id)
     if not bundle_path.is_dir():
         build.log = (
-            f"[{ts}] BUILD FAILED: bundle directory not found "
-            f"(bundle_id={bundle.id})"
+            f"[{ts}] BUILD FAILED: bundle directory not found (bundle_id={bundle.id})"
         )
         build_transition_to(
             db, build, BuildRequestStatus.FAILED, "bundle directory not found"
@@ -219,7 +223,7 @@ def process_build(db: Session, build: BuildRequest) -> None:
     build_transition_to(db, build, BuildRequestStatus.BUILDING)
 
     if bundle.build_strategy == BuildStrategy.CUSTOM.value:
-        dockerfile = bundle_path / "build" / "Dockerfile"
+        dockerfile = bundle_path / "Dockerfile"
     else:
         dockerfile = builder.get_template_dockerfile()
 
@@ -232,10 +236,7 @@ def process_build(db: Session, build: BuildRequest) -> None:
         )
     except Exception as e:
         build_end = _timestamp()
-        build.log = (
-            f"{preamble}\n"
-            f"[{build_end}] BUILD FAILED (exception): {e}"
-        )
+        build.log = f"{preamble}\n[{build_end}] BUILD FAILED (exception): {e}"
         bundle.build_status = AnalysisBundleBuildStatus.ENVIRONMENT_BUILD_FAILED
         bundle.build_error = str(e)
         db.commit()
@@ -314,24 +315,42 @@ def execute_request(db: Session, request: ExecutionRequest) -> None:
     if bundle is None:
         request.log = f"[{ts}] EXECUTION FAILED: bundle not found (id={request.analysis_bundle_id})"
         db.commit()
-        _emit_execution_event(db, AuditEventType.EXECUTION_FAILED, request, {"failure_reason": "bundle not found"})
+        _emit_execution_event(
+            db,
+            AuditEventType.EXECUTION_FAILED,
+            request,
+            {"failure_reason": "bundle not found"},
+        )
         transition_to(db, request, ExecutionRequestStatus.FAILED, "bundle not found")
         return
 
     if bundle.execution_environment_id is None:
-        request.log = (
-            f"[{ts}] EXECUTION FAILED: no execution environment configured"
-        )
+        request.log = f"[{ts}] EXECUTION FAILED: no execution environment configured"
         db.commit()
-        _emit_execution_event(db, AuditEventType.EXECUTION_FAILED, request, {"failure_reason": "no execution environment configured"})
-        transition_to(db, request, ExecutionRequestStatus.FAILED, "no execution environment configured")
+        _emit_execution_event(
+            db,
+            AuditEventType.EXECUTION_FAILED,
+            request,
+            {"failure_reason": "no execution environment configured"},
+        )
+        transition_to(
+            db,
+            request,
+            ExecutionRequestStatus.FAILED,
+            "no execution environment configured",
+        )
         return
 
     env = db.query(ExecutionEnvironment).get(bundle.execution_environment_id)
     if env is None:
         request.log = f"[{ts}] EXECUTION FAILED: environment not found"
         db.commit()
-        _emit_execution_event(db, AuditEventType.EXECUTION_FAILED, request, {"failure_reason": "environment not found"})
+        _emit_execution_event(
+            db,
+            AuditEventType.EXECUTION_FAILED,
+            request,
+            {"failure_reason": "environment not found"},
+        )
         transition_to(
             db, request, ExecutionRequestStatus.FAILED, "environment not found"
         )
@@ -345,7 +364,12 @@ def execute_request(db: Session, request: ExecutionRequest) -> None:
     if not image:
         request.log = f"[{ts}] EXECUTION FAILED: no image reference"
         db.commit()
-        _emit_execution_event(db, AuditEventType.EXECUTION_FAILED, request, {"failure_reason": "no image reference"})
+        _emit_execution_event(
+            db,
+            AuditEventType.EXECUTION_FAILED,
+            request,
+            {"failure_reason": "no image reference"},
+        )
         transition_to(db, request, ExecutionRequestStatus.FAILED, "no image reference")
         return
 
@@ -357,7 +381,12 @@ def execute_request(db: Session, request: ExecutionRequest) -> None:
             f"[{ts}] EXECUTION FAILED: analysis directory not found: {analysis_dir}"
         )
         db.commit()
-        _emit_execution_event(db, AuditEventType.EXECUTION_FAILED, request, {"failure_reason": "analysis directory not found"})
+        _emit_execution_event(
+            db,
+            AuditEventType.EXECUTION_FAILED,
+            request,
+            {"failure_reason": "analysis directory not found"},
+        )
         transition_to(
             db,
             request,
@@ -368,24 +397,37 @@ def execute_request(db: Session, request: ExecutionRequest) -> None:
 
     entrypoint = bundle.entrypoint
     if not entrypoint:
-        request.log = (
-            f"[{ts}] EXECUTION FAILED: no entrypoint configured"
-        )
+        request.log = f"[{ts}] EXECUTION FAILED: no entrypoint configured"
         db.commit()
-        _emit_execution_event(db, AuditEventType.EXECUTION_FAILED, request, {"failure_reason": "no entrypoint configured"})
-        transition_to(db, request, ExecutionRequestStatus.FAILED, "no entrypoint configured")
+        _emit_execution_event(
+            db,
+            AuditEventType.EXECUTION_FAILED,
+            request,
+            {"failure_reason": "no entrypoint configured"},
+        )
+        transition_to(
+            db, request, ExecutionRequestStatus.FAILED, "no entrypoint configured"
+        )
         return
 
     interpreter_str = bundle.interpreter or "python"
     try:
         interpreter = Interpreter(interpreter_str)
     except ValueError:
-        request.log = (
-            f"[{_timestamp()}] EXECUTION FAILED: unknown interpreter '{interpreter_str}'"
-        )
+        request.log = f"[{_timestamp()}] EXECUTION FAILED: unknown interpreter '{interpreter_str}'"
         db.commit()
-        _emit_execution_event(db, AuditEventType.EXECUTION_FAILED, request, {"failure_reason": f"unknown interpreter '{interpreter_str}'"})
-        transition_to(db, request, ExecutionRequestStatus.FAILED, f"unknown interpreter '{interpreter_str}'")
+        _emit_execution_event(
+            db,
+            AuditEventType.EXECUTION_FAILED,
+            request,
+            {"failure_reason": f"unknown interpreter '{interpreter_str}'"},
+        )
+        transition_to(
+            db,
+            request,
+            ExecutionRequestStatus.FAILED,
+            f"unknown interpreter '{interpreter_str}'",
+        )
         return
     extra = shlex.split(bundle.arguments) if bundle.arguments else []
     command = [interpreter.executable, f"/analysis/{entrypoint}"] + extra
@@ -430,17 +472,18 @@ def execute_request(db: Session, request: ExecutionRequest) -> None:
             f"[exec] No output captured — container was terminated"
         )
         db.commit()
-        _emit_execution_event(db, AuditEventType.EXECUTION_FAILED, request, {"failure_reason": "timeout"})
+        _emit_execution_event(
+            db, AuditEventType.EXECUTION_FAILED, request, {"failure_reason": "timeout"}
+        )
         transition_to(db, request, ExecutionRequestStatus.FAILED, "timeout")
         return
     except Exception as e:
         exec_end = _timestamp()
-        request.log = (
-            f"{preamble}\n"
-            f"[{exec_end}] EXECUTION FAILED: {e}"
-        )
+        request.log = f"{preamble}\n[{exec_end}] EXECUTION FAILED: {e}"
         db.commit()
-        _emit_execution_event(db, AuditEventType.EXECUTION_FAILED, request, {"failure_reason": str(e)})
+        _emit_execution_event(
+            db, AuditEventType.EXECUTION_FAILED, request, {"failure_reason": str(e)}
+        )
         transition_to(db, request, ExecutionRequestStatus.FAILED, str(e))
         return
 
@@ -452,14 +495,21 @@ def execute_request(db: Session, request: ExecutionRequest) -> None:
         log_body += f"[exec] stderr:\n{result.stderr.rstrip()}\n"
 
     if result.exit_code != 0:
-        logger.error("Execution failed (exit %s): %s", result.exit_code, result.stderr or "")
+        logger.error(
+            "Execution failed (exit %s): %s", result.exit_code, result.stderr or ""
+        )
         request.log = (
             f"{preamble}\n"
             f"[{exec_end}] EXECUTION FAILED (exit code {result.exit_code})\n"
             f"{log_body}"
         )
         db.commit()
-        _emit_execution_event(db, AuditEventType.EXECUTION_FAILED, request, {"failure_reason": f"exit code {result.exit_code}"})
+        _emit_execution_event(
+            db,
+            AuditEventType.EXECUTION_FAILED,
+            request,
+            {"failure_reason": f"exit code {result.exit_code}"},
+        )
         transition_to(
             db,
             request,
@@ -497,7 +547,9 @@ def execute_request(db: Session, request: ExecutionRequest) -> None:
         metadata={"file_count": output_count},
     )
     db.commit()
-    _emit_execution_event(db, AuditEventType.EXECUTION_COMPLETED, request, {"output_count": output_count})
+    _emit_execution_event(
+        db, AuditEventType.EXECUTION_COMPLETED, request, {"output_count": output_count}
+    )
     transition_to(db, request, ExecutionRequestStatus.COMPLETED)
 
 
@@ -515,9 +567,7 @@ def main():
             db = SessionLocal()
             backoff = 1
         except Exception as e:
-            logger.warning(
-                "Database connection failed (retry in %ds): %s", backoff, e
-            )
+            logger.warning("Database connection failed (retry in %ds): %s", backoff, e)
             time.sleep(backoff)
             backoff = min(backoff * 2, BACKOFF_MAX)
             continue

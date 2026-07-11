@@ -535,21 +535,6 @@ export default function AnalysisDetailPage() {
 
           <div style={{ marginBottom: "var(--spacing-md)" }}>
             <div style={{ fontSize: "0.8rem", color: "var(--color-text-secondary)", marginBottom: "var(--spacing-xs)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-              Build Strategy
-            </div>
-            <div>
-              {bundle.build_strategy === "custom" ? (
-                <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: "4px", fontSize: "0.8rem", fontWeight: 600, background: "#e3f2fd", color: "#1565c0" }}>
-                  Custom Build
-                </span>
-              ) : (
-                <span>Institutional Build</span>
-              )}
-            </div>
-          </div>
-
-          <div style={{ marginBottom: "var(--spacing-md)" }}>
-            <div style={{ fontSize: "0.8rem", color: "var(--color-text-secondary)", marginBottom: "var(--spacing-xs)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
               Version
             </div>
             <div>{bundle.version}</div>
@@ -1048,8 +1033,28 @@ export default function AnalysisDetailPage() {
               </table>
             </div>
           ) : (
-            <div style={{ color: "var(--color-text-secondary)", fontSize: "0.85rem", lineHeight: 1.6 }}>
-              No files uploaded yet. Upload a ZIP archive containing your analysis code to get started, or add individual files.
+            <div style={{ color: "var(--color-text-secondary)", fontSize: "0.85rem", lineHeight: 1.8 }}>
+              <div>No files uploaded yet. Upload a ZIP archive containing your analysis code to get started, or add individual files.</div>
+              <div style={{ marginTop: "var(--spacing-sm)" }}>
+                <Link
+                  href="/templates"
+                  style={{ color: "var(--color-primary)", textDecoration: "none" }}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Browse Bundle Templates →
+                </Link>
+              </div>
+              <div>
+                <Link
+                  href="/examples"
+                  style={{ color: "var(--color-primary)", textDecoration: "none" }}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Browse Example Analyses →
+                </Link>
+              </div>
             </div>
           )}
         </div>
@@ -1078,8 +1083,16 @@ export default function AnalysisDetailPage() {
               </label>
               <select
                 id="edit-env"
-                value={editEnvId}
-                onChange={(e) => setEditEnvId(e.target.value)}
+                value={editBuildStrategy === "custom" ? "__custom__" : editEnvId}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === "__custom__") {
+                    setEditBuildStrategy("custom");
+                  } else {
+                    setEditBuildStrategy("institutional");
+                    setEditEnvId(val);
+                  }
+                }}
                 style={{
                   width: "100%",
                   padding: "var(--spacing-xs) var(--spacing-sm)",
@@ -1095,34 +1108,35 @@ export default function AnalysisDetailPage() {
                     {env.display_name}
                   </option>
                 ))}
-              </select>
-            </div>
-
-            <div>
-              <label
-                htmlFor="edit-build-strategy"
-                style={{ fontSize: "0.8rem", color: "var(--color-text-secondary)", marginBottom: "var(--spacing-xs)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", display: "block" }}
-              >
-                Build Strategy
-              </label>
-              <select
-                id="edit-build-strategy"
-                value={editBuildStrategy}
-                onChange={(e) => setEditBuildStrategy(e.target.value)}
-                style={{
-                  width: "100%",
-                  padding: "var(--spacing-xs) var(--spacing-sm)",
-                  border: "1px solid var(--color-border)",
-                  borderRadius: "var(--radius-md)",
-                  fontSize: "0.9rem",
-                  background: "var(--color-bg)",
-                }}
-              >
-                <option value="institutional">Institutional Build</option>
                 {user?.capabilities.includes("build.customize") && (
-                  <option value="custom">Custom Build</option>
+                  <option value="__custom__">⚡ Custom Build</option>
                 )}
               </select>
+              <div style={{ marginTop: "var(--spacing-xs)", fontSize: "0.8rem" }}>
+                {editBuildStrategy === "custom" ? (
+                  <span style={{ color: "var(--color-primary)" }}>
+                    Custom Dockerfile with {editEnvId ? environments.find((e) => e.id === editEnvId)?.display_name : "selected environment"}
+                  </span>
+                ) : editEnvId && environments.find((e) => e.id === editEnvId) ? (
+                  <Link
+                    href={`/environments/${environments.find((e) => e.id === editEnvId)?.identifier}`}
+                    style={{ color: "var(--color-primary)", textDecoration: "none" }}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    View {environments.find((e) => e.id === editEnvId)?.display_name} details →
+                  </Link>
+                ) : (
+                  <Link
+                    href="/environments"
+                    style={{ color: "var(--color-primary)", textDecoration: "none" }}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Browse Execution Environments →
+                  </Link>
+                )}
+              </div>
             </div>
 
             <div>
@@ -1274,8 +1288,24 @@ export default function AnalysisDetailPage() {
                 ))}
               </div>
             ) : (
-              <div style={{ color: "var(--color-text-secondary)", fontSize: "0.85rem" }}>
-                No data resources allocated to this project. Add resources from the project Resources tab.
+              <div style={{ color: "var(--color-text-secondary)", fontSize: "0.85rem", lineHeight: 1.6 }}>
+                No data resources allocated to this project.{" "}
+                <Link
+                  href={`/projects/${projectId}/resources`}
+                  style={{ color: "var(--color-primary)", textDecoration: "none" }}
+                >
+                  Add resources from the Resources tab →
+                </Link>
+              </div>
+            )}
+            {selectedResources.length > 0 && (
+              <div style={{ marginTop: "var(--spacing-sm)", fontSize: "0.8rem" }}>
+                <Link
+                  href={`/projects/${projectId}/resources`}
+                  style={{ color: "var(--color-primary)", textDecoration: "none" }}
+                >
+                  View all project Data Resources →
+                </Link>
               </div>
             )}
           </div>

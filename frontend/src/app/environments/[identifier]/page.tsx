@@ -8,10 +8,12 @@ import { CodeBlock } from "@/components/CodeBlock";
 import { PublicationTabs, PublicationTab } from "@/components/PublicationTabs";
 import {
   ExecutionEnvironment,
+  ExampleAnalysis,
   getExecutionEnvironment,
   getEnvironmentArtefacts,
   getEnvironmentArtefactUrl,
   getEnvironmentArtefactContent,
+  getExampleAnalyses,
 } from "@/lib/api";
 
 const MARKDOWN_FILES = new Set(["PACKAGES.md", "LOCAL_DEV.md", "EXECUTION_CONTRACT.md"]);
@@ -44,6 +46,7 @@ export default function EnvironmentDetailPage() {
   const [packagesMd, setPackagesMd] = useState<string | null>(null);
   const [dockerfile, setDockerfile] = useState<string | null>(null);
   const [requirementsTxt, setRequirementsTxt] = useState<string | null>(null);
+  const [relatedExamples, setRelatedExamples] = useState<ExampleAnalysis[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -85,6 +88,13 @@ export default function EnvironmentDetailPage() {
       }
 
       await Promise.all(pending);
+
+      try {
+        const examples = await getExampleAnalyses({ environment: identifier });
+        setRelatedExamples(examples);
+      } catch {
+        setRelatedExamples([]);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load environment");
     }
@@ -191,8 +201,37 @@ export default function EnvironmentDetailPage() {
       });
     }
 
+    if (relatedExamples.length > 0) {
+      result.push({
+        id: "example-analyses",
+        label: "Example Analyses",
+        content: (
+          <div>
+            <p style={{ marginBottom: "var(--spacing-md)", color: "var(--color-text-secondary)", lineHeight: 1.6 }}>
+              Example analyses compatible with this execution environment.
+            </p>
+            <ul style={{ margin: 0, paddingLeft: "var(--spacing-lg)" }}>
+              {relatedExamples.map((ex) => (
+                <li key={ex.identifier} style={{ marginBottom: "var(--spacing-sm)" }}>
+                  <Link
+                    href={`/examples/${ex.identifier}`}
+                    style={{ color: "var(--color-primary)", textDecoration: "none", fontWeight: 500 }}
+                  >
+                    {ex.name}
+                  </Link>
+                  <span style={{ color: "var(--color-text-secondary)", fontSize: "0.85rem", marginLeft: "var(--spacing-sm)" }}>
+                    {ex.description}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ),
+      });
+    }
+
     return result;
-  }, [env, localDevMd, contractMd, packagesMd, dockerfile, requirementsTxt, remainingArtefacts, identifier]);
+  }, [env, localDevMd, contractMd, packagesMd, dockerfile, requirementsTxt, remainingArtefacts, identifier, relatedExamples]);
 
   if (error) {
     return (

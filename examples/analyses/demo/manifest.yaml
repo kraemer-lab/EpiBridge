@@ -1,0 +1,9 @@
+identifier: demo
+name: Mexico Dengue Summary
+description: "Read dengue surveillance data and compute summary statistics. Demonstrates the standard Canada workload pattern: CSV input, pandas transformation, CSV output."
+execution_environment_identifier: python-3.14
+data_resource_identifiers:
+  - mex-dengue-2026
+entrypoint: run.py
+expected_outputs:
+  - summary.csv

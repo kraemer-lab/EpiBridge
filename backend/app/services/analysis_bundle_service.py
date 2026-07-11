@@ -100,9 +100,6 @@ def validate_resources(
     return resources
 
 
-CUSTOM_BUILD_DIR = "build"
-
-
 def validate_build_strategy(
     bundle: AnalysisBundle,
     bundle_path: Path | None,
@@ -115,22 +112,14 @@ def validate_build_strategy(
     if bundle_path is None:
         return None
 
-    build_dir = bundle_path / CUSTOM_BUILD_DIR
-    custom_dockerfile = build_dir / "Dockerfile"
+    dockerfile = bundle_path / "Dockerfile"
 
     if bundle.build_strategy == BuildStrategy.CUSTOM.value:
-        if not custom_dockerfile.exists() or not custom_dockerfile.is_file():
+        if not dockerfile.exists() or not dockerfile.is_file():
             return (
-                "Custom Build Strategy requires a build/Dockerfile "
-                "in the Analysis Bundle"
+                "Custom Build Strategy requires a Dockerfile "
+                "in the root of the Analysis Bundle"
             )
-        return None
-
-    if build_dir.exists():
-        return (
-            "Institutional Build Strategy does not allow a build/ directory "
-            "in the Analysis Bundle"
-        )
 
     return None
 

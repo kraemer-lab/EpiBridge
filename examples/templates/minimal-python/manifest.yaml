@@ -1,0 +1,4 @@
+identifier: minimal-python
+name: Minimal Python Bundle
+description: "A minimal Python analysis bundle structure. Download and customise with your own analysis code."
+execution_environment_identifier: python-3.14

@@ -7,12 +7,14 @@ import { Markdown } from "@/components/Markdown";
 import { PublicationTabs, PublicationTab } from "@/components/PublicationTabs";
 import {
   DataResource,
+  ExampleAnalysis,
   getDataResource,
   getResourceArtefacts,
   getResourceArtefactUrl,
   getResourceArtefactContent,
   getTermsStatus,
   acceptResourceTerms,
+  getExampleAnalyses,
 } from "@/lib/api";
 import { TermsDialog } from "@/components/TermsDialog";
 
@@ -38,6 +40,7 @@ export default function ResourceDetailPage() {
   const [schemaMd, setSchemaMd] = useState<string | null>(null);
   const [docMd, setDocMd] = useState<string | null>(null);
   const [representativeFile, setRepresentativeFile] = useState<string | null>(null);
+  const [relatedExamples, setRelatedExamples] = useState<ExampleAnalysis[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [termsStatus, setTermsStatus] = useState<{ resource_id: string; version: string; title: string; accepted: boolean } | null>(null);
   const [showTerms, setShowTerms] = useState(false);
@@ -71,6 +74,13 @@ export default function ResourceDetailPage() {
       }
 
       await Promise.all(pending);
+
+      try {
+        const examples = await getExampleAnalyses({ resource: identifier });
+        setRelatedExamples(examples);
+      } catch {
+        setRelatedExamples([]);
+      }
 
       try {
         const status = await getTermsStatus();
@@ -223,8 +233,37 @@ export default function ResourceDetailPage() {
       });
     }
 
+    if (relatedExamples.length > 0) {
+      result.push({
+        id: "example-analyses",
+        label: "Example Analyses",
+        content: (
+          <div>
+            <p style={{ marginBottom: "var(--spacing-md)", color: "var(--color-text-secondary)", lineHeight: 1.6 }}>
+              Example analyses using this data resource.
+            </p>
+            <ul style={{ margin: 0, paddingLeft: "var(--spacing-lg)" }}>
+              {relatedExamples.map((ex) => (
+                <li key={ex.identifier} style={{ marginBottom: "var(--spacing-sm)" }}>
+                  <Link
+                    href={`/examples/${ex.identifier}`}
+                    style={{ color: "var(--color-primary)", textDecoration: "none", fontWeight: 500 }}
+                  >
+                    {ex.name}
+                  </Link>
+                  <span style={{ color: "var(--color-text-secondary)", fontSize: "0.85rem", marginLeft: "var(--spacing-sm)" }}>
+                    {ex.description}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ),
+      });
+    }
+
     return result;
-  }, [resource, schemaMd, docMd, representativeFile, remainingArtefacts, identifier, termsStatus]);
+  }, [resource, schemaMd, docMd, representativeFile, remainingArtefacts, identifier, termsStatus, relatedExamples]);
 
   if (error) {
     return (

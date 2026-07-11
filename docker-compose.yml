@@ -75,6 +75,8 @@ services:
     environment:
       RESOURCE_MANIFEST_DIR: /resources
       ENVIRONMENT_MANIFEST_DIR: /execution-environments
+      EXAMPLE_ANALYSIS_DIR: /examples/analyses
+      TEMPLATE_DIR: /examples/templates
       # Persistent output store shared between backend and worker.
       # Execution containers write to their own local /output directory.
       # The worker imports those outputs here after execution; the backend
@@ -92,6 +94,8 @@ services:
       # and ENVIRONMENT_MANIFEST_DIR env vars directly instead.
       - ./execution-environments:/execution-environments:ro
       - ./examples/resources:/examples/resources:ro
+      - ./examples/analyses:/examples/analyses:ro
+      - ./examples/templates:/examples/templates:ro
       - ./resources:/resources:ro
     networks:
       - internal

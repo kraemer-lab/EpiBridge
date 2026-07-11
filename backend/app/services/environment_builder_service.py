@@ -16,8 +16,6 @@ from app.services.bundle_store import get_bundle_store
 
 logger = logging.getLogger("services.environment_builder_service")
 
-CUSTOM_BUILD_DIR = "build"
-
 
 def resolve_builder_for_bundle(bundle: AnalysisBundle):
     runtime = (
@@ -44,9 +42,9 @@ def _compute_custom_hash(bundle_path, builder):
     dep_file = bundle_path / builder.default_dependency_filename()
     if dep_file.exists() and dep_file.is_file():
         hasher.update(dep_file.read_bytes())
-    custom_file = bundle_path / CUSTOM_BUILD_DIR / "Dockerfile"
-    if custom_file.exists() and custom_file.is_file():
-        hasher.update(custom_file.read_bytes())
+    dockerfile = bundle_path / "Dockerfile"
+    if dockerfile.exists() and dockerfile.is_file():
+        hasher.update(dockerfile.read_bytes())
     return hasher.hexdigest()
 
 

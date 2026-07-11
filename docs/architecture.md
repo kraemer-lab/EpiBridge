@@ -519,14 +519,14 @@ Two strategies are currently supported:
 | Strategy | Behaviour |
 |----------|-----------|
 | **Institutional Build** | Uses the curated builder template for the selected Execution Environment. The standard, default path. |
-| **Custom Build** | Uses a `build/Dockerfile` provided inside the Analysis Bundle. Required for this strategy; rejected for Institutional Build. |
+| **Custom Build** | Uses a `Dockerfile` provided in the root of the Analysis Bundle. Required for this strategy; ignored in Institutional Build. |
 
 The strategy is enforced at submission time:
 
-- **Institutional Build**: the bundle must **not** contain a `build/` directory.
-- **Custom Build**: the bundle **must** contain `build/Dockerfile`.
+- **Custom Build**: the bundle **must** contain a `Dockerfile` at its root.
+- **Institutional Build**: any root-level `Dockerfile` is ignored. The execution mode determines behaviour — not file presence.
 
-These are validated explicitly by the service layer. No inference, no fallback, no detection.
+The `build_strategy` metadata field is the single source of truth. Bundle contents are not inspected for institutional builds.
 
 #### Custom Build Convention
 
@@ -905,13 +905,13 @@ Execution Environment
         +
 Build Strategy
         +
-Analysis Bundle (dependency + optional build/Dockerfile)
+Analysis Bundle (dependency + optional Dockerfile)
      ↓
 Environment Builder selection (by runtime prefix)
      ↓
 Compute dependency hash:
   Institutional → hash(dependency_file)
-  Custom       → hash(dependency_file + build/Dockerfile)
+  Custom       → hash(dependency_file + Dockerfile)
      ↓
 Cache lookup: (execution_environment_id, dependency_hash)
      ├── HIT → nothing to do

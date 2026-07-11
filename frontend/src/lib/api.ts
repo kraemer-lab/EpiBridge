@@ -661,6 +661,76 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   };
 }
 
+// --- Example Analyses & Templates (Directory Publications) ---
+
+export interface ExampleAnalysis {
+  identifier: string;
+  name: string;
+  description: string;
+  execution_environment_identifier: string | null;
+  data_resource_identifiers: string[];
+  entrypoint: string | null;
+  expected_outputs: string[];
+}
+
+export interface Template {
+  identifier: string;
+  name: string;
+  description: string;
+  execution_environment_identifier: string | null;
+}
+
+export async function getExampleAnalyses(params?: {
+  environment?: string;
+  resource?: string;
+}): Promise<ExampleAnalysis[]> {
+  const searchParams = new URLSearchParams();
+  if (params?.environment) searchParams.set("environment", params.environment);
+  if (params?.resource) searchParams.set("resource", params.resource);
+  const qs = searchParams.toString();
+  return request<ExampleAnalysis[]>(`/api/examples${qs ? `?${qs}` : ""}`);
+}
+
+export async function getExampleAnalysis(identifier: string): Promise<ExampleAnalysis> {
+  return request<ExampleAnalysis>(`/api/examples/${identifier}`);
+}
+
+export async function getExampleAnalysisArtefacts(identifier: string): Promise<ArtefactList> {
+  return request<ArtefactList>(`/api/examples/${identifier}/artefacts`);
+}
+
+export function getExampleAnalysisArtefactUrl(identifier: string, path: string): string {
+  return `/api/examples/${identifier}/artefacts/${path}`;
+}
+
+export async function getExampleAnalysisArtefactContent(identifier: string, path: string): Promise<string> {
+  const res = await fetch(getExampleAnalysisArtefactUrl(identifier, path), { credentials: "include" });
+  if (!res.ok) throw new Error(`Failed to load artefact: ${path}`);
+  return res.text();
+}
+
+export async function getTemplates(): Promise<Template[]> {
+  return request<Template[]>("/api/templates");
+}
+
+export async function getTemplate(identifier: string): Promise<Template> {
+  return request<Template>(`/api/templates/${identifier}`);
+}
+
+export async function getTemplateArtefacts(identifier: string): Promise<ArtefactList> {
+  return request<ArtefactList>(`/api/templates/${identifier}/artefacts`);
+}
+
+export function getTemplateArtefactUrl(identifier: string, path: string): string {
+  return `/api/templates/${identifier}/artefacts/${path}`;
+}
+
+export async function getTemplateArtefactContent(identifier: string, path: string): Promise<string> {
+  const res = await fetch(getTemplateArtefactUrl(identifier, path), { credentials: "include" });
+  if (!res.ok) throw new Error(`Failed to load artefact: ${path}`);
+  return res.text();
+}
+
 // --- Audit Events ---
 
 export interface AuditEvent {
