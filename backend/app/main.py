@@ -12,6 +12,7 @@ from app.api.routes.environments import router as environments_router
 from app.api.routes.health import router as health_router
 from app.api.routes.me import router as me_router
 from app.api.routes.projects import router as projects_router
+from app.api.routes.resources import router as resources_router
 from app.api.routes.terms import router as terms_router
 from app.auth.dependencies import require_platform_terms_accepted
 from app.auth.policy import PolicyError
@@ -24,7 +25,7 @@ from app.services.environment_manifest_loader import load_environment_directory
 from app.services.execution_environment_service import (
     register_from_manifest as register_environments,
 )
-from app.services.manifest_loader import load_directory
+from app.services.manifest_loader import load_resource_directory
 from app.services.resource_registration import register_from_manifest
 from app.services.session_service import cleanup_expired_sessions
 
@@ -59,7 +60,7 @@ async def lifespan(app: FastAPI):
                 f"Resource manifest directory not found: {manifest_path}. "
                 "Set RESOURCE_MANIFEST_DIR env var to a valid directory."
             )
-        entries = load_directory(manifest_path)
+        entries = load_resource_directory(manifest_path)
         db: Session = SessionLocal()
         try:
             register_from_manifest(db, entries)
@@ -100,6 +101,11 @@ app.include_router(
 )
 app.include_router(
     admin_router,
+    prefix="/api",
+    dependencies=[Depends(require_platform_terms_accepted)],
+)
+app.include_router(
+    resources_router,
     prefix="/api",
     dependencies=[Depends(require_platform_terms_accepted)],
 )

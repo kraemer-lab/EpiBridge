@@ -1,0 +1,14 @@
+# EpiBridge Published Data Resource
+#
+# The institutional publication manifest for this Data Resource.
+# The publication directory is derived from the identifier (resources/<identifier>/).
+
+identifier: mex-dengue-2026
+name: Mexico Dengue Surveillance 2026
+alias: mexico_dengue_2026
+provider: csv
+endpoint:
+  path: mexico_dengue_2026
+description: "Dengue surveillance data for Mexico, 2026"
+version: "1.0.0"
+status: active

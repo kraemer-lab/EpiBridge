@@ -626,6 +626,28 @@ export async function getEnvironmentArtefactContent(identifier: string, path: st
   return res.text();
 }
 
+export async function getDataResources(): Promise<DataResource[]> {
+  return request<DataResource[]>("/api/resources");
+}
+
+export async function getDataResource(identifier: string): Promise<DataResource> {
+  return request<DataResource>(`/api/resources/${identifier}`);
+}
+
+export async function getResourceArtefacts(identifier: string): Promise<ArtefactList> {
+  return request<ArtefactList>(`/api/resources/${identifier}/artefacts`);
+}
+
+export function getResourceArtefactUrl(identifier: string, path: string): string {
+  return `/api/resources/${identifier}/artefacts/${path}`;
+}
+
+export async function getResourceArtefactContent(identifier: string, path: string): Promise<string> {
+  const res = await fetch(getResourceArtefactUrl(identifier, path), { credentials: "include" });
+  if (!res.ok) throw new Error(`Failed to load artefact: ${path}`);
+  return res.text();
+}
+
 export async function getDashboardStats(): Promise<DashboardStats> {
   const [projects, resources] = await Promise.all([
     getProjects(),

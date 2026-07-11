@@ -91,7 +91,7 @@ test("Canonical Workflow", async ({ page }) => {
   await expect(page.getByRole("link", { name: "Overview" })).toBeVisible();
 
   // Open the Resources tab and attach the Mexico dengue data resource
-  await page.getByRole("link", { name: "Resources" }).click();
+  await page.getByRole("link", { name: "Resources", exact: true }).click();
   await expect(page.getByText("Configure Resources")).toBeVisible();
   await page
     .locator("tr")

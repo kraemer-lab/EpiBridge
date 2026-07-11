@@ -73,7 +73,7 @@ services:
     env_file:
       - .env
     environment:
-      RESOURCE_MANIFEST_DIR: /examples/resources
+      RESOURCE_MANIFEST_DIR: /resources
       ENVIRONMENT_MANIFEST_DIR: /execution-environments
       # Persistent output store shared between backend and worker.
       # Execution containers write to their own local /output directory.
@@ -92,6 +92,7 @@ services:
       # and ENVIRONMENT_MANIFEST_DIR env vars directly instead.
       - ./execution-environments:/execution-environments:ro
       - ./examples/resources:/examples/resources:ro
+      - ./resources:/resources:ro
     networks:
       - internal
       - frontend

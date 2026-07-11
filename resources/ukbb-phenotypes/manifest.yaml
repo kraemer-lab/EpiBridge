@@ -1,0 +1,14 @@
+# EpiBridge Published Data Resource
+#
+# The institutional publication manifest for this Data Resource.
+# The publication directory is derived from the identifier (resources/<identifier>/).
+
+identifier: ukbb-phenotypes
+name: UK Biobank Phenotypes
+alias: ukbb
+provider: duckdb
+endpoint:
+  path: ukbb/phenotypes.duckdb
+description: "UK Biobank phenotype database"
+version: "1.0.0"
+status: active
