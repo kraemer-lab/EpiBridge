@@ -1,23 +1,49 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import { Markdown } from "@/components/Markdown";
+import { CodeBlock } from "@/components/CodeBlock";
+import { PublicationTabs, PublicationTab } from "@/components/PublicationTabs";
 import {
   ExecutionEnvironment,
-  ArtefactList,
   getExecutionEnvironment,
   getEnvironmentArtefacts,
   getEnvironmentArtefactUrl,
+  getEnvironmentArtefactContent,
 } from "@/lib/api";
+
+const MARKDOWN_FILES = new Set(["PACKAGES.md", "LOCAL_DEV.md", "EXECUTION_CONTRACT.md"]);
+const CODE_FILES = new Set(["Dockerfile", "requirements.txt"]);
+
+const CODE_META: Record<string, { label: string; lang: string }> = {
+  Dockerfile: { label: "Dockerfile", lang: "Dockerfile" },
+  "requirements.txt": { label: "requirements.txt", lang: "txt" },
+};
+
+function stripFirstHeading(md: string): string {
+  return md.replace(/^#{1,3}\s+.*\n?/, "").trim();
+}
+
+function purposeStatement(env: ExecutionEnvironment): string {
+  if (env.identifier === "conda") {
+    return `The ${env.name} provides flexible package management for analyses that require specialised dependencies. Researchers define their own environment using conda's environment.yml format.`;
+  }
+  return `The ${env.name} is the institution's standard environment for computational epidemiology analyses. Develop and test against this environment to maximise reproducibility between local development and institutional execution.`;
+}
 
 export default function EnvironmentDetailPage() {
   const params = useParams();
   const identifier = params.identifier as string;
 
   const [env, setEnv] = useState<ExecutionEnvironment | null>(null);
-  const [artefacts, setArtefacts] = useState<ArtefactList | null>(null);
+  const [artefacts, setArtefacts] = useState<string[] | null>(null);
+  const [localDevMd, setLocalDevMd] = useState<string | null>(null);
+  const [contractMd, setContractMd] = useState<string | null>(null);
+  const [packagesMd, setPackagesMd] = useState<string | null>(null);
   const [dockerfile, setDockerfile] = useState<string | null>(null);
+  const [requirementsTxt, setRequirementsTxt] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -27,15 +53,38 @@ export default function EnvironmentDetailPage() {
         getEnvironmentArtefacts(identifier),
       ]);
       setEnv(envData);
-      setArtefacts(artefactData);
+      setArtefacts(artefactData.artefacts);
 
-      if (artefactData.artefacts.includes("Dockerfile")) {
-        const url = getEnvironmentArtefactUrl(identifier, "Dockerfile");
-        const res = await fetch(url, { credentials: "include" });
-        if (res.ok) {
-          setDockerfile(await res.text());
-        }
+      const files = artefactData.artefacts;
+      const pending: Promise<void>[] = [];
+
+      if (files.includes("LOCAL_DEV.md")) {
+        pending.push(
+          getEnvironmentArtefactContent(identifier, "LOCAL_DEV.md").then(setLocalDevMd),
+        );
       }
+      if (files.includes("EXECUTION_CONTRACT.md")) {
+        pending.push(
+          getEnvironmentArtefactContent(identifier, "EXECUTION_CONTRACT.md").then(setContractMd),
+        );
+      }
+      if (files.includes("PACKAGES.md")) {
+        pending.push(
+          getEnvironmentArtefactContent(identifier, "PACKAGES.md").then(setPackagesMd),
+        );
+      }
+      if (files.includes("Dockerfile")) {
+        pending.push(
+          getEnvironmentArtefactContent(identifier, "Dockerfile").then(setDockerfile),
+        );
+      }
+      if (files.includes("requirements.txt")) {
+        pending.push(
+          getEnvironmentArtefactContent(identifier, "requirements.txt").then(setRequirementsTxt),
+        );
+      }
+
+      await Promise.all(pending);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load environment");
     }
@@ -44,6 +93,106 @@ export default function EnvironmentDetailPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const remainingArtefacts = useMemo(
+    () =>
+      artefacts
+        ? Array.from(new Set(artefacts)).sort().filter(
+            (f) => f !== "manifest.yaml" && !MARKDOWN_FILES.has(f) && !CODE_FILES.has(f),
+          )
+        : [],
+    [artefacts],
+  );
+
+  const tabs = useMemo<PublicationTab[]>(() => {
+    if (!env) return [];
+    const result: PublicationTab[] = [];
+
+    result.push({
+      id: "overview",
+      label: "Overview",
+      content: (
+        <div>
+          <p className="overview-purpose">{purposeStatement(env)}</p>
+          <p className="overview-description">{env.description || "No description provided."}</p>
+        </div>
+      ),
+    });
+
+    if (localDevMd) {
+      result.push({
+        id: "local-development",
+        label: "Local Development",
+        content: <Markdown content={stripFirstHeading(localDevMd)} />,
+      });
+    }
+
+    if (contractMd) {
+      result.push({
+        id: "execution-contract",
+        label: "Execution Contract",
+        content: <Markdown content={stripFirstHeading(contractMd)} />,
+      });
+    }
+
+    if (packagesMd) {
+      result.push({
+        id: "software",
+        label: "Software",
+        content: <Markdown content={stripFirstHeading(packagesMd)} />,
+      });
+    }
+
+    if (dockerfile || requirementsTxt || remainingArtefacts.length > 0) {
+      result.push({
+        id: "technical-reference",
+        label: "Technical Reference",
+        content: (
+          <div>
+            {dockerfile && (
+              <div style={{ marginBottom: requirementsTxt || remainingArtefacts.length > 0 ? "var(--spacing-lg)" : 0 }}>
+                <h3 style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "var(--spacing-sm)" }}>
+                  {CODE_META.Dockerfile?.label || "Dockerfile"}
+                </h3>
+                <CodeBlock code={dockerfile} language={CODE_META.Dockerfile?.lang} />
+              </div>
+            )}
+            {requirementsTxt && (
+              <div style={{ marginBottom: remainingArtefacts.length > 0 ? "var(--spacing-lg)" : 0 }}>
+                <h3 style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "var(--spacing-sm)" }}>
+                  {CODE_META["requirements.txt"]?.label || "requirements.txt"}
+                </h3>
+                <CodeBlock code={requirementsTxt} language={CODE_META["requirements.txt"]?.lang} />
+              </div>
+            )}
+            {remainingArtefacts.length > 0 && (
+              <div>
+                <h3 style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "var(--spacing-sm)" }}>
+                  Published Artefacts
+                </h3>
+                <ul style={{ margin: 0, paddingLeft: "var(--spacing-lg)" }}>
+                  {remainingArtefacts.map((file) => (
+                    <li key={file} style={{ marginBottom: "var(--spacing-xs)" }}>
+                      <a
+                        href={getEnvironmentArtefactUrl(identifier, file)}
+                        style={{ color: "var(--color-primary)", textDecoration: "none" }}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        {file}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        ),
+      });
+    }
+
+    return result;
+  }, [env, localDevMd, contractMd, packagesMd, dockerfile, requirementsTxt, remainingArtefacts, identifier]);
 
   if (error) {
     return (
@@ -62,169 +211,31 @@ export default function EnvironmentDetailPage() {
     return <div className="card empty-state">Loading…</div>;
   }
 
-  const hasManifest = artefacts?.artefacts.includes("manifest.yaml");
-
   return (
     <>
       <Link href="/environments" style={{ color: "var(--color-primary)", textDecoration: "none", fontSize: "0.9rem" }}>
         ← Environments
       </Link>
 
-      <h1 className="page-title" style={{ marginTop: "var(--spacing-md)" }}>
-        {env.display_name}
-      </h1>
-
-      <div className="card">
-        <h2 style={{ marginTop: 0, fontSize: "1rem", fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-          Environment Details
-        </h2>
-        <table className="table" style={{ marginBottom: 0 }}>
-          <tbody>
-            <tr>
-              <td style={{ fontWeight: 500, width: "180px" }}>Name</td>
-              <td>{env.name}</td>
-            </tr>
-            <tr>
-              <td style={{ fontWeight: 500 }}>Identifier</td>
-              <td><code>{env.identifier}</code></td>
-            </tr>
-            <tr>
-              <td style={{ fontWeight: 500 }}>Runtime</td>
-              <td>{env.runtime}</td>
-            </tr>
-            <tr>
-              <td style={{ fontWeight: 500 }}>Description</td>
-              <td>{env.description || "—"}</td>
-            </tr>
-            <tr>
-              <td style={{ fontWeight: 500 }}>Image</td>
-              <td><code>{env.image_reference}</code></td>
-            </tr>
-          </tbody>
-        </table>
+      <div className="publication-header">
+        <h2>{env.display_name}</h2>
+        <dl className="publication-meta">
+          <div>
+            <dt>Identifier</dt>
+            <dd>{env.identifier}</dd>
+          </div>
+          <div>
+            <dt>Runtime</dt>
+            <dd>{env.runtime}</dd>
+          </div>
+          <div>
+            <dt>Image</dt>
+            <dd>{env.image_reference}</dd>
+          </div>
+        </dl>
       </div>
 
-      <div className="card" style={{ marginTop: "var(--spacing-lg)" }}>
-        <h2 style={{ marginTop: 0, fontSize: "1rem", fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-          Local Development
-        </h2>
-        <p style={{ marginBottom: "var(--spacing-md)", color: "var(--color-text-secondary)" }}>
-          Reproduce this execution environment locally using Docker.
-        </p>
-
-        <div style={{ marginBottom: "var(--spacing-md)" }}>
-          <label style={{ display: "block", fontWeight: 500, marginBottom: "var(--spacing-xs)", fontSize: "0.9rem" }}>
-            Pull the image
-          </label>
-          <div style={{ display: "flex", gap: "var(--spacing-sm)" }}>
-            <code
-              style={{
-                flex: 1,
-                padding: "var(--spacing-sm) var(--spacing-md)",
-                background: "var(--color-bg-code, #f5f5f5)",
-                borderRadius: "4px",
-                fontSize: "0.85rem",
-                whiteSpace: "pre-wrap",
-              }}
-            >
-              docker pull {env.image_reference}
-            </code>
-            <button
-              className="btn btn-secondary"
-              style={{ flexShrink: 0 }}
-              onClick={() => navigator.clipboard.writeText(`docker pull ${env.image_reference}`)}
-            >
-              Copy
-            </button>
-          </div>
-        </div>
-
-        <div style={{ marginBottom: "var(--spacing-md)" }}>
-          <label style={{ display: "block", fontWeight: 500, marginBottom: "var(--spacing-xs)", fontSize: "0.9rem" }}>
-            Run a container
-          </label>
-          <div style={{ display: "flex", gap: "var(--spacing-sm)" }}>
-            <code
-              style={{
-                flex: 1,
-                padding: "var(--spacing-sm) var(--spacing-md)",
-                background: "var(--color-bg-code, #f5f5f5)",
-                borderRadius: "4px",
-                fontSize: "0.85rem",
-                whiteSpace: "pre-wrap",
-              }}
-            >
-              docker run --rm -v $(pwd):/analysis -v $(pwd)/data:/data:ro {env.image_reference}
-            </code>
-            <button
-              className="btn btn-secondary"
-              style={{ flexShrink: 0 }}
-              onClick={() =>
-                navigator.clipboard.writeText(`docker run --rm -v $(pwd):/analysis -v $(pwd)/data:/data:ro ${env.image_reference}`)
-              }
-            >
-              Copy
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {dockerfile && (
-        <div className="card" style={{ marginTop: "var(--spacing-lg)" }}>
-          <h2 style={{ marginTop: 0, fontSize: "1rem", fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-            Dockerfile
-          </h2>
-          <pre
-            style={{
-              background: "var(--color-bg-code, #f5f5f5)",
-              padding: "var(--spacing-md)",
-              borderRadius: "4px",
-              overflowX: "auto",
-              fontSize: "0.85rem",
-              lineHeight: 1.5,
-              margin: 0,
-            }}
-          >
-            {dockerfile}
-          </pre>
-        </div>
-      )}
-
-      {artefacts && artefacts.artefacts.length > 0 && (
-        <div className="card" style={{ marginTop: "var(--spacing-lg)" }}>
-          <h2 style={{ marginTop: 0, fontSize: "1rem", fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-            Published Artefacts
-          </h2>
-          <ul style={{ margin: 0, paddingLeft: "var(--spacing-lg)" }}>
-            {artefacts.artefacts.filter((f) => f !== "manifest.yaml" || hasManifest).map((file) => (
-              <li key={file} style={{ marginBottom: "var(--spacing-xs)" }}>
-                {file === "manifest.yaml" || file === "Dockerfile" ? (
-                  <span>{file}</span>
-                ) : (
-                  <a
-                    href={getEnvironmentArtefactUrl(identifier, file)}
-                    style={{ color: "var(--color-primary)", textDecoration: "none" }}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    {file}
-                  </a>
-                )}
-                {file === "manifest.yaml" && (
-                  <span style={{ color: "var(--color-text-secondary)", fontSize: "0.85rem", marginLeft: "var(--spacing-sm)" }}>
-                    (registry metadata)
-                  </span>
-                )}
-                {file === "Dockerfile" && (
-                  <span style={{ color: "var(--color-text-secondary)", fontSize: "0.85rem", marginLeft: "var(--spacing-sm)" }}>
-                    (shown above)
-                  </span>
-                )}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      <PublicationTabs tabs={tabs} defaultTab="overview" />
     </>
   );
 }

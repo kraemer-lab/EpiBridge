@@ -48,17 +48,28 @@ test("Canonical Workflow", async ({ page }) => {
 
   // Verify environment detail page
   await expect(
-    page.getByRole("heading", { name: "Environment Details" }),
+    page.getByRole("heading", { name: "Python 3.13" }),
   ).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "Local Development" }),
+    page.getByRole("tab", { name: "Overview" }),
   ).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Dockerfile" })).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "Published Artefacts" }),
+    page.getByRole("tab", { name: "Local Development" }),
   ).toBeVisible();
+  await expect(
+    page.getByRole("tab", { name: "Technical Reference" }),
+  ).toBeVisible();
+
+  // Click Local Development tab and verify content
+  await page.getByRole("tab", { name: "Local Development" }).click();
   await expect(page.getByText("Pull the image")).toBeVisible();
   await expect(page.getByText("Run a container")).toBeVisible();
+
+  // Click Technical Reference tab and verify Dockerfile
+  await page.getByRole("tab", { name: "Technical Reference" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Dockerfile" }),
+  ).toBeVisible();
 
   // Navigate back and then to Projects page
   await page.getByRole("link", { name: "← Environments" }).click();

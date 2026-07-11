@@ -620,6 +620,12 @@ export function getEnvironmentArtefactUrl(identifier: string, path: string): str
   return `/api/execution-environments/${identifier}/artefacts/${path}`;
 }
 
+export async function getEnvironmentArtefactContent(identifier: string, path: string): Promise<string> {
+  const res = await fetch(getEnvironmentArtefactUrl(identifier, path), { credentials: "include" });
+  if (!res.ok) throw new Error(`Failed to load artefact: ${path}`);
+  return res.text();
+}
+
 export async function getDashboardStats(): Promise<DashboardStats> {
   const [projects, resources] = await Promise.all([
     getProjects(),
