@@ -1,8 +1,10 @@
 import uuid
 from datetime import datetime
+from pathlib import Path
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import PlainTextResponse, Response
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_user
@@ -10,10 +12,12 @@ from app.auth.policy import PolicyError, require_capability
 from app.db.session import get_db
 from app.models.analysis_bundle import AnalysisBundle
 from app.models.audit_event import AuditEventType
+from app.models.build_request import BuildRequest
 from app.models.capability import Capability
 from app.models.data_resource import DataResource
 from app.models.execution_environment import ExecutionEnvironment
 from app.models.user import User
+from app.schemas.ai_bundle_review import AIBundleReviewRead
 from app.schemas.analysis_bundle import AnalysisBundleRead
 from app.schemas.audit_event import AuditEventList
 from app.schemas.data_resource import DataResourceRead
@@ -28,6 +32,7 @@ from app.services.analysis_bundle_service import (
     get_resource_identifiers,
 )
 from app.services.audit_service import create_audit_event, query_audit_events
+from app.services.bundle_store import get_bundle_store
 from app.services.execution_request_service import (
     get_execution_request,
     list_execution_requests,
@@ -142,6 +147,16 @@ def _check_admin_view(current_user: User) -> None:
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
 
 
+def _build_log_for_bundle(db: Session, bundle_id: uuid.UUID) -> str:
+    latest = (
+        db.query(BuildRequest)
+        .filter(BuildRequest.analysis_bundle_id == bundle_id)
+        .order_by(BuildRequest.created_at.desc())
+        .first()
+    )
+    return latest.log if latest is not None else ""
+
+
 @router.get("/admin/bundles", response_model=List[AnalysisBundleRead])
 def list_bundles(
     db: Session = Depends(get_db),
@@ -151,6 +166,11 @@ def list_bundles(
     bundles = db.query(AnalysisBundle).order_by(AnalysisBundle.name).all()
     result = []
     for b in bundles:
+        ai_review_read = (
+            AIBundleReviewRead.model_validate(b.ai_review)
+            if b.ai_review is not None
+            else None
+        )
         read = AnalysisBundleRead(
             id=b.id,
             project_id=b.project_id,
@@ -171,9 +191,10 @@ def list_bundles(
             build_strategy=b.build_strategy,
             build_status=b.build_status,
             build_error=b.build_error,
-            build_log="",
+            build_log=_build_log_for_bundle(db, b.id),
             created_at=b.created_at,
             updated_at=b.updated_at,
+            ai_review=ai_review_read,
         )
         result.append(read)
     return result
@@ -192,6 +213,11 @@ def get_bundle(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Bundle not found",
         )
+    ai_review_read = (
+        AIBundleReviewRead.model_validate(bundle.ai_review)
+        if bundle.ai_review is not None
+        else None
+    )
     return AnalysisBundleRead(
         id=bundle.id,
         project_id=bundle.project_id,
@@ -212,9 +238,97 @@ def get_bundle(
         build_strategy=bundle.build_strategy,
         build_status=bundle.build_status,
         build_error=bundle.build_error,
-        build_log="",
+        build_log=_build_log_for_bundle(db, bundle.id),
         created_at=bundle.created_at,
         updated_at=bundle.updated_at,
+        ai_review=ai_review_read,
+    )
+
+
+@router.get("/admin/bundles/{bundle_id}/files")
+def get_admin_bundle_files(
+    bundle_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _check_admin_view(current_user)
+    bundle = _get_admin_bundle(bundle_id, db)
+    store = get_bundle_store()
+    files = store.list_files(bundle.id)
+    return {
+        "files": files,
+        "total_size": store.get_total_size(bundle.id),
+    }
+
+
+MAX_PREVIEW_SIZE = 1024 * 1024
+
+_TEXT_EXTENSIONS = frozenset(
+    {
+        ".py",
+        ".r",
+        ".R",
+        ".sh",
+        ".js",
+        ".ipynb",
+        ".txt",
+        ".md",
+        ".json",
+        ".yaml",
+        ".yml",
+        ".toml",
+        ".cfg",
+        ".ini",
+        ".conf",
+        ".xml",
+        ".html",
+        ".css",
+        ".ts",
+        ".tsx",
+        ".jsx",
+        ".sql",
+        ".csv",
+        ".tsv",
+    }
+)
+
+
+@router.get("/admin/bundles/{bundle_id}/files/{path:path}")
+def get_admin_bundle_file(
+    bundle_id: str,
+    path: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _check_admin_view(current_user)
+    bundle = _get_admin_bundle(bundle_id, db)
+    store = get_bundle_store()
+    try:
+        content = store.read_file(bundle.id, path)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        )
+    if len(content) > MAX_PREVIEW_SIZE:
+        msg = (
+            f"File too large to preview ({len(content)} bytes, "
+            f"max {MAX_PREVIEW_SIZE} bytes)"
+        )
+        return Response(content=msg, media_type="text/plain", status_code=413)
+    ext = Path(path).suffix
+    if ext in _TEXT_EXTENSIONS:
+        try:
+            text = content.decode("utf-8")
+            return PlainTextResponse(text)
+        except UnicodeDecodeError:
+            return Response(
+                content=f"Binary file — {len(content)} bytes — preview unavailable",
+                media_type="text/plain",
+            )
+    return Response(
+        content=f"Binary file — {len(content)} bytes — preview unavailable",
+        media_type="text/plain",
     )
 
 
@@ -655,7 +769,17 @@ def get_admin_audit_events(
     return AuditEventList(items=items, total=total, limit=limit, offset=offset)
 
 
-def _admin_bundle_to_read(bundle: AnalysisBundle) -> AnalysisBundleRead:
+def _admin_bundle_to_read(
+    bundle: AnalysisBundle, db: Session | None = None
+) -> AnalysisBundleRead:
+    ai_review_read = (
+        AIBundleReviewRead.model_validate(bundle.ai_review)
+        if bundle.ai_review is not None
+        else None
+    )
+    build_log = ""
+    if db is not None:
+        build_log = _build_log_for_bundle(db, bundle.id)
     return AnalysisBundleRead(
         id=bundle.id,
         project_id=bundle.project_id,
@@ -676,10 +800,10 @@ def _admin_bundle_to_read(bundle: AnalysisBundle) -> AnalysisBundleRead:
         build_strategy=bundle.build_strategy,
         build_status=bundle.build_status,
         build_error=bundle.build_error,
-        build_log="",
+        build_log=build_log,
         created_at=bundle.created_at,
         updated_at=bundle.updated_at,
-        ai_review=None,
+        ai_review=ai_review_read,
     )
 
 
@@ -722,7 +846,7 @@ def post_admin_approve_bundle(
     )
     db.commit()
     db.refresh(bundle)
-    return _admin_bundle_to_read(bundle)
+    return _admin_bundle_to_read(bundle, db=db)
 
 
 @router.post(
@@ -754,7 +878,7 @@ def post_admin_reject_bundle(
     )
     db.commit()
     db.refresh(bundle)
-    return _admin_bundle_to_read(bundle)
+    return _admin_bundle_to_read(bundle, db=db)
 
 
 @router.post(
@@ -787,7 +911,7 @@ def post_admin_supersede_bundle(
     )
     db.commit()
     db.refresh(bundle)
-    return _admin_bundle_to_read(bundle)
+    return _admin_bundle_to_read(bundle, db=db)
 
 
 @router.post(

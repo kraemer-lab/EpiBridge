@@ -50,6 +50,9 @@ class BundleStore(ABC):
     def get_total_size(self, bundle_id: uuid.UUID) -> int: ...
 
     @abstractmethod
+    def read_file(self, bundle_id: uuid.UUID, path: str) -> bytes: ...
+
+    @abstractmethod
     def get_content_hash(self, bundle_id: uuid.UUID) -> str: ...
 
 
@@ -167,6 +170,18 @@ class LocalFileSystemBundleStore(BundleStore):
         if not target.is_file():
             raise ValueError(f"Not a file: {path}")
         target.unlink()
+
+    def read_file(self, bundle_id: uuid.UUID, path: str) -> bytes:
+        store_path = self.get_path(bundle_id)
+        if not store_path.is_dir():
+            raise ValueError(f"Bundle not found: {bundle_id}")
+        cleaned = os.path.normpath(path)
+        target = (store_path / cleaned).resolve()
+        if not str(target).startswith(str(store_path.resolve())):
+            raise ValueError(f"Path traversal detected: {path}")
+        if not target.exists() or not target.is_file():
+            raise ValueError(f"File not found: {path}")
+        return target.read_bytes()
 
     def clear_contents(self, bundle_id: uuid.UUID) -> None:
         store_path = self.get_path(bundle_id)
