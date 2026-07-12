@@ -83,6 +83,11 @@ services:
       # serves them from here via the download endpoint.
       OUTPUT_DIR: /outputs
       BUNDLE_STORE_DIR: /var/lib/epibridge/bundles
+      # Increase the login rate limit for the Playwright test suite.
+      # Multiple consecutive `make playwright` runs can exhaust the
+      # default in-memory limit (10 per 5 minutes) within a single
+      # development session.
+      RATE_LIMIT_MAX_ATTEMPTS: "100"
     volumes:
       - /var/lib/epibridge/outputs:/outputs:ro
       - /var/lib/epibridge/bundles:/var/lib/epibridge/bundles:rw

@@ -360,6 +360,27 @@ export async function getAdminOutput(outputId: string): Promise<Output> {
   return request<Output>(`/api/admin/outputs/${outputId}`);
 }
 
+export async function getAdminBundleFiles(
+  bundleId: string,
+): Promise<BundleFileList> {
+  return request<BundleFileList>(`/api/admin/bundles/${bundleId}/files`);
+}
+
+export async function getAdminBundleFileContent(
+  bundleId: string,
+  path: string,
+): Promise<string> {
+  const res = await fetch(
+    `/api/admin/bundles/${bundleId}/files/${encodeURIComponent(path)}`,
+    { credentials: "include" },
+  );
+  if (!res.ok) {
+    const detail = await res.text().catch(() => res.statusText);
+    throw new Error(detail || "Failed to load file");
+  }
+  return res.text();
+}
+
 export async function approveOutputSet(outputSetId: string): Promise<OutputSet> {
   return request<OutputSet>(`/api/admin/output-sets/${outputSetId}/approve`, { method: "POST" });
 }
