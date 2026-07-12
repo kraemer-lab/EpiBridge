@@ -336,6 +336,10 @@ export async function getAdminResource(id: string): Promise<DataResource> {
   return request<DataResource>(`/api/admin/resources/${id}`);
 }
 
+export async function getAdminExecutionEnvironments(): Promise<ExecutionEnvironment[]> {
+  return request<ExecutionEnvironment[]>("/api/admin/execution-environments");
+}
+
 export async function getAdminBundles(): Promise<AnalysisBundle[]> {
   return request<AnalysisBundle[]>("/api/admin/bundles");
 }

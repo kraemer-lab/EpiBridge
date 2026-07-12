@@ -12,6 +12,7 @@ interface AdminTab {
 
 const adminTabs: AdminTab[] = [
   { href: "/admin", label: "Data Resources", requiredCapability: "data.manage" },
+  { href: "/admin/environments", label: "Environments", requiredCapability: "environment.manage" },
   { href: "/admin/bundles", label: "Submissions", requiredCapability: "bundle.review" },
   { href: "/admin/executions", label: "Executions", requiredCapability: "bundle.review" },
   { href: "/admin/outputs", label: "Outputs", requiredCapability: "output.review" },
@@ -41,7 +42,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       <h1 className="page-title">Admin</h1>
 
       {visibleTabs.length > 0 && (
-        <nav style={baseStyle}>
+        <nav style={baseStyle} aria-label="Admin tabs">
           {visibleTabs.map((tab) => {
             const isActive = pathname === tab.href;
             return (
