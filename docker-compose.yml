@@ -73,8 +73,10 @@ services:
     env_file:
       - .env
     environment:
-      RESOURCE_MANIFEST_DIR: /examples/resources
+      RESOURCE_MANIFEST_DIR: /resources
       ENVIRONMENT_MANIFEST_DIR: /execution-environments
+      EXAMPLE_ANALYSIS_DIR: /examples/analyses
+      TEMPLATE_DIR: /examples/templates
       # Persistent output store shared between backend and worker.
       # Execution containers write to their own local /output directory.
       # The worker imports those outputs here after execution; the backend
@@ -92,6 +94,9 @@ services:
       # and ENVIRONMENT_MANIFEST_DIR env vars directly instead.
       - ./execution-environments:/execution-environments:ro
       - ./examples/resources:/examples/resources:ro
+      - ./examples/analyses:/examples/analyses:ro
+      - ./examples/templates:/examples/templates:ro
+      - ./resources:/resources:ro
     networks:
       - internal
       - frontend
@@ -125,6 +130,12 @@ services:
       # to the same volume the backend reads from.
       OUTPUT_DIR: /outputs
       ANALYSIS_BUNDLE_ROOT: /var/lib/epibridge/bundles
+      # Resource manifest directory — needed for representative dataset
+      # resolution during validation runs.
+      RESOURCE_MANIFEST_DIR: /resources
+      # Host-side equivalent of RESOURCE_MANIFEST_DIR for Docker-outside-of-Docker
+      # bind mounts during validation execution.
+      HOST_RESOURCE_MANIFEST_DIR: ${HOST_RESOURCE_MANIFEST_DIR:-/opt/epibridge/resources}
     volumes:
       # Docker socket enables DockerExecutor — the only component
       # that communicates with Docker Engine to orchestrate analysis containers.
@@ -133,6 +144,10 @@ services:
       - /var/lib/epibridge/bundles:/var/lib/epibridge/bundles:ro
       - /var/log/epibridge:/var/log/epibridge
       - ./examples/resources:/read-only-data:ro
+      # Resource publications — required for representative dataset mounts
+      # during validation runs. Reuses the same manifest directory the
+      # backend reads from (RESOURCE_MANIFEST_DIR=/resources).
+      - ./resources:/resources:ro
     networks:
       - internal
     group_add:

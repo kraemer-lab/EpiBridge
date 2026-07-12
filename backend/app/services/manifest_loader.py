@@ -56,3 +56,69 @@ def load_directory(dir_path: str | Path) -> list[dict]:
             all_resources.append(entry)
 
     return all_resources
+
+
+def load_resource_directory(dir_path: str | Path) -> list[dict]:
+    """Load resources from per-directory manifests mirroring EE pattern.
+
+    Scans <dir>/*/manifest.yaml where each manifest is a single mapping
+    (not a list under a 'resources' key). The directory name must match
+    the resource identifier.
+    """
+    dir_path = Path(dir_path)
+    if not dir_path.is_dir():
+        msg = f"Not a directory: {dir_path}"
+        raise ValueError(msg)
+
+    manifest_files = sorted(dir_path.glob("*/manifest.yaml"))
+    if not manifest_files:
+        msg = f"No resource manifests found in {dir_path} (expected */manifest.yaml)"
+        raise ValueError(msg)
+
+    all_entries = []
+    seen = set()
+
+    for manifest_file in manifest_files:
+        resource_dir = manifest_file.parent
+        with open(manifest_file) as f:
+            data = yaml.safe_load(f)
+
+        if not isinstance(data, dict):
+            msg = f"Manifest {manifest_file} must contain a top-level mapping"
+            raise ValueError(msg)
+
+        missing = REQUIRED_FIELDS - set(data.keys())
+        if missing:
+            msg = f"Missing required fields {sorted(missing)} in {manifest_file}"
+            raise ValueError(msg)
+
+        if not isinstance(data.get("endpoint"), dict):
+            msg = f"Manifest {manifest_file}: 'endpoint' must be a dict"
+            raise ValueError(msg)
+
+        identifier = data["identifier"]
+        if identifier != resource_dir.name:
+            msg = (
+                f"Resource identifier '{identifier}' in {manifest_file} "
+                f"must match directory name '{resource_dir.name}'"
+            )
+            raise ValueError(msg)
+
+        if identifier in seen:
+            msg = f"Duplicate resource identifier '{identifier}' across manifests"
+            raise ValueError(msg)
+        seen.add(identifier)
+
+        entry = {
+            "identifier": identifier,
+            "name": data["name"],
+            "alias": data["alias"],
+            "provider": data["provider"],
+            "endpoint": data["endpoint"],
+            "description": data.get("description", ""),
+            "version": data.get("version", "1.0.0"),
+            "status": data.get("status", "active"),
+        }
+        all_entries.append(entry)
+
+    return all_entries

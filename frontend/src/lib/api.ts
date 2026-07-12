@@ -82,13 +82,14 @@ export interface AnalysisBundle {
   id: string;
   project_id: string;
   created_by_id: string;
-  execution_environment_id: string;
+  execution_environment_id: string | null;
   name: string;
   status: string;
   build_strategy: string;
   build_status: string;
   build_error: string;
   build_log: string;
+  source_path: string;
   runtime: string;
   display_runtime: string;
   version: string;
@@ -189,6 +190,37 @@ export interface OutputSetListItem {
   release_package_size: number | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface ValidationRequest {
+  id: string;
+  project_id: string;
+  analysis_bundle_id: string;
+  name: string;
+  timeout_seconds: number;
+  parameter_overrides: Record<string, unknown>;
+  status: string;
+  log: string;
+  output_files: { filename: string; size: number }[];
+  bundle_content_hash: string;
+  requested_by_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ValidationRequestCreate {
+  analysis_bundle_id: string;
+  name?: string;
+  timeout_seconds?: number;
+  parameter_overrides?: Record<string, unknown>;
+}
+
+export interface BundleValidationStatus {
+  last_validation_id: string | null;
+  last_validation_hash: string;
+  current_bundle_hash: string;
+  is_validated: boolean;
+  has_changed: boolean;
 }
 
 export interface DashboardStats {
@@ -340,6 +372,16 @@ export async function getAdminBundle(id: string): Promise<AnalysisBundle> {
   return request<AnalysisBundle>(`/api/admin/bundles/${id}`);
 }
 
+export async function createDraftBundle(
+  projectId: string,
+  name: string,
+): Promise<AnalysisBundle> {
+  return request<AnalysisBundle>(`/api/projects/${projectId}/bundles`, {
+    method: "POST",
+    body: JSON.stringify({ name }),
+  });
+}
+
 export async function createProjectBundle(
   projectId: string,
   data: AnalysisBundleCreate,
@@ -381,6 +423,98 @@ export async function detachProjectResource(
   resourceId: string,
 ): Promise<void> {
   await fetch(`/api/projects/${projectId}/resources/${resourceId}`, {
+    method: "DELETE",
+    credentials: "include",
+  });
+}
+
+export interface BundleFile {
+  path: string;
+  size: number;
+}
+
+export interface BundleFileList {
+  files: BundleFile[];
+  total_size: number;
+}
+
+export async function getBundleFiles(
+  projectId: string,
+  bundleId: string,
+): Promise<BundleFileList> {
+  return request<BundleFileList>(`/api/projects/${projectId}/bundles/${bundleId}/files`);
+}
+
+export async function uploadBundleZip(
+  projectId: string,
+  bundleId: string,
+  file: File,
+): Promise<void> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const res = await fetch(`/api/projects/${projectId}/bundles/${bundleId}/files/upload`, {
+    method: "POST",
+    body: formData,
+    credentials: "include",
+  });
+  if (!res.ok) {
+    const detail = await res.json().then((b) => b.detail).catch(() => "Upload failed");
+    throw new Error(detail);
+  }
+}
+
+export async function importBundleZip(
+  projectId: string,
+  bundleId: string,
+  file: File,
+): Promise<void> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const res = await fetch(`/api/projects/${projectId}/bundles/${bundleId}/files/import`, {
+    method: "POST",
+    body: formData,
+    credentials: "include",
+  });
+  if (!res.ok) {
+    const detail = await res.json().then((b) => b.detail).catch(() => "Import failed");
+    throw new Error(detail);
+  }
+}
+
+export async function uploadBundleFile(
+  projectId: string,
+  bundleId: string,
+  file: File,
+): Promise<void> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const res = await fetch(`/api/projects/${projectId}/bundles/${bundleId}/files/single`, {
+    method: "POST",
+    body: formData,
+    credentials: "include",
+  });
+  if (!res.ok) {
+    const detail = await res.json().then((b) => b.detail).catch(() => "Upload failed");
+    throw new Error(detail);
+  }
+}
+
+export async function deleteBundleFile(
+  projectId: string,
+  bundleId: string,
+  path: string,
+): Promise<void> {
+  await fetch(`/api/projects/${projectId}/bundles/${bundleId}/files/${encodeURIComponent(path)}`, {
+    method: "DELETE",
+    credentials: "include",
+  });
+}
+
+export async function clearBundleFiles(
+  projectId: string,
+  bundleId: string,
+): Promise<void> {
+  await fetch(`/api/projects/${projectId}/bundles/${bundleId}/files`, {
     method: "DELETE",
     credentials: "include",
   });
@@ -497,6 +631,40 @@ export function getOutputSetDownloadUrl(
   return `/api/projects/${projectId}/execution-requests/${requestId}/outputs/download`;
 }
 
+// --- Validation Requests ---
+
+export async function createValidationRequest(
+  projectId: string,
+  bundleId: string,
+  data: ValidationRequestCreate,
+): Promise<ValidationRequest> {
+  return request<ValidationRequest>(
+    `/api/projects/${projectId}/bundles/${bundleId}/validations`,
+    {
+      method: "POST",
+      body: JSON.stringify(data),
+    },
+  );
+}
+
+export async function getBundleValidations(
+  projectId: string,
+  bundleId: string,
+): Promise<ValidationRequest[]> {
+  return request<ValidationRequest[]>(
+    `/api/projects/${projectId}/bundles/${bundleId}/validations`,
+  );
+}
+
+export async function getBundleValidationStatus(
+  projectId: string,
+  bundleId: string,
+): Promise<BundleValidationStatus> {
+  return request<BundleValidationStatus>(
+    `/api/projects/${projectId}/bundles/${bundleId}/validation-status`,
+  );
+}
+
 export interface ArtefactList {
   artefacts: string[];
 }
@@ -517,6 +685,34 @@ export function getEnvironmentArtefactUrl(identifier: string, path: string): str
   return `/api/execution-environments/${identifier}/artefacts/${path}`;
 }
 
+export async function getEnvironmentArtefactContent(identifier: string, path: string): Promise<string> {
+  const res = await fetch(getEnvironmentArtefactUrl(identifier, path), { credentials: "include" });
+  if (!res.ok) throw new Error(`Failed to load artefact: ${path}`);
+  return res.text();
+}
+
+export async function getDataResources(): Promise<DataResource[]> {
+  return request<DataResource[]>("/api/resources");
+}
+
+export async function getDataResource(identifier: string): Promise<DataResource> {
+  return request<DataResource>(`/api/resources/${identifier}`);
+}
+
+export async function getResourceArtefacts(identifier: string): Promise<ArtefactList> {
+  return request<ArtefactList>(`/api/resources/${identifier}/artefacts`);
+}
+
+export function getResourceArtefactUrl(identifier: string, path: string): string {
+  return `/api/resources/${identifier}/artefacts/${path}`;
+}
+
+export async function getResourceArtefactContent(identifier: string, path: string): Promise<string> {
+  const res = await fetch(getResourceArtefactUrl(identifier, path), { credentials: "include" });
+  if (!res.ok) throw new Error(`Failed to load artefact: ${path}`);
+  return res.text();
+}
+
 export async function getDashboardStats(): Promise<DashboardStats> {
   const [projects, resources] = await Promise.all([
     getProjects(),
@@ -528,6 +724,76 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     outputs: 0,
     resources: resources.length,
   };
+}
+
+// --- Example Analyses & Templates (Directory Publications) ---
+
+export interface ExampleAnalysis {
+  identifier: string;
+  name: string;
+  description: string;
+  execution_environment_identifier: string | null;
+  data_resource_identifiers: string[];
+  entrypoint: string | null;
+  expected_outputs: string[];
+}
+
+export interface Template {
+  identifier: string;
+  name: string;
+  description: string;
+  execution_environment_identifier: string | null;
+}
+
+export async function getExampleAnalyses(params?: {
+  environment?: string;
+  resource?: string;
+}): Promise<ExampleAnalysis[]> {
+  const searchParams = new URLSearchParams();
+  if (params?.environment) searchParams.set("environment", params.environment);
+  if (params?.resource) searchParams.set("resource", params.resource);
+  const qs = searchParams.toString();
+  return request<ExampleAnalysis[]>(`/api/examples${qs ? `?${qs}` : ""}`);
+}
+
+export async function getExampleAnalysis(identifier: string): Promise<ExampleAnalysis> {
+  return request<ExampleAnalysis>(`/api/examples/${identifier}`);
+}
+
+export async function getExampleAnalysisArtefacts(identifier: string): Promise<ArtefactList> {
+  return request<ArtefactList>(`/api/examples/${identifier}/artefacts`);
+}
+
+export function getExampleAnalysisArtefactUrl(identifier: string, path: string): string {
+  return `/api/examples/${identifier}/artefacts/${path}`;
+}
+
+export async function getExampleAnalysisArtefactContent(identifier: string, path: string): Promise<string> {
+  const res = await fetch(getExampleAnalysisArtefactUrl(identifier, path), { credentials: "include" });
+  if (!res.ok) throw new Error(`Failed to load artefact: ${path}`);
+  return res.text();
+}
+
+export async function getTemplates(): Promise<Template[]> {
+  return request<Template[]>("/api/templates");
+}
+
+export async function getTemplate(identifier: string): Promise<Template> {
+  return request<Template>(`/api/templates/${identifier}`);
+}
+
+export async function getTemplateArtefacts(identifier: string): Promise<ArtefactList> {
+  return request<ArtefactList>(`/api/templates/${identifier}/artefacts`);
+}
+
+export function getTemplateArtefactUrl(identifier: string, path: string): string {
+  return `/api/templates/${identifier}/artefacts/${path}`;
+}
+
+export async function getTemplateArtefactContent(identifier: string, path: string): Promise<string> {
+  const res = await fetch(getTemplateArtefactUrl(identifier, path), { credentials: "include" });
+  if (!res.ok) throw new Error(`Failed to load artefact: ${path}`);
+  return res.text();
 }
 
 // --- Audit Events ---

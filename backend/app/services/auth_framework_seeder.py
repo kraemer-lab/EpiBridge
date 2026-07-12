@@ -15,6 +15,7 @@ _ROLE_CAPABILITY_MAP: dict[UserRole, set[str]] = {
         Capability.BUNDLE_CREATE,
         Capability.BUNDLE_SUBMIT,
         Capability.EXECUTION_RUN,
+        Capability.VALIDATION_RUN,
     },
     UserRole.MODERATOR: {
         Capability.PROJECT_MANAGE,
@@ -25,6 +26,7 @@ _ROLE_CAPABILITY_MAP: dict[UserRole, set[str]] = {
         Capability.BUNDLE_REVIEW,
         Capability.EXECUTION_RUN,
         Capability.OUTPUT_REVIEW,
+        Capability.VALIDATION_RUN,
     },
     UserRole.MAINTAINER: {
         Capability.PROJECT_MANAGE,
@@ -40,6 +42,7 @@ _ROLE_CAPABILITY_MAP: dict[UserRole, set[str]] = {
         Capability.DATA_MANAGE,
         Capability.BUILD_CUSTOMIZE,
         Capability.TERMS_MANAGE,
+        Capability.VALIDATION_RUN,
     },
     UserRole.ADMIN: set(ALL_CAPABILITIES),
 }

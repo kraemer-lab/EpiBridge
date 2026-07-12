@@ -97,7 +97,7 @@ export default function CreateAnalysisPage() {
         &larr; Back to Analysis
       </Link>
       <h2 style={{ fontSize: "1.1rem", fontWeight: 600, marginTop: "var(--spacing-md)", marginBottom: "var(--spacing-lg)" }}>
-        Create Analysis
+        New Draft Bundle
       </h2>
 
       <div className="card" style={{ maxWidth: "640px" }}>
@@ -138,8 +138,16 @@ export default function CreateAnalysisPage() {
           </label>
           <select
             id="analysis-env"
-            value={selectedEnvId}
-            onChange={(e) => setSelectedEnvId(e.target.value)}
+            value={buildStrategy === "custom" ? "__custom__" : selectedEnvId}
+            onChange={(e) => {
+              const val = e.target.value;
+              if (val === "__custom__") {
+                setBuildStrategy("custom");
+              } else {
+                setBuildStrategy("institutional");
+                setSelectedEnvId(val);
+              }
+            }}
             style={{
               width: "100%",
               padding: "var(--spacing-sm) var(--spacing-md)",
@@ -155,8 +163,15 @@ export default function CreateAnalysisPage() {
                 {env.display_name}
               </option>
             ))}
+            {user?.capabilities.includes("build.customize") && (
+              <option value="__custom__">⚡ Custom Build</option>
+            )}
           </select>
-          {selectedEnvId && (
+          {buildStrategy === "custom" ? (
+            <div style={{ fontSize: "0.85rem", color: "var(--color-primary)", textDecoration: "none", marginTop: "var(--spacing-xs)" }}>
+              Custom Dockerfile will be used with {selectedEnvId ? environments.find((e) => e.id === selectedEnvId)?.display_name : "selected environment"}
+            </div>
+          ) : selectedEnvId ? (
             <Link
               href={`/environments/${environments.find((e) => e.id === selectedEnvId)?.identifier ?? ""}`}
               style={{ fontSize: "0.85rem", color: "var(--color-primary)", textDecoration: "none", marginTop: "var(--spacing-xs)", display: "inline-block" }}
@@ -165,7 +180,7 @@ export default function CreateAnalysisPage() {
             >
               View environment details →
             </Link>
-          )}
+          ) : null}
           {fieldErrors.environment && (
             <div style={{ color: "#e65100", fontSize: "0.8rem", marginTop: "var(--spacing-xs)" }}>
               {fieldErrors.environment}
@@ -320,37 +335,6 @@ export default function CreateAnalysisPage() {
                   </span>
                 </label>
               ))}
-            </div>
-          )}
-        </div>
-
-        <div style={{ marginBottom: "var(--spacing-md)" }}>
-          <label htmlFor="analysis-build-strategy" style={{ display: "block", fontWeight: 600, marginBottom: "var(--spacing-xs)", fontSize: "0.9rem" }}>
-            Build Strategy
-          </label>
-          <select
-            id="analysis-build-strategy"
-            value={buildStrategy}
-            onChange={(e) => setBuildStrategy(e.target.value)}
-            style={{
-              width: "100%",
-              padding: "var(--spacing-sm) var(--spacing-md)",
-              border: "1px solid var(--color-border)",
-              borderRadius: "var(--radius-md)",
-              fontSize: "0.9rem",
-              background: "var(--color-bg)",
-            }}
-          >
-            <option value="institutional">Institutional Build</option>
-            {user?.capabilities.includes("build.customize") && (
-              <option value="custom">Custom Build</option>
-            )}
-          </select>
-          {buildStrategy === "custom" && (
-            <div style={{ color: "var(--color-text-secondary)", fontSize: "0.85rem", marginTop: "var(--spacing-sm)", lineHeight: 1.5, padding: "var(--spacing-sm)", border: "1px solid #e3f2fd", borderRadius: "var(--radius-md)", background: "#f5f9ff" }}>
-              Include a <code>build/Dockerfile</code> in your Analysis Bundle ZIP to
-              customise how the execution environment is built.
-              The institutional base image is available as the <code>BASE_IMAGE</code> build argument.
             </div>
           )}
         </div>

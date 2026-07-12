@@ -12,7 +12,9 @@ from app.api.routes.environments import router as environments_router
 from app.api.routes.health import router as health_router
 from app.api.routes.me import router as me_router
 from app.api.routes.projects import router as projects_router
+from app.api.routes.resources import router as resources_router
 from app.api.routes.terms import router as terms_router
+from app.api.routes.validations import router as validations_router
 from app.auth.dependencies import require_platform_terms_accepted
 from app.auth.policy import PolicyError
 from app.auth.router import router as auth_router
@@ -20,11 +22,15 @@ from app.core.config import settings
 from app.core.logging import configure_logging
 from app.db.migration import ensure_migrated
 from app.db.session import SessionLocal
+from app.services.directory_publication import (
+    DirectoryPublication,
+    create_publication_router,
+)
 from app.services.environment_manifest_loader import load_environment_directory
 from app.services.execution_environment_service import (
     register_from_manifest as register_environments,
 )
-from app.services.manifest_loader import load_directory
+from app.services.manifest_loader import load_resource_directory
 from app.services.resource_registration import register_from_manifest
 from app.services.session_service import cleanup_expired_sessions
 
@@ -59,7 +65,7 @@ async def lifespan(app: FastAPI):
                 f"Resource manifest directory not found: {manifest_path}. "
                 "Set RESOURCE_MANIFEST_DIR env var to a valid directory."
             )
-        entries = load_directory(manifest_path)
+        entries = load_resource_directory(manifest_path)
         db: Session = SessionLocal()
         try:
             register_from_manifest(db, entries)
@@ -103,7 +109,35 @@ app.include_router(
     prefix="/api",
     dependencies=[Depends(require_platform_terms_accepted)],
 )
+app.include_router(
+    resources_router,
+    prefix="/api",
+    dependencies=[Depends(require_platform_terms_accepted)],
+)
 app.include_router(terms_router, prefix="/api")
+app.include_router(
+    validations_router,
+    prefix="/api",
+    dependencies=[Depends(require_platform_terms_accepted)],
+)
+
+if settings.example_analysis_dir:
+    examples_dir = Path(settings.example_analysis_dir)
+    if examples_dir.is_dir():
+        examples_pub = DirectoryPublication(examples_dir)
+        app.include_router(
+            create_publication_router("/api/examples", examples_pub),
+            dependencies=[Depends(require_platform_terms_accepted)],
+        )
+
+if settings.template_dir:
+    templates_dir = Path(settings.template_dir)
+    if templates_dir.is_dir():
+        templates_pub = DirectoryPublication(templates_dir)
+        app.include_router(
+            create_publication_router("/api/templates", templates_pub),
+            dependencies=[Depends(require_platform_terms_accepted)],
+        )
 
 
 @app.exception_handler(PolicyError)

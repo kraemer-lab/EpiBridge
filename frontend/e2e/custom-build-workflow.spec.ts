@@ -13,7 +13,7 @@ const MAINTAINER_PASSWORD = process.env.MAINTAINER_PASSWORD || "maintainer";
  *
  * Provenance chain:
  *   Custom Build Strategy
- *   → Custom Dockerfile (build/Dockerfile in the bundle)
+ *   → Custom Dockerfile (Dockerfile in the bundle root)
  *   → The Dockerfile creates /opt/epibridge-proof/build_proof.txt during docker build
  *   → This file is baked into the ExecutionImage
  *   → When the execution container starts from that image, the file is present on disk
@@ -72,46 +72,55 @@ test("Custom Build Workflow", async ({ page }) => {
 
   // 5. Navigate to Create Analysis
   await page.getByRole("link", { name: "Analysis" }).click();
-  await page.getByRole("link", { name: "Create Analysis" }).click();
+  await page.getByRole("button", { name: "New Draft Bundle" }).click();
 
-  // 6. Fill the form
-  await page.getByLabel("Name").fill(analysisName);
-  await page.getByLabel("Version").fill("2.0.0");
-  await page.getByLabel("Entrypoint").fill("run.py");
-  await page.getByLabel("Interpreter").selectOption("Python");
-  await page
-    .getByLabel("Execution Environment")
-    .selectOption({ label: "Python 3.13" });
+  // 6. Wait for redirect to the bundle workspace
+  await page.waitForURL(/\/projects\/[^/]+\/analysis\/[^/]+$/);
+  await expect(page.getByText("Draft — Editable")).toBeVisible();
 
-  // 7. Select Custom Build strategy
-  await page.getByLabel("Build Strategy").selectOption("Custom Build");
+  // 7. Rename the draft
+  await page.locator('input[type="text"]').first().fill(analysisName);
 
-  // 8. Upload the analysis bundle ZIP containing the custom Dockerfile
+  // 8. Upload the analysis bundle ZIP containing the Dockerfile at the bundle root
   const zipBuffer = createZip([
     { name: "run.py", content: ANALYSIS_CODE },
     { name: "requirements.txt", content: "" },
-    { name: "build/Dockerfile", content: CUSTOM_DOCKERFILE },
+    { name: "Dockerfile", content: CUSTOM_DOCKERFILE },
   ]);
+  await page.getByRole("button", { name: "Upload ZIP" }).click();
+  await page.getByText("Upload ZIP").click();
   await page.locator('input[type="file"]').setInputFiles({
     name: "custom-build-bundle.zip",
     mimeType: "application/zip",
     buffer: zipBuffer,
   });
 
-  // 9. Save
-  await page.getByRole("button", { name: "Save" }).click();
+  // 9. Configure execution settings inline in the workspace
+  await page.getByLabel("Environment").selectOption({ label: "Python 3.13" });
+  await page.locator("#edit-version-exec").fill("2.0.0");
 
-  // 10. Wait for redirect and open the bundle
+  // Wait for file listing to load then select entrypoint
+  await page.waitForTimeout(1000);
+  const entrypointSelect = page.locator("select").filter({ has: page.locator('option[value="run.py"]') }).first();
+  if (await entrypointSelect.isVisible()) {
+    await entrypointSelect.selectOption("run.py");
+  }
+  await page.getByLabel("Interpreter").selectOption("Python");
+  await page.getByLabel("Environment").selectOption("⚡ Custom Build");
+
+  // 10. Save the draft
+  await page.getByRole("button", { name: "Save and Close" }).click();
   await page.waitForURL(/\/projects\/[^/]+\/analysis$/);
-  await expect(page.getByTestId("analysis-heading")).toBeVisible();
-  await expect(page.getByText(analysisName)).toBeVisible();
+
+  // 11. Re-open the draft from the list
   await page.getByText(analysisName).click();
+  await page.waitForURL(/\/projects\/[^/]+\/analysis\/[^/]+$/);
 
-  // 11. Verify Build Strategy shows Custom Build
-  await expect(page.getByText("Custom Build", { exact: true })).toBeVisible();
+  // 12. Verify Custom Build is selected in the environment dropdown
+  await expect(page.locator("#edit-env")).toHaveValue("__custom__");
 
-  // 12. Submit the bundle (DRAFT → SUBMITTED)
-  await page.getByRole("button", { name: "Submit" }).click();
+  // 13. Submit the bundle (DRAFT → SUBMITTED)
+  await page.getByRole("button", { name: "Submit for Review" }).click();
   await expect(page.getByText("Submitted")).toBeVisible();
 
   // 13. Approve the bundle (SUBMITTED → APPROVED_FOR_EXECUTION)
@@ -124,7 +133,7 @@ test("Custom Build Workflow", async ({ page }) => {
   //     The worker:
   //       1. Receives the BuildRequest from the database
   //       2. Detects bundle.build_strategy == "custom"
-  //       3. Uses bundle_path/build/Dockerfile instead of the curated template
+  //       3. Uses bundle_path/Dockerfile instead of the curated template
   //       4. Runs docker build, which creates /opt/epibridge-proof/build_proof.txt in the image
   //       5. Creates an ExecutionImage record and links it to the bundle
   //       6. Sets bundle.build_status = ENVIRONMENT_READY

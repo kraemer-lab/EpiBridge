@@ -1,6 +1,6 @@
 # AGENTS.md
 
-## Project status — Milestone 20 complete (Consent & Terms Governance)
+## Project status — Milestone 21 complete (Bundle Workspace, Institutional Publications, Validation Run)
 
 ### Exists and functional
 
@@ -16,21 +16,29 @@ backend/         FastAPI: identity model (User, Role, Capability,
                  platform terms enforcement (dependency-based),
                  dataset terms enforcement (resource attach, bundle submit),
                  audit event model (AuditEvent, AuditEventType), audit service,
-                 audit query API
+                 audit query API,
+                 ValidationRequest model, validation API, execution fingerprint,
+                 representative dataset mounting
 frontend/        Next.js + React + TypeScript: login, projects, admin pages,
                  user management UI, project members UI, audit log tab,
                  per-project and per-resource audit views,
                  platform terms interstitial (/terms), terms admin page,
-                 dataset terms dialog during resource attach and bundle submit
+                 dataset terms dialog during resource attach and bundle submit,
+                 Bundle Workspace (bundle detail page with file management,
+                 environment selection, resource declaration, validation run),
+                 validation result display, bundle consistency indicators
 execution-environments/      Execution Environment artefacts (base images, manifests)
+examples/        Example analyses, bundle templates, environment definitions,
+                 resource publication manifests
 vm/              cloud-init.yaml, Caddyfile (HTTPS, HSTS, compression,
                  security headers, request size limits), runtime spec
 scripts/         bootstrap.sh, install.sh, upgrade.sh, backup.sh, restore.sh, healthcheck.sh
 docker-compose.yml  6 services + optional ollama (--profile ai),
                      internal + frontend + external networks
-tests/           Unit (360), integration (identity validation, user management,
-                 project membership, audit, terms governance), smoke,
-                 e2e (canonical workflow with terms)
+tests/           Unit (375), integration (identity validation, user management,
+                 project membership, audit, terms governance, validation),
+                 smoke,
+                 e2e (canonical workflow, custom build workflow, validation workflow)
 docs/            Architecture (current state), security, API, vision, AI assistance
 ```
 
@@ -38,7 +46,6 @@ docs/            Architecture (current state), security, API, vision, AI assista
 
 ```
 shared/          Shared schemas and types (not started)
-examples/        Synthetic datasets and analysis templates (not started)
 ```
 
 ### Intended architecture (from docs/)
@@ -111,6 +118,8 @@ Capability vocabulary (defined in `app.models.capability.Capability` enum):
 | `data.manage` | Manage data resources |
 | `user.manage` | Manage user accounts |
 | `terms.manage` | Publish and manage terms of service |
+| `validation.run` | Run validation against representative datasets |
+| `build.customize` | Use Custom Build strategy for analysis bundles |
 
 The `capabilities` table is materialised from the enum during seeding (the enum is authoritative). `UserCapability` records are copied from role templates at user creation and become independent thereafter.
 
@@ -229,6 +238,13 @@ Terms events record the publication of institutional governance documents and th
 - `dataset_terms.published`
 - `platform_terms.accepted`
 - `dataset_terms.accepted`
+
+#### Validation
+
+Validation events record the outcome of operational verification runs against representative datasets. These are operational events only — validation does not participate in governance workflows.
+
+- `validation.completed`
+- `validation.failed`
 
 ### Policy layer
 
@@ -476,6 +492,8 @@ make test         # run tests
 - `make dev-test` — run full suite inside the container via SSH (recommended developer workflow; requires OrbStack VM + Docker stack)
 - `make test` — run unit, integration, and smoke test suites natively (requires PostgreSQL + Redis on localhost; the `epibridge_test` database must exist)
 - `make playwright` — run canonical workflow e2e test (requires full stack running)
+- `make playwright CMD=e2e/custom-build-workflow.spec.ts` — run custom build workflow e2e test
+- `make playwright CMD=e2e/validation-workflow.spec.ts` — run validation workflow e2e test
 - `python -m pytest backend/tests/unit -v` — unit tests only (no database required)
 - `python -m pytest backend/tests/integration -v` — integration tests (requires PostgreSQL + Redis on localhost + `epibridge_test` database)
 - `python -m pytest backend/tests/smoke -v` — smoke tests (requires full stack running)
@@ -504,6 +522,8 @@ createdb epibridge_test
 - `make ci` — bootstrap full stack (build, start, seed), same as `make bootstrap`
 - `make ci-clean` — tear down all Docker resources and remove `.env`
 - `make playwright` — run canonical workflow e2e test (must be run after `make ci`)
+- `make playwright CMD=e2e/custom-build-workflow.spec.ts` — run custom build workflow e2e test
+- `make playwright CMD=e2e/validation-workflow.spec.ts` — run validation workflow e2e test
 
 **Shared bootstrap** (from repo root, requires Docker):
 - `make bootstrap` — idempotent bootstrap used by both development and CI.
@@ -553,6 +573,28 @@ The test (in `frontend/e2e/canonical-workflow.spec.ts`) validates:
 
 This is a system test — not UI, not API — covering frontend, backend, database, worker, Docker executor, provider abstraction, runtime contract, output registration, download endpoint, and audit ledger.
 
+### Validation Workflow (end-to-end)
+
+The validation workflow is a separate Playwright e2e test that proves the researcher validation capability.
+
+```bash
+make dev           # bootstrap the full stack (OrbStack VM)
+make playwright CMD=e2e/validation-workflow.spec.ts
+```
+
+The test (in `frontend/e2e/validation-workflow.spec.ts`) validates:
+1. Browsing institutional publications (environments, resources)
+2. Creating a project
+3. Attaching a data resource
+4. Creating a draft analysis bundle
+5. Uploading analysis code that reads representative data
+6. Running validation (PENDING → RUNNING → COMPLETED)
+7. Viewing validation logs and output files
+8. Verifying the "Validated" bundle consistency indicator
+9. Modifying the bundle and verifying "Bundle has changed since validation"
+10. Re-running validation to restore the "Validated" state
+11. Submitting for review
+
 ### Deployment user
 
 Platform services (backend, worker) run as the non-root `epibridge` user. The reference
@@ -569,7 +611,7 @@ The worker (`worker/worker/main.py`) runs as a single-threaded infinite polling 
 - **Outer catch-all**: Any unexpected exception during polling is logged with a full traceback; the loop continues.
 - **Graceful shutdown**: `SIGTERM` and `SIGINT` are handled. The current iteration completes (including any in-flight build or execution), then the loop exits. In-flight containers are left for Docker to manage.
 
-The worker polls `BuildRequest` (PENDING) first, then `ExecutionRequest` (PENDING), within each poll cycle.
+The worker polls `ValidationRequest` (PENDING) first, then `BuildRequest` (PENDING), then `ExecutionRequest` (PENDING), within each poll cycle.
 
 ### Future refactoring — Authentication flow
 

@@ -82,6 +82,7 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 export HOST_DATA_ROOT="${HOST_DATA_ROOT:-${REPO_ROOT}/examples/resources}"
+export HOST_RESOURCE_MANIFEST_DIR="${HOST_RESOURCE_MANIFEST_DIR:-${REPO_ROOT}/resources}"
 
 ###############################################################################
 # 4. Build Docker images

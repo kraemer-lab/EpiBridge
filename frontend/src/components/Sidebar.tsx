@@ -20,8 +20,12 @@ function hasAdminAccess(capabilities: string[]): boolean {
 
 const links = [
   { href: "/", label: "Dashboard" },
+  { href: "/resources", label: "Resources" },
   { href: "/projects", label: "Projects" },
   { href: "/environments", label: "Environments" },
+  { href: "/examples", label: "Examples" },
+  { href: "/templates", label: "Templates" },
+  { href: "/docs", label: "Documentation" },
 ];
 
 export default function Sidebar() {
@@ -38,6 +42,7 @@ export default function Sidebar() {
           <Link
             key={link.href}
             href={link.href}
+            aria-label={link.href === "/resources" ? "Browse Data Resources" : undefined}
             className={`${styles.link} ${pathname === link.href ? styles.active : ""}`}
           >
             {link.label}

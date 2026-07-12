@@ -25,10 +25,13 @@ class Interpreter(str, enum.Enum):
 
 class AnalysisBundleCreate(BaseModel):
     # NOTE: lifecycle state is owned by the server, not supplied by clients.
+    #       Draft bundles may be created with only a name; missing fields
+    #       are populated with sensible defaults. Full validation occurs
+    #       at submission time.
     name: str
-    execution_environment_id: uuid.UUID
-    version: str
-    entrypoint: str
+    execution_environment_id: uuid.UUID | None = None
+    version: str = ""
+    entrypoint: str = ""
     interpreter: Interpreter = Interpreter.PYTHON
     arguments: str = ""
     source_path: str = ""
@@ -43,7 +46,7 @@ class AnalysisBundleRead(BaseModel):
     id: uuid.UUID
     project_id: uuid.UUID
     created_by_id: uuid.UUID
-    execution_environment_id: uuid.UUID
+    execution_environment_id: uuid.UUID | None = None
     name: str
     source_path: str
     status: AnalysisBundleStatus
@@ -69,7 +72,7 @@ class AnalysisBundleRead(BaseModel):
     @computed_field
     @property
     def display_runtime(self) -> str:
-        return _display_name(self.runtime)
+        return _display_name(self.runtime) if self.runtime else "Not configured"
 
     model_config = {"from_attributes": True}
 

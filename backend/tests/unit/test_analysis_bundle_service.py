@@ -31,18 +31,16 @@ class TestValidateManifest:
         result = validate_manifest(VALID_MANIFEST)
         assert result["name"] == "Survival Analysis"
 
-    def test_missing_required_field(self):
+    def test_missing_optional_field_allowed(self):
         data = VALID_MANIFEST.copy()
         del data["execution_environment_id"]
-        with pytest.raises(ValueError, match="execution_environment_id"):
-            validate_manifest(data)
+        result = validate_manifest(data)
+        assert result["name"] == "Survival Analysis"
 
-    def test_missing_multiple_fields(self):
+    def test_minimal_draft_is_valid(self):
         data = {"name": "Foo"}
-        with pytest.raises(
-            ValueError, match="entrypoint, execution_environment_id, version"
-        ):
-            validate_manifest(data)
+        result = validate_manifest(data)
+        assert result["name"] == "Foo"
 
     def test_empty_name(self):
         data = VALID_MANIFEST.copy()
@@ -50,17 +48,23 @@ class TestValidateManifest:
         with pytest.raises(ValueError, match="name"):
             validate_manifest(data)
 
-    def test_empty_version(self):
+    def test_empty_version_allowed(self):
         data = VALID_MANIFEST.copy()
-        data["version"] = "   "
-        with pytest.raises(ValueError, match="version"):
-            validate_manifest(data)
+        data["version"] = ""
+        result = validate_manifest(data)
+        assert result["version"] == ""
 
-    def test_empty_entrypoint(self):
+    def test_empty_entrypoint_allowed(self):
         data = VALID_MANIFEST.copy()
         data["entrypoint"] = ""
-        with pytest.raises(ValueError, match="entrypoint"):
-            validate_manifest(data)
+        result = validate_manifest(data)
+        assert result["entrypoint"] == ""
+
+    def test_whitespace_version_allowed(self):
+        data = VALID_MANIFEST.copy()
+        data["version"] = "   "
+        result = validate_manifest(data)
+        assert result["version"] == "   "
 
     def test_invalid_execution_environment_id(self):
         data = VALID_MANIFEST.copy()
@@ -230,11 +234,22 @@ class TestCreateBundle:
         assert result.data_resources == []
 
     @patch("app.services.analysis_bundle_service.validate_resources")
-    def test_invalid_manifest_raises(self, mock_validate_resources):
+    def test_minimal_draft_creates_successfully(self, mock_validate_resources):
         db = MagicMock()
-        data = {"name": "Incomplete"}
-        with pytest.raises(ValueError, match="execution_environment_id"):
-            create_bundle(db, data, uuid.uuid4(), uuid.uuid4())
+        db.add.return_value = None
+        db.flush.return_value = None
+        mock_validate_resources.return_value = []
+
+        data = {"name": "My Draft"}
+        result = create_bundle(db, data, uuid.uuid4(), uuid.uuid4())
+        assert result.name == "My Draft"
+        assert result.execution_environment_id is None
+
+    @patch("app.services.analysis_bundle_service.validate_resources")
+    def test_empty_name_raises(self, mock_validate_resources):
+        db = MagicMock()
+        with pytest.raises(ValueError, match="name"):
+            create_bundle(db, {"name": ""}, uuid.uuid4(), uuid.uuid4())
         db.commit.assert_not_called()
 
 

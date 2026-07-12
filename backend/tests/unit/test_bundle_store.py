@@ -90,3 +90,56 @@ class TestBundleStoreDecompressionBomb:
         upload = _mock_upload(b"")
         with pytest.raises(ValueError, match="empty"):
             store.store(uuid.uuid4(), upload, "run.py")
+
+
+class TestBundleStoreContentHash:
+    def test_empty_store_returns_empty(self, store, tmp_path):
+        with patch("app.services.bundle_store.BUNDLE_STORE_ROOT", tmp_path):
+            h = store.get_content_hash(uuid.uuid4())
+            assert h == ""
+
+    def test_single_file_hash(self, store, tmp_path):
+        bundle_id = uuid.uuid4()
+        bundle_dir = tmp_path / str(bundle_id)
+        bundle_dir.mkdir(parents=True)
+        (bundle_dir / "run.py").write_text("print('hello')")
+        with patch("app.services.bundle_store.BUNDLE_STORE_ROOT", tmp_path):
+            h = store.get_content_hash(bundle_id)
+            assert isinstance(h, str)
+            assert len(h) == 64
+
+    def test_same_content_produces_same_hash(self, store, tmp_path):
+        with patch("app.services.bundle_store.BUNDLE_STORE_ROOT", tmp_path):
+            id_a = uuid.uuid4()
+            (tmp_path / str(id_a)).mkdir()
+            (tmp_path / str(id_a) / "run.py").write_text("x")
+
+            id_b = uuid.uuid4()
+            (tmp_path / str(id_b)).mkdir()
+            (tmp_path / str(id_b) / "run.py").write_text("x")
+
+            assert store.get_content_hash(id_a) == store.get_content_hash(id_b)
+
+    def test_different_content_produces_different_hash(self, store, tmp_path):
+        with patch("app.services.bundle_store.BUNDLE_STORE_ROOT", tmp_path):
+            id_a = uuid.uuid4()
+            (tmp_path / str(id_a)).mkdir()
+            (tmp_path / str(id_a) / "a.py").write_text("content_a")
+
+            id_b = uuid.uuid4()
+            (tmp_path / str(id_b)).mkdir()
+            (tmp_path / str(id_b) / "b.py").write_text("content_b")
+
+            assert store.get_content_hash(id_a) != store.get_content_hash(id_b)
+
+    def test_multiple_files_sorted(self, store, tmp_path):
+        bundle_id = uuid.uuid4()
+        bundle_dir = tmp_path / str(bundle_id)
+        bundle_dir.mkdir(parents=True)
+        (bundle_dir / "z.py").write_text("last")
+        (bundle_dir / "a.py").write_text("first")
+        (bundle_dir / "m.py").write_text("middle")
+        with patch("app.services.bundle_store.BUNDLE_STORE_ROOT", tmp_path):
+            h = store.get_content_hash(bundle_id)
+            assert isinstance(h, str)
+            assert len(h) == 64

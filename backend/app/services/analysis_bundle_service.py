@@ -15,20 +15,8 @@ from app.models.execution_environment import ExecutionEnvironment
 from app.models.project_data_resource import ProjectResourceAllocation
 from app.services.audit_service import create_audit_event
 
-REQUIRED_MANIFEST_FIELDS = {
-    "name",
-    "execution_environment_id",
-    "version",
-    "entrypoint",
-}
-
 
 def validate_manifest(data: dict) -> dict:
-    missing = REQUIRED_MANIFEST_FIELDS - set(data.keys())
-    if missing:
-        msg = f"Missing required fields: {', '.join(sorted(missing))}"
-        raise ValueError(msg)
-
     if not isinstance(data.get("name"), str) or not data["name"].strip():
         raise ValueError("'name' must be a non-empty string")
 
@@ -36,19 +24,22 @@ def validate_manifest(data: dict) -> dict:
         raise ValueError("'source_path' must be a string")
 
     ee_id = data.get("execution_environment_id")
-    if isinstance(ee_id, str):
-        try:
-            uuid.UUID(ee_id)
-        except ValueError:
+    if ee_id is not None:
+        if isinstance(ee_id, str):
+            try:
+                uuid.UUID(ee_id)
+            except ValueError:
+                raise ValueError("'execution_environment_id' must be a valid UUID")
+        elif not isinstance(ee_id, uuid.UUID):
             raise ValueError("'execution_environment_id' must be a valid UUID")
-    elif not isinstance(ee_id, uuid.UUID):
-        raise ValueError("'execution_environment_id' must be a valid UUID")
 
-    if not isinstance(data.get("version"), str) or not data["version"].strip():
-        raise ValueError("'version' must be a non-empty string")
+    if "version" in data and data["version"]:
+        if not isinstance(data["version"], str):
+            raise ValueError("'version' must be a string")
 
-    if not isinstance(data.get("entrypoint"), str) or not data["entrypoint"].strip():
-        raise ValueError("'entrypoint' must be a non-empty string")
+    if "entrypoint" in data and data["entrypoint"]:
+        if not isinstance(data["entrypoint"], str):
+            raise ValueError("'entrypoint' must be a string")
 
     resources = data.get("resource_identifiers", [])
     if not isinstance(resources, list):
@@ -109,9 +100,6 @@ def validate_resources(
     return resources
 
 
-CUSTOM_BUILD_DIR = "build"
-
-
 def validate_build_strategy(
     bundle: AnalysisBundle,
     bundle_path: Path | None,
@@ -124,22 +112,14 @@ def validate_build_strategy(
     if bundle_path is None:
         return None
 
-    build_dir = bundle_path / CUSTOM_BUILD_DIR
-    custom_dockerfile = build_dir / "Dockerfile"
+    dockerfile = bundle_path / "Dockerfile"
 
     if bundle.build_strategy == BuildStrategy.CUSTOM.value:
-        if not custom_dockerfile.exists() or not custom_dockerfile.is_file():
+        if not dockerfile.exists() or not dockerfile.is_file():
             return (
-                "Custom Build Strategy requires a build/Dockerfile "
-                "in the Analysis Bundle"
+                "Custom Build Strategy requires a Dockerfile "
+                "in the root of the Analysis Bundle"
             )
-        return None
-
-    if build_dir.exists():
-        return (
-            "Institutional Build Strategy does not allow a build/ directory "
-            "in the Analysis Bundle"
-        )
 
     return None
 
@@ -164,21 +144,25 @@ def create_bundle(
     created_by_id: uuid.UUID,
 ) -> AnalysisBundle:
     validate_manifest(data)
-    validate_entrypoint(data["entrypoint"])
+
+    if data.get("entrypoint"):
+        validate_entrypoint(data["entrypoint"])
+
     resources = validate_resources(data.get("resource_identifiers", []), project_id, db)
 
-    ee_id = data["execution_environment_id"]
-    if isinstance(ee_id, str):
-        ee_id = uuid.UUID(ee_id)
-    validate_execution_environment(ee_id, db)
+    ee_id = data.get("execution_environment_id")
+    if ee_id is not None:
+        if isinstance(ee_id, str):
+            ee_id = uuid.UUID(ee_id)
+        validate_execution_environment(ee_id, db)
 
     bundle = AnalysisBundle(
         project_id=project_id,
         created_by_id=created_by_id,
         execution_environment_id=ee_id,
         name=data["name"],
-        version=data["version"],
-        entrypoint=data["entrypoint"],
+        version=data.get("version", ""),
+        entrypoint=data.get("entrypoint", ""),
         interpreter=data.get("interpreter", "python"),
         arguments=data.get("arguments", ""),
         source_path=data.get("source_path", ""),

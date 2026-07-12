@@ -43,6 +43,9 @@ class AuditEventType(str, enum.Enum):
     PLATFORM_TERMS_ACCEPTED = "platform_terms.accepted"
     DATASET_TERMS_ACCEPTED = "dataset_terms.accepted"
 
+    VALIDATION_COMPLETED = "validation.completed"
+    VALIDATION_FAILED = "validation.failed"
+
 
 class AuditEvent(Base):
     __tablename__ = "audit_events"

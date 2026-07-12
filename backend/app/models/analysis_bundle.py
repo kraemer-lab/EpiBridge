@@ -51,10 +51,10 @@ class AnalysisBundle(Base):
     created_by_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
     )
-    execution_environment_id: Mapped[uuid.UUID] = mapped_column(
+    execution_environment_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("execution_environments.id"),
-        nullable=False,
+        nullable=True,
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     source_path: Mapped[str] = mapped_column(Text, nullable=False, default="")
@@ -96,7 +96,7 @@ class AnalysisBundle(Base):
 
     project: Mapped["Project"] = relationship(backref="analysis_bundles")
     created_by: Mapped["User"] = relationship(backref="created_bundles")
-    execution_environment: Mapped["ExecutionEnvironment"] = relationship()
+    execution_environment: Mapped["ExecutionEnvironment | None"] = relationship()
     execution_image: Mapped["ExecutionImage | None"] = relationship()
 
     data_resources: Mapped[list["DataResource"]] = relationship(

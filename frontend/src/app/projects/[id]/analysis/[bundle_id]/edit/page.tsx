@@ -109,7 +109,7 @@ export default function EditAnalysisPage() {
         &larr; Back to Analysis
       </Link>
       <h2 style={{ fontSize: "1.1rem", fontWeight: 600, marginTop: "var(--spacing-md)", marginBottom: "var(--spacing-lg)" }}>
-        Edit Analysis
+        Continue Editing
       </h2>
 
       <div className="card" style={{ maxWidth: "640px" }}>

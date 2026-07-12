@@ -815,3 +815,210 @@ def delete_project_member(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Member not found",
         )
+
+
+def _require_draft_status(bundle: AnalysisBundle) -> None:
+    if bundle.status != AnalysisBundleStatus.DRAFT.value:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Cannot modify bundle in state: {bundle.status}",
+        )
+
+
+def _get_project_bundle(
+    bundle_id: uuid.UUID, project_id: uuid.UUID, db: Session
+) -> AnalysisBundle:
+    bundle = (
+        db.query(AnalysisBundle)
+        .filter(
+            AnalysisBundle.id == bundle_id,
+            AnalysisBundle.project_id == project_id,
+        )
+        .first()
+    )
+    if bundle is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Analysis bundle not found",
+        )
+    return bundle
+
+
+@router.get(
+    "/projects/{project_id}/bundles/{bundle_id}/files",
+)
+def get_bundle_files(
+    project_id: uuid.UUID,
+    bundle_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    require_project_membership(db, current_user, project_id)
+    bundle = _get_project_bundle(bundle_id, project_id, db)
+    store = get_bundle_store()
+    files = store.list_files(bundle.id)
+    return {
+        "files": files,
+        "total_size": store.get_total_size(bundle.id),
+    }
+
+
+@router.post(
+    "/projects/{project_id}/bundles/{bundle_id}/files/upload",
+    status_code=200,
+)
+def post_bundle_files_upload(
+    project_id: uuid.UUID,
+    bundle_id: uuid.UUID,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    require_project_membership(db, current_user, project_id)
+    _require_capability(current_user, Capability.BUNDLE_CREATE)
+    bundle = _get_project_bundle(bundle_id, project_id, db)
+    _require_draft_status(bundle)
+
+    if not file.filename or not file.filename.endswith(".zip"):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Uploaded file must be a ZIP archive",
+        )
+
+    store = get_bundle_store()
+    try:
+        store.replace_contents(bundle.id, file)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e),
+        )
+
+    update_bundle(db, bundle.id, {"source_path": str(bundle.id)})
+    return {"status": "ok"}
+
+
+@router.post(
+    "/projects/{project_id}/bundles/{bundle_id}/files/import",
+    status_code=200,
+)
+def post_bundle_files_import(
+    project_id: uuid.UUID,
+    bundle_id: uuid.UUID,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    require_project_membership(db, current_user, project_id)
+    _require_capability(current_user, Capability.BUNDLE_CREATE)
+    bundle = _get_project_bundle(bundle_id, project_id, db)
+    _require_draft_status(bundle)
+
+    if not file.filename or not file.filename.endswith(".zip"):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Uploaded file must be a ZIP archive",
+        )
+
+    store = get_bundle_store()
+    try:
+        store.import_archive(bundle.id, file)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e),
+        )
+
+    update_bundle(db, bundle.id, {"source_path": str(bundle.id)})
+    return {"status": "ok"}
+
+
+@router.post(
+    "/projects/{project_id}/bundles/{bundle_id}/files/single",
+    status_code=200,
+)
+def post_bundle_files_single(
+    project_id: uuid.UUID,
+    bundle_id: uuid.UUID,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    require_project_membership(db, current_user, project_id)
+    _require_capability(current_user, Capability.BUNDLE_CREATE)
+    bundle = _get_project_bundle(bundle_id, project_id, db)
+    _require_draft_status(bundle)
+
+    if not file.filename:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Filename is required",
+        )
+
+    content = file.file.read()
+    if len(content) == 0:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="File is empty",
+        )
+
+    store = get_bundle_store()
+    try:
+        store.add_file(bundle.id, file.filename, content)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e),
+        )
+
+    update_bundle(db, bundle.id, {"source_path": str(bundle.id)})
+    return {"status": "ok"}
+
+
+@router.delete(
+    "/projects/{project_id}/bundles/{bundle_id}/files/{path:path}",
+    status_code=200,
+)
+def delete_bundle_file(
+    project_id: uuid.UUID,
+    bundle_id: uuid.UUID,
+    path: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    require_project_membership(db, current_user, project_id)
+    _require_capability(current_user, Capability.BUNDLE_CREATE)
+    bundle = _get_project_bundle(bundle_id, project_id, db)
+    _require_draft_status(bundle)
+
+    store = get_bundle_store()
+    try:
+        store.remove_file(bundle.id, path)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e),
+        )
+
+    return {"status": "ok"}
+
+
+@router.delete(
+    "/projects/{project_id}/bundles/{bundle_id}/files",
+    status_code=200,
+)
+def delete_bundle_files(
+    project_id: uuid.UUID,
+    bundle_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    require_project_membership(db, current_user, project_id)
+    _require_capability(current_user, Capability.BUNDLE_CREATE)
+    bundle = _get_project_bundle(bundle_id, project_id, db)
+    _require_draft_status(bundle)
+
+    store = get_bundle_store()
+    store.clear_contents(bundle.id)
+    update_bundle(db, bundle.id, {"source_path": ""})
+    return {"status": "ok"}
