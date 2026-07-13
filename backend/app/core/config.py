@@ -62,6 +62,15 @@ class Settings(BaseSettings):
     execution_pids_limit: int = 256
     max_output_size_mb: int = 1024
 
+    email_enabled: bool = False
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_tls: bool = True
+    smtp_from: str = "noreply@example.org"
+    smtp_from_name: str = "EpiBridge"
+
     @property
     def database_url(self) -> str:
         return (

@@ -71,6 +71,7 @@ from app.services.execution_request_service import (
     list_execution_requests,
     request_to_read,
 )
+from app.services.notification_triggers import trigger_bundle_submitted_notifications
 from app.services.output_set_service import (
     get_released_output_set,
     list_outputs_by_set,
@@ -530,10 +531,11 @@ async def post_project_bundle_upload(
 def post_submit_bundle(
     project_id: uuid.UUID,
     bundle_id: uuid.UUID,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    require_project_membership(db, current_user, project_id)
+    project = require_project_membership(db, current_user, project_id)
     _require_capability(current_user, Capability.BUNDLE_SUBMIT)
 
     bundle = (
@@ -588,6 +590,15 @@ def post_submit_bundle(
     )
     db.commit()
     db.refresh(bundle)
+
+    trigger_bundle_submitted_notifications(
+        db,
+        bundle=bundle,
+        project=project,
+        submitter=current_user,
+        background_tasks=background_tasks,
+    )
+
     return _bundle_to_read(bundle)
 
 

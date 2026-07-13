@@ -3,7 +3,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from fastapi.responses import PlainTextResponse, Response
 from sqlalchemy.orm import Session
 
@@ -38,6 +38,7 @@ from app.services.execution_request_service import (
     list_execution_requests,
     request_to_read,
 )
+from app.services.notification_triggers import trigger_output_released_notifications
 from app.services.output_service import get_output
 from app.services.output_set_service import (
     get_output_set,
@@ -642,6 +643,7 @@ def post_admin_reject_output_set(
 )
 def post_admin_release_output_set(
     output_set_id: str,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -673,6 +675,14 @@ def post_admin_release_output_set(
     )
     db.commit()
     db.refresh(output_set)
+
+    trigger_output_released_notifications(
+        db,
+        output_set=output_set,
+        releaser=current_user,
+        background_tasks=background_tasks,
+    )
+
     req = output_set.execution_request
     outputs = list_outputs_by_set(db, output_set.id)
     return OutputSetRead(
