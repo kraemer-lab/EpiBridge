@@ -138,16 +138,8 @@ export default function CreateAnalysisPage() {
           </label>
           <select
             id="analysis-env"
-            value={buildStrategy === "custom" ? "__custom__" : selectedEnvId}
-            onChange={(e) => {
-              const val = e.target.value;
-              if (val === "__custom__") {
-                setBuildStrategy("custom");
-              } else {
-                setBuildStrategy("institutional");
-                setSelectedEnvId(val);
-              }
-            }}
+            value={selectedEnvId}
+            onChange={(e) => setSelectedEnvId(e.target.value)}
             style={{
               width: "100%",
               padding: "var(--spacing-sm) var(--spacing-md)",
@@ -163,15 +155,8 @@ export default function CreateAnalysisPage() {
                 {env.display_name}
               </option>
             ))}
-            {user?.capabilities.includes("build.customize") && (
-              <option value="__custom__">⚡ Custom Build</option>
-            )}
           </select>
-          {buildStrategy === "custom" ? (
-            <div style={{ fontSize: "0.85rem", color: "var(--color-primary)", textDecoration: "none", marginTop: "var(--spacing-xs)" }}>
-              Custom Dockerfile will be used with {selectedEnvId ? environments.find((e) => e.id === selectedEnvId)?.display_name : "selected environment"}
-            </div>
-          ) : selectedEnvId ? (
+          {selectedEnvId ? (
             <Link
               href={`/environments/${environments.find((e) => e.id === selectedEnvId)?.identifier ?? ""}`}
               style={{ fontSize: "0.85rem", color: "var(--color-primary)", textDecoration: "none", marginTop: "var(--spacing-xs)", display: "inline-block" }}
@@ -181,6 +166,47 @@ export default function CreateAnalysisPage() {
               View environment details →
             </Link>
           ) : null}
+
+          {user?.capabilities.includes("build.customize") && (
+            <label
+              style={{
+                display: "flex",
+                alignItems: "flex-start",
+                gap: "var(--spacing-sm)",
+                cursor: "pointer",
+                marginTop: "var(--spacing-sm)",
+                paddingTop: "var(--spacing-sm)",
+                borderTop: "1px solid var(--color-border)",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={buildStrategy === "custom"}
+                onChange={(e) =>
+                  setBuildStrategy(
+                    e.target.checked ? "custom" : "institutional",
+                  )
+                }
+                style={{ marginTop: "2px" }}
+              />
+              <div>
+                <div style={{ fontWeight: 500, fontSize: "0.9rem" }}>
+                  Custom Build
+                </div>
+                <div
+                  style={{
+                    fontSize: "0.8rem",
+                    color: "var(--color-text-secondary)",
+                  }}
+                >
+                  {selectedEnvId
+                    ? `Build custom Dockerfile on top of ${environments.find((e) => e.id === selectedEnvId)?.display_name || "selected environment"}`
+                    : "Select an execution environment first"}
+                </div>
+              </div>
+            </label>
+          )}
+
           {fieldErrors.environment && (
             <div style={{ color: "#e65100", fontSize: "0.8rem", marginTop: "var(--spacing-xs)" }}>
               {fieldErrors.environment}

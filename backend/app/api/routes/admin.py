@@ -3,7 +3,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from fastapi.responses import PlainTextResponse, Response
 from sqlalchemy.orm import Session
 
@@ -26,7 +26,7 @@ from app.schemas.execution_request import ExecutionRequestRead
 from app.schemas.output import OutputRead
 from app.schemas.output_set import OutputSetListItem, OutputSetRead
 from app.schemas.terms import TermsOfServicePublish, TermsOfServiceRead
-from app.schemas.user import UserCreate, UserRead
+from app.schemas.user import UserCreate, UserRead, UserUpdate
 from app.services.analysis_bundle_service import (
     get_environment_runtime,
     get_resource_identifiers,
@@ -38,6 +38,7 @@ from app.services.execution_request_service import (
     list_execution_requests,
     request_to_read,
 )
+from app.services.notification_triggers import trigger_output_released_notifications
 from app.services.output_service import get_output
 from app.services.output_set_service import (
     get_output_set,
@@ -51,7 +52,12 @@ from app.services.terms_service import (
     publish_platform_terms,
     publish_resource_terms,
 )
-from app.services.user_service import create_user, get_user_by_id, list_users
+from app.services.user_service import (
+    create_user,
+    get_user_by_id,
+    list_users,
+    update_user,
+)
 from app.workflow.bundle import approve_bundle, reject_bundle, supersede_bundle
 from app.workflow.output_set import (
     approve_output_set,
@@ -70,6 +76,19 @@ def _require_capability(current_user: User, capability: Capability) -> None:
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Forbidden",
         )
+
+
+def _require_any_capability(current_user: User, capabilities: list[Capability]) -> None:
+    for cap in capabilities:
+        try:
+            require_capability(current_user, cap)
+            return
+        except PolicyError:
+            continue
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Forbidden",
+    )
 
 
 @router.get("/admin/resources", response_model=List[DataResourceRead])
@@ -624,6 +643,7 @@ def post_admin_reject_output_set(
 )
 def post_admin_release_output_set(
     output_set_id: str,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -655,6 +675,14 @@ def post_admin_release_output_set(
     )
     db.commit()
     db.refresh(output_set)
+
+    trigger_output_released_notifications(
+        db,
+        output_set=output_set,
+        releaser=current_user,
+        background_tasks=background_tasks,
+    )
+
     req = output_set.execution_request
     outputs = list_outputs_by_set(db, output_set.id)
     return OutputSetRead(
@@ -687,7 +715,9 @@ def list_admin_users(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _require_capability(current_user, Capability.USER_MANAGE)
+    _require_any_capability(
+        current_user, [Capability.USER_MANAGE, Capability.USER_READ]
+    )
     return list_users(db)
 
 
@@ -697,7 +727,9 @@ def get_admin_user(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _require_capability(current_user, Capability.USER_MANAGE)
+    _require_any_capability(
+        current_user, [Capability.USER_MANAGE, Capability.USER_READ]
+    )
     user = get_user_by_id(db, user_id)
     if user is None:
         raise HTTPException(
@@ -727,10 +759,36 @@ def post_admin_user(
         email=data.email,
         display_name=data.display_name,
         password=data.password,
-        role=data.role,
+        roles=data.roles,
         actor_id=current_user.id,
     )
     return user
+
+
+@router.put("/admin/users/{user_id}", response_model=UserRead)
+def put_admin_user(
+    user_id: uuid.UUID,
+    data: UserUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _require_capability(current_user, Capability.USER_MANAGE)
+
+    updated = update_user(
+        db,
+        user_id=user_id,
+        display_name=data.display_name,
+        password=data.password,
+        roles=data.roles,
+        advanced_capabilities=data.advanced_capabilities,
+        actor_id=current_user.id,
+    )
+    if updated is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+    return updated
 
 
 # --- Audit event query ---

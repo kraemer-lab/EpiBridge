@@ -103,17 +103,17 @@ export default function AdminTermsPage() {
     setLoading(true);
     setError(null);
     try {
-      const [s, allResources] = await Promise.all([
-        getAdminTermsStatus(),
-        getAdminResources(),
-      ]);
+      const s = await getAdminTermsStatus();
       setStatus(s);
-      setResources(allResources);
     } catch {
       setError("Failed to load terms status.");
-    } finally {
       setLoading(false);
+      return;
     }
+    getAdminResources()
+      .then(setResources)
+      .catch(() => setResources([]));
+    setLoading(false);
   }, []);
 
   useEffect(() => {

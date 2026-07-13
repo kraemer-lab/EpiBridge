@@ -9,10 +9,11 @@ EpiBridge allows you to analyse sensitive epidemiological datasets without the d
 3. Download a [Bundle Template](/templates) to start your own Analysis Bundle.
 4. Build your analysis locally using representative data and the published execution environment.
 5. Upload your completed Analysis Bundle to a Project.
-6. Submit for review. An institutional reviewer approves or rejects it.
-7. If approved, an authorised user requests execution.
-8. After execution, outputs are reviewed and released.
-9. Download your approved outputs.
+6. (Optional) Run **Validation** against representative data to verify operational correctness.
+7. Submit for review. An institutional reviewer approves or rejects it.
+8. If approved, an authorised user requests execution. The Worker automatically builds a reusable execution image.
+9. After execution, outputs are reviewed and released.
+10. Download your approved outputs.
 
 ### Key Concepts
 

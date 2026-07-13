@@ -1,6 +1,6 @@
 # AGENTS.md
 
-## Project status — Milestone 21 complete (Bundle Workspace, Institutional Publications, Validation Run)
+## Project status — Milestone 23 complete (Persona Acceptance, Responsibility-Oriented UX, Notification Architecture)
 
 ### Exists and functional
 
@@ -8,9 +8,12 @@
 backend/         FastAPI: identity model (User, Role, Capability,
                  ProjectMembership), capability-based policy, SQLAlchemy,
                  Alembic, config, Local Identity Provider auth,
-                 CLI seed-admin/seed-demo/seed-terms, bundle store, worker execution,
-                 Environment Builder subsystem, auth framework seeder,
-                 user management API (create/list/get users), email validation,
+                 CLI seed-admin/seed-maintainer/seed-researcher/seed-demo/seed-terms,
+                 bundle store, worker execution, Environment Builder subsystem,
+                 auth framework seeder, user management API (create/list/get/users),
+                 email validation, email notification service (SMTP),
+                 responsibility-transfer notifications (bundle submitted,
+                 output released),
                  terms of service model (TermsOfService, TermsAcceptance),
                  terms service (publish, accept, query), terms API routes,
                  platform terms enforcement (dependency-based),
@@ -22,24 +25,39 @@ backend/         FastAPI: identity model (User, Role, Capability,
 frontend/        Next.js + React + TypeScript: login, projects, admin pages,
                  user management UI, project members UI, audit log tab,
                  per-project and per-resource audit views,
+                 responsibility-oriented homepage (role-based quick actions),
+                 responsibility-oriented Projects list (filters by role),
                  platform terms interstitial (/terms), terms admin page,
                  dataset terms dialog during resource attach and bundle submit,
                  Bundle Workspace (bundle detail page with file management,
-                 environment selection, resource declaration, validation run),
-                 validation result display, bundle consistency indicators
-execution-environments/      Execution Environment artefacts (base images, manifests)
+                 environment selection, resource declaration, validation run,
+                 build status indicator),
+                 validation result display, bundle consistency indicators,
+                 persona-based UI (header shows institutional role)
+execution-environments/      Execution Environment artefacts (base images, manifests,
+                              execution contracts, acceptance test suites)
 examples/        Example analyses, bundle templates, environment definitions,
                  resource publication manifests
 vm/              cloud-init.yaml, Caddyfile (HTTPS, HSTS, compression,
                  security headers, request size limits), runtime spec
 scripts/         bootstrap.sh, install.sh, upgrade.sh, backup.sh, restore.sh, healthcheck.sh
 docker-compose.yml  6 services + optional ollama (--profile ai),
-                     internal + frontend + external networks
+                     internal + frontend + external networks,
+                     email configuration (SMTP relay support)
+frontend/e2e/
+  acceptance/        4 persona acceptance tests (administrator, maintainer,
+                     moderator, researcher)
+  institution/       1 institutional acceptance test (canonical workflow)
+  execution-environment-acceptance/
+                     3 execution environment acceptance tests
+                     (python-3.13, python-3.14, conda)
+  helpers/           Shared auth, network, and environment helpers
 tests/           Unit (375), integration (identity validation, user management,
                  project membership, audit, terms governance, validation),
                  smoke,
                  e2e (canonical workflow, custom build workflow, validation workflow)
-docs/            Architecture (current state), security, API, vision, AI assistance
+docs/            Architecture (current state), security, API, vision, AI assistance,
+                 testing
 ```
 
 ### Still needs creating
@@ -431,6 +449,110 @@ An HTTP middleware logs each request after completion:
 - **Demo workspace** (optional) can be created by `seed-demo` CLI command — a development tool, not application startup logic.
 - **Manifest directories** (`RESOURCE_MANIFEST_DIR`, `ENVIRONMENT_MANIFEST_DIR`) are deployment configuration, not application defaults. Docker Compose sets them for development; production points them elsewhere.
 
+### Institutional Personas
+
+EpiBridge defines four institutional personas, each with a distinct scope of responsibility. The persona is derived from the user's role and is surfaced in the UI (header, homepage quick actions, Projects list filtering).
+
+| Persona | Role | Responsibilities |
+|---------|------|------------------|
+| **Researcher** | `researcher` | Create projects, create analysis bundles, run validation, submit for review, request execution |
+| **Moderator** | `moderator` | All researcher capabilities plus: review and approve/reject bundles, review and approve/reject output sets |
+| **Maintainer** | `maintainer` | All moderator capabilities plus: release outputs, manage execution environments, manage data resources, use Custom Build |
+| **Administrator** | `admin` | All capabilities including: user management, terms management, full audit access |
+
+The persona is a UI concept derived from the role. The policy layer never consults personas or roles — it only checks capabilities.
+
+#### Responsibility-Oriented UI
+
+The homepage and navigation surface are organised around institutional responsibility rather than technical implementation details:
+
+- **Homepage**: Shows role-based quick actions. A researcher sees "Create Project", "View Bundles"; an administrator sees "Manage Users", "Audit Log".
+- **Projects list**: Filters by the user's role in each project. Researchers see projects they created or were added to; moderators see all projects with bundles pending review.
+- **Header**: Displays the user's persona (derived from role) for self-identification.
+
+### Runtime Capability Derivation
+
+Capabilities are assigned at user creation time by copying from the role's capability template:
+
+```python
+for cap in role.default_capabilities:
+    user_capabilities.append(UserCapability(user=user, capability=cap))
+```
+
+After creation, capabilities become independent of the role. Changing a user's role does **not** alter existing capabilities. An administrator must explicitly add or remove capabilities through the user management UI.
+
+This design means:
+- Role templates are a **seeding convenience**, not an authorisation mechanism.
+- The `UserCapability` records in the database are the source of truth for what a user can do.
+- An administrator can grant individual capabilities beyond the role template (e.g., giving a researcher `build.customize` for a specific project).
+
+### Advanced Permissions
+
+The `build.customize` capability is a separate, grantable permission that controls access to the Custom Build strategy. It is:
+
+- Assigned to `maintainer` and `admin` roles by default.
+- Grantable to individual users (including researchers) through the user management UI.
+- Enforced at the API layer — users without it see only "Institutional Build" in the UI and receive a policy error if they attempt to submit a Custom Build bundle.
+
+This pattern (a capability that is not part of the standard role template) establishes the model for future advanced permissions.
+
+### Three Distinct Workflows
+
+The platform supports three distinct execution workflows, each with different governance requirements:
+
+#### 1. Validation Workflow
+
+Researchers run advisory operational checks against representative datasets. No governance is involved — outputs are transient and researcher-visible only.
+
+```
+DRAFT bundle → Run Validation → Results displayed → (optional) Modify → Re-validate
+```
+
+#### 2. Build Workflow
+
+Analysis Bundle dependency specifications are transformed into reusable Docker images. The build is driven by the declared Build Strategy (Institutional or Custom):
+
+```
+Bundle submitted → BuildRequest created → Worker builds image → ExecutionImage cached
+```
+
+The build is part of the submission-to-execution pipeline and is invisible to researchers.
+
+#### 3. Governed Execution Workflow
+
+Approved bundles execute against governed data resources in isolated containers. Outputs pass through two-stage human review before release.
+
+```
+Bundle approved → Execution requested → Worker executes → Output Set → Review → Release
+```
+
+### Notification Architecture
+
+The platform sends responsibility-transfer email notifications to keep the right people informed at the right time. Notifications are triggered by governance actions, not by every data change.
+
+#### Events
+
+| Event | Recipients | Content |
+|-------|------------|---------|
+| `bundle.submitted` | Project members with `bundle.review` capability (excluding the submitter) | Project name, bundle name, submitter, review link |
+| `output.released` | Execution requester and bundle creator (excluding the releaser) | Project name, bundle name, results link |
+
+#### Design Principles
+
+- **Recipient scoping**: Recipients are project members who possess the relevant capability. This avoids spamming unrelated users.
+- **Self-exclusion**: The acting user never receives a notification about their own action.
+- **Deduplication**: Duplicate recipients are collapsed into a single email.
+- **Data minimisation**: Email bodies do not contain sensitive data, analysis code, or output files. They contain only metadata (names, links) sufficient to direct the recipient to the platform.
+- **Asynchronous**: Notifications are sent via `BackgroundTasks` — they never block the API response.
+- **Configurable**: SMTP settings (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_USE_TLS`) and the deployment domain (`DOMAIN`) are configured through environment variables.
+
+#### Implementation
+
+- `app/services/email_service.py` — low-level SMTP sending
+- `app/services/email_templates.py` — templated email bodies
+- `app/services/notification_triggers.py` — trigger functions called from route handlers
+- Requires no additional infrastructure beyond an SMTP relay
+
 ### Seeded development accounts
 
 The following personas are seeded during `bootstrap.sh` and are available for
@@ -491,9 +613,14 @@ make test         # run tests
 **Testing** (from repo root):
 - `make dev-test` — run full suite inside the container via SSH (recommended developer workflow; requires OrbStack VM + Docker stack)
 - `make test` — run unit, integration, and smoke test suites natively (requires PostgreSQL + Redis on localhost; the `epibridge_test` database must exist)
-- `make playwright` — run canonical workflow e2e test (requires full stack running)
-- `make playwright CMD=e2e/custom-build-workflow.spec.ts` — run custom build workflow e2e test
-- `make playwright CMD=e2e/validation-workflow.spec.ts` — run validation workflow e2e test
+- `make playwright` — run institutional acceptance test (canonical workflow, requires full stack running)
+- `make playwright CMD=e2e/acceptance/researcher.spec.ts` — run researcher persona acceptance test
+- `make playwright CMD=e2e/acceptance/administrator.spec.ts` — run administrator persona acceptance test
+- `make playwright CMD=e2e/acceptance/moderator.spec.ts` — run moderator persona acceptance test
+- `make playwright CMD=e2e/acceptance/maintainer.spec.ts` — run maintainer persona acceptance test
+- `make playwright CMD=e2e/execution-environment-acceptance/python-3.14.spec.ts` — run python-3.14 EE acceptance test
+- `make playwright CMD=e2e/execution-environment-acceptance/python-3.13.spec.ts` — run python-3.13 EE acceptance test
+- `make playwright CMD=e2e/execution-environment-acceptance/conda.spec.ts` — run conda EE acceptance test
 - `python -m pytest backend/tests/unit -v` — unit tests only (no database required)
 - `python -m pytest backend/tests/integration -v` — integration tests (requires PostgreSQL + Redis on localhost + `epibridge_test` database)
 - `python -m pytest backend/tests/smoke -v` — smoke tests (requires full stack running)
@@ -545,16 +672,46 @@ createdb epibridge_test
 **VM / Dev environment** (see `vm/runtime.md`):
 - `scripts/orbstack.sh` — OrbStack-specific helpers (create, mount, ssh, ip)
 
-### Canonical Workflow (end-to-end)
+### Acceptance Test Architecture
 
-The canonical workflow is a single Playwright e2e test that proves the entire platform works from a researcher's perspective.
+Milestone 23 introduces a three-tier acceptance test framework, organised under `frontend/e2e/`:
 
-```bash
-make dev           # bootstrap the full stack (OrbStack VM)
-make playwright    # run the canonical workflow e2e test
+```
+frontend/e2e/
+├── acceptance/                    # Tier 1: Persona Acceptance
+│   ├── administrator.spec.ts      Proves the admin can manage users, terms, etc.
+│   ├── maintainer.spec.ts         Proves the maintainer can manage environments, release outputs
+│   ├── moderator.spec.ts          Proves the moderator can review bundles and outputs
+│   └── researcher.spec.ts         Proves the researcher can create projects, bundles, run analyses
+├── institution/                   # Tier 2: Institutional Acceptance
+│   └── canonical.spec.ts          Proves the full canonical workflow end-to-end
+├── execution-environment-acceptance/  # Tier 3: Execution Environment Acceptance
+│   ├── python-3.13.spec.ts        Proves python-3.13 honours its execution contract
+│   ├── python-3.14.spec.ts        Proves python-3.14 honours its execution contract
+│   └── conda.spec.ts              Proves the conda environment honours its execution contract
+└── helpers/                       Shared test infrastructure
 ```
 
-The test (in `frontend/e2e/canonical-workflow.spec.ts`) validates:
+#### Tier 1 — Persona Acceptance
+
+Each persona test validates that a specific institutional role can complete its assigned responsibilities through the UI. These tests do not re-validate the full pipeline — they prove capability boundaries are correctly enforced.
+
+- **Administrator**: create users, publish terms, view audit log
+- **Maintainer**: manage environments, create projects with custom builds, release outputs
+- **Moderator**: review and approve/reject bundles and output sets
+- **Researcher**: create projects, create bundles, run validation, submit for review
+
+```bash
+make playwright CMD=e2e/acceptance/researcher.spec.ts
+make playwright CMD=e2e/acceptance/administrator.spec.ts
+make playwright CMD=e2e/acceptance/moderator.spec.ts
+make playwright CMD=e2e/acceptance/maintainer.spec.ts
+```
+
+#### Tier 2 — Institutional Acceptance
+
+The institutional acceptance test (`frontend/e2e/institution/canonical.spec.ts`) proves the entire platform works as an institutional system. It exercises the complete canonical workflow:
+
 1. Opening EpiBridge
 2. Login with admin credentials
 3. Publishing platform terms via the admin API
@@ -573,27 +730,20 @@ The test (in `frontend/e2e/canonical-workflow.spec.ts`) validates:
 
 This is a system test — not UI, not API — covering frontend, backend, database, worker, Docker executor, provider abstraction, runtime contract, output registration, download endpoint, and audit ledger.
 
-### Validation Workflow (end-to-end)
-
-The validation workflow is a separate Playwright e2e test that proves the researcher validation capability.
-
 ```bash
 make dev           # bootstrap the full stack (OrbStack VM)
-make playwright CMD=e2e/validation-workflow.spec.ts
+make playwright    # run the institutional acceptance test
 ```
 
-The test (in `frontend/e2e/validation-workflow.spec.ts`) validates:
-1. Browsing institutional publications (environments, resources)
-2. Creating a project
-3. Attaching a data resource
-4. Creating a draft analysis bundle
-5. Uploading analysis code that reads representative data
-6. Running validation (PENDING → RUNNING → COMPLETED)
-7. Viewing validation logs and output files
-8. Verifying the "Validated" bundle consistency indicator
-9. Modifying the bundle and verifying "Bundle has changed since validation"
-10. Re-running validation to restore the "Validated" state
-11. Submitting for review
+#### Tier 3 — Execution Environment Acceptance
+
+Each execution environment acceptance test verifies that a published EE honours its execution contract. These tests validate that the environment can install declared dependencies, build a runnable execution image, and produce expected outputs under governed execution conditions. Institutional workflow (project provisioning, bundle creation, submission, approval, output release) is handled by helpers and is not under test here.
+
+```bash
+make playwright CMD=e2e/execution-environment-acceptance/python-3.14.spec.ts
+make playwright CMD=e2e/execution-environment-acceptance/python-3.13.spec.ts
+make playwright CMD=e2e/execution-environment-acceptance/conda.spec.ts
+```
 
 ### Deployment user
 

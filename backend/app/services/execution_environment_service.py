@@ -63,6 +63,7 @@ def upsert_environment(db: Session, entry: dict) -> ExecutionEnvironment:
         existing.status = entry.get("status", "active")
         existing.image_reference = entry.get("image_reference", "")
         existing.definition_path = entry.get("definition_path")
+        existing.validation_setup_command = entry.get("validation_setup_command")
         return existing
 
     env = ExecutionEnvironment(
@@ -73,6 +74,7 @@ def upsert_environment(db: Session, entry: dict) -> ExecutionEnvironment:
         status=entry.get("status", "active"),
         image_reference=entry.get("image_reference", ""),
         definition_path=entry.get("definition_path"),
+        validation_setup_command=entry.get("validation_setup_command"),
     )
     db.add(env)
     return env

@@ -12,7 +12,6 @@ const tabs = [
   { href: "/jobs", label: "Jobs" },
   { href: "/outputs", label: "Outputs" },
   { href: "/members", label: "Members" },
-  { href: "/settings", label: "Settings" },
 ];
 
 export default function ProjectLayout({ children }: { children: React.ReactNode }) {

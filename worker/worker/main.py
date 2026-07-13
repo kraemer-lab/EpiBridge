@@ -516,6 +516,7 @@ def execute_request(db: Session, request: ExecutionRequest) -> None:
             output_dir=output_dir,
             timeout=timeout,
             env={},
+            network_enabled=False,
         )
     except TimeoutError:
         exec_end = _timestamp()
@@ -758,7 +759,18 @@ def process_validation(db: Session, request: ValidationRequest) -> None:
         return
 
     extra = shlex.split(bundle.arguments) if bundle.arguments else []
-    command = [interpreter.executable, f"/analysis/{entrypoint}"] + extra
+    base_command = [interpreter.executable, f"/analysis/{entrypoint}"] + extra
+
+    if env.validation_setup_command:
+        cmd_str = " ".join(shlex.quote(str(c)) for c in base_command)
+        setup = " ".join(env.validation_setup_command.splitlines()).strip()
+        command = [
+            "sh", "-c",
+            f"{setup} && exec {cmd_str}",
+        ]
+    else:
+        command = base_command
+
     output_dir = OUTPUT_ROOT / "validation" / str(request.id)
     data_mounts = resolve_mounts(bundle, db, representative=True)
     timeout = request.timeout_seconds
@@ -794,7 +806,8 @@ def process_validation(db: Session, request: ValidationRequest) -> None:
             mounts=data_mounts,
             output_dir=output_dir,
             timeout=timeout,
-            env={},
+            env={"HOME": "/work"},
+            network_enabled=True,
         )
     except TimeoutError:
         exec_end = _timestamp()

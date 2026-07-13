@@ -45,29 +45,30 @@ def create_researcher():
     if len(sys.argv) < 4:
         print(
             "Usage: epibridge create-user <email> <name> "
-            "[--password PASSWORD] [--role researcher|admin]"
+            "[--password PASSWORD] [--roles researcher,moderator,...]"
         )
         sys.exit(1)
 
     email = sys.argv[2]
     name = sys.argv[3]
     password = "password"
-    role = UserRole.RESEARCHER
+    roles = [UserRole.RESEARCHER]
 
     i = 4
     while i < len(sys.argv):
         if sys.argv[i] == "--password" and i + 1 < len(sys.argv):
             password = sys.argv[i + 1]
             i += 2
-        elif sys.argv[i] == "--role" and i + 1 < len(sys.argv):
-            role_str = sys.argv[i + 1]
-            if role_str == "admin":
-                role = UserRole.ADMIN
-            elif role_str == "researcher":
-                role = UserRole.RESEARCHER
-            else:
-                print(f"Unknown role: {role_str}")
-                sys.exit(1)
+        elif sys.argv[i] == "--roles" and i + 1 < len(sys.argv):
+            role_strs = sys.argv[i + 1].split(",")
+            parsed = []
+            for rs in role_strs:
+                try:
+                    parsed.append(UserRole(rs.strip()))
+                except ValueError:
+                    print(f"Unknown role: {rs.strip()}")
+                    sys.exit(1)
+            roles = parsed
             i += 2
         else:
             i += 1
@@ -75,9 +76,13 @@ def create_researcher():
     db = SessionLocal()
     try:
         user = create_user(
-            db, email=email, display_name=name, password=password, role=role
+            db, email=email, display_name=name, password=password, roles=roles
         )
-        print(f"create-user: Created {role.value} user: {user.email} (id={user.id})")
+        role_names = ", ".join(r.value for r in roles)
+        print(
+            f"create-user: Created user with roles [{role_names}]: "
+            f"{user.email} (id={user.id})"
+        )
     except Exception as e:
         print(f"create-user: ERROR — {e}")
         sys.exit(1)
@@ -104,6 +109,7 @@ def seed_maintainer():
             display_name=display_name,
             password=password,
             role=UserRole.MAINTAINER,
+            roles=[UserRole.MAINTAINER],
         )
         print(
             f"seed-maintainer: Created/verified maintainer user: "
@@ -129,6 +135,7 @@ def seed_researcher():
             display_name=display_name,
             password=password,
             role=UserRole.RESEARCHER,
+            roles=[UserRole.RESEARCHER],
         )
         print(
             f"seed-researcher: Created/verified researcher user: "
@@ -136,6 +143,62 @@ def seed_researcher():
         )
     except Exception as e:
         print(f"seed-researcher: ERROR — {e}")
+        sys.exit(1)
+    finally:
+        db.close()
+
+
+def seed_moderator():
+    email = "moderator@epibridge.local"
+    password = "moderator"
+    display_name = "Moderator"
+
+    db = SessionLocal()
+    try:
+        user = get_or_create_user(
+            db,
+            email=email,
+            display_name=display_name,
+            password=password,
+            role=UserRole.MODERATOR,
+            roles=[UserRole.MODERATOR],
+        )
+        print(
+            f"seed-moderator: Created/verified moderator user: "
+            f"{user.email} (id={user.id})"
+        )
+    except Exception as e:
+        print(f"seed-moderator: ERROR — {e}")
+        sys.exit(1)
+    finally:
+        db.close()
+
+
+def seed_developer():
+    email = "developer@epibridge.local"
+    password = "developer"
+    display_name = "Developer"
+    roles = list(UserRole)
+
+    db = SessionLocal()
+    try:
+        user = get_or_create_user(
+            db,
+            email=email,
+            display_name=display_name,
+            password=password,
+            role=UserRole.DEVELOPER
+            if hasattr(UserRole, "DEVELOPER")
+            else UserRole.ADMIN,
+            roles=roles,
+        )
+        role_names = ", ".join(r.value for r in roles)
+        print(
+            f"seed-developer: Created/verified developer user "
+            f"(all roles: [{role_names}]): {user.email} (id={user.id})"
+        )
+    except Exception as e:
+        print(f"seed-developer: ERROR — {e}")
         sys.exit(1)
     finally:
         db.close()
@@ -167,8 +230,8 @@ def main():
     if len(sys.argv) < 2:
         print("Usage: epibridge <command>")
         print(
-            "Commands: seed-admin, seed-maintainer, seed-researcher, "
-            "seed-terms, seed-demo, create-user"
+            "Commands: seed-admin, seed-moderator, seed-maintainer, "
+            "seed-researcher, seed-developer, seed-terms, seed-demo, create-user"
         )
         sys.exit(1)
 
@@ -179,6 +242,10 @@ def main():
         seed_maintainer()
     elif command == "seed-researcher":
         seed_researcher()
+    elif command == "seed-moderator":
+        seed_moderator()
+    elif command == "seed-developer":
+        seed_developer()
     elif command == "seed-terms":
         seed_terms_cmd()
     elif command == "seed-demo":

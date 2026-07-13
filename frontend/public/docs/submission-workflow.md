@@ -27,7 +27,16 @@ Configure:
 
 Upload your Analysis Bundle ZIP. You can also manage individual files within the workspace.
 
-### Step 5 — Submit for Review
+### Step 5 — Validate (Optional)
+
+Before submitting, you can run an advisory **Validation** against representative datasets.
+This verifies that your analysis code executes successfully. Validation uses the same
+execution pipeline as governed production but never accesses sensitive data.
+
+Results include execution logs and output files. A "Validated" indicator confirms
+your bundle was consistent at the time of validation.
+
+### Step 6 — Submit for Review
 
 Submit your draft. A reviewer with the appropriate capability will review your bundle.
 
@@ -37,23 +46,25 @@ The reviewer may:
 - **Reject** the bundle with feedback.
 - **Supersede** an approved bundle (replacing it with an updated version).
 
-### Step 6 — Request Execution
+### Step 7 — Request Execution
 
-An authorised user requests execution of the approved bundle.
+An authorised user requests execution of the approved bundle. Before execution,
+the Worker automatically builds a reusable execution image from your bundle's
+dependency specification (Institutional Build) or your custom Dockerfile (Custom Build).
 
-### Step 7 — Execution
+### Step 8 — Execution
 
-The Worker builds the execution image and runs your analysis in an isolated container with:
+The Worker runs your analysis in an isolated container with:
 
 - No network access
 - Read-only data mounts
 - Resource limits (CPU, memory, PIDs)
 
-### Step 8 — Output Review
+### Step 9 — Output Review
 
 Execution outputs are collected into an Output Set. A reviewer approves or rejects the outputs.
 
-### Step 9 — Release and Download
+### Step 10 — Release and Download
 
 Approved outputs are released. You can download a release package containing your results and execution metadata.
 

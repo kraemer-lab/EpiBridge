@@ -63,6 +63,32 @@ The policy layer (`app.auth.policy`) provides three functions:
 | `require_project_membership(db, user, project_id)` | Raise 404 if user is not a project member |
 | `require_owner(user, resource)` | Raise `PolicyError` if user is not the resource owner |
 
+### Runtime Capability Derivation
+
+Capabilities are assigned at user creation time by copying from the role's
+capability template. After creation, capabilities become independent of the
+role. Changing a user's role does **not** alter existing capabilities.
+
+This means:
+
+- Role templates are a **seeding convenience**, not an authorisation mechanism.
+- The `UserCapability` records in the database are the source of truth.
+- An administrator can grant individual capabilities beyond the role template
+  (e.g., giving a researcher `build.customize` for a specific project).
+
+### Advanced Permissions
+
+The `build.customize` capability is a separately grantable permission that
+controls access to the Custom Build strategy. It is:
+
+- Assigned to `maintainer` and `admin` roles by default.
+- Grantable to individual users through the user management UI.
+- Enforced at the API layer — users without it see only "Institutional Build"
+  in the UI and receive a policy error if they attempt to submit a Custom
+  Build bundle.
+
+### Capability Enforcement
+
 Capabilities are authoritative. Roles seed capabilities at user creation
 time, after which capabilities are independent. The policy layer never
 consults roles.
@@ -73,6 +99,14 @@ participate in this project?" without storing roles or capabilities.
 Access requires both:
 1. membership in the project
 2. the relevant capability for the action
+
+The capability vocabulary includes 14 capabilities defined in
+`app.models.capability.Capability`:
+
+`project.manage`, `project.members.manage`, `project.resources.manage`,
+`bundle.create`, `bundle.submit`, `bundle.review`, `execution.run`,
+`output.review`, `output.release`, `environment.manage`, `data.manage`,
+`user.manage`, `terms.manage`, `validation.run`, `build.customize`
 
 ---
 
@@ -117,6 +151,26 @@ ledger:
 Audit events are immutable, attributable to an authenticated actor
 (or system user), associated with a project and governed resource, and
 accompanied by structured metadata.
+
+---
+
+## Email Notifications
+
+The platform sends responsibility-transfer email notifications triggered by
+governance actions. These have specific security properties:
+
+- **Recipient scoping**: Recipients are project members who possess the
+  relevant capability. This prevents information disclosure to unrelated users.
+- **Self-exclusion**: The acting user never receives a notification about
+  their own action.
+- **Deduplication**: Duplicate recipients are collapsed into a single email.
+- **Data minimisation**: Email bodies contain only metadata (names, links)
+  sufficient to direct the recipient to the platform. Analysis code, output
+  files, and sensitive data are never included.
+- **No sensitive data in transit**: Notification emails are sent via SMTP,
+  which should be configured with TLS (`SMTP_USE_TLS=true`).
+- **Authentication required**: The SMTP relay credentials are stored in
+  environment variables and are never exposed through the application API.
 
 ---
 

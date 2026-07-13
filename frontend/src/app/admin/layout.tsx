@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { useEffect } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/AuthContext";
 
 interface AdminTab {
@@ -23,11 +24,18 @@ const adminTabs: AdminTab[] = [
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const { user } = useAuth();
 
   const visibleTabs = user !== null
     ? adminTabs.filter((tab) => user.capabilities.includes(tab.requiredCapability))
     : [];
+
+  useEffect(() => {
+    if (pathname === "/admin" && visibleTabs.length > 0) {
+      router.replace(visibleTabs[0].href);
+    }
+  }, [pathname, visibleTabs, router]);
 
   const baseStyle: React.CSSProperties = {
     display: "flex",

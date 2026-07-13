@@ -1160,16 +1160,8 @@ export default function AnalysisDetailPage() {
               </label>
               <select
                 id="edit-env"
-                value={editBuildStrategy === "custom" ? "__custom__" : editEnvId}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  if (val === "__custom__") {
-                    setEditBuildStrategy("custom");
-                  } else {
-                    setEditBuildStrategy("institutional");
-                    setEditEnvId(val);
-                  }
-                }}
+                value={editEnvId}
+                onChange={(e) => setEditEnvId(e.target.value)}
                 style={{
                   width: "100%",
                   padding: "var(--spacing-xs) var(--spacing-sm)",
@@ -1185,16 +1177,9 @@ export default function AnalysisDetailPage() {
                     {env.display_name}
                   </option>
                 ))}
-                {user?.capabilities.includes("build.customize") && (
-                  <option value="__custom__">⚡ Custom Build</option>
-                )}
               </select>
               <div style={{ marginTop: "var(--spacing-xs)", fontSize: "0.8rem" }}>
-                {editBuildStrategy === "custom" ? (
-                  <span style={{ color: "var(--color-primary)" }}>
-                    Custom Dockerfile with {editEnvId ? environments.find((e) => e.id === editEnvId)?.display_name : "selected environment"}
-                  </span>
-                ) : editEnvId && environments.find((e) => e.id === editEnvId) ? (
+                {editEnvId && environments.find((e) => e.id === editEnvId) ? (
                   <Link
                     href={`/environments/${environments.find((e) => e.id === editEnvId)?.identifier}`}
                     style={{ color: "var(--color-primary)", textDecoration: "none" }}
@@ -1214,6 +1199,46 @@ export default function AnalysisDetailPage() {
                   </Link>
                 )}
               </div>
+
+              {user?.capabilities.includes("build.customize") && (
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "flex-start",
+                    gap: "var(--spacing-sm)",
+                    cursor: "pointer",
+                    marginTop: "var(--spacing-sm)",
+                    paddingTop: "var(--spacing-sm)",
+                    borderTop: "1px solid var(--color-border)",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={editBuildStrategy === "custom"}
+                    onChange={(e) =>
+                      setEditBuildStrategy(
+                        e.target.checked ? "custom" : "institutional",
+                      )
+                    }
+                    style={{ marginTop: "2px" }}
+                  />
+                  <div>
+                    <div style={{ fontWeight: 500, fontSize: "0.85rem" }}>
+                      Custom Build
+                    </div>
+                    <div
+                      style={{
+                        fontSize: "0.75rem",
+                        color: "var(--color-text-secondary)",
+                      }}
+                    >
+                      {editEnvId
+                        ? `Build custom Dockerfile on top of ${environments.find((e) => e.id === editEnvId)?.display_name || "selected environment"}`
+                        : "Select an execution environment first"}
+                    </div>
+                  </div>
+                </label>
+              )}
             </div>
 
             <div>
@@ -1419,6 +1444,17 @@ export default function AnalysisDetailPage() {
               className="btn btn-primary"
               onClick={handleRunValidation}
               disabled={validationLoading || !editEnvId || bundleFiles.length === 0}
+              title={
+                validationLoading
+                  ? "Validation in progress"
+                  : !editEnvId && bundleFiles.length === 0
+                    ? "Select an execution environment and upload analysis files"
+                    : !editEnvId
+                      ? "Select an execution environment"
+                      : bundleFiles.length === 0
+                        ? "Upload analysis files first"
+                        : "Run validation"
+              }
             >
               {validationLoading ? "Running..." : "Run Validation"}
             </button>
@@ -1427,9 +1463,19 @@ export default function AnalysisDetailPage() {
                 {validationError}
               </div>
             )}
-            {(!editEnvId || bundleFiles.length === 0) && (
+            {!editEnvId && bundleFiles.length === 0 && (
               <div style={{ color: "var(--color-text-secondary)", fontSize: "0.8rem", marginTop: "var(--spacing-xs)" }}>
-                Configure an execution environment and upload files to enable validation.
+                Select an execution environment and upload analysis files to enable validation.
+              </div>
+            )}
+            {!editEnvId && bundleFiles.length > 0 && (
+              <div style={{ color: "var(--color-text-secondary)", fontSize: "0.8rem", marginTop: "var(--spacing-xs)" }}>
+                Select an execution environment to enable validation.
+              </div>
+            )}
+            {editEnvId && bundleFiles.length === 0 && (
+              <div style={{ color: "var(--color-text-secondary)", fontSize: "0.8rem", marginTop: "var(--spacing-xs)" }}>
+                Upload analysis files to enable validation.
               </div>
             )}
           </div>

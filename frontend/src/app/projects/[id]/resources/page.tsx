@@ -34,8 +34,8 @@ export default function ProjectResourcesPage() {
       const attachedIds = new Set(project.map((r) => r.id));
       setAttached(project);
       setAvailable(all.filter((r) => !attachedIds.has(r.id)));
-    } catch {
-      setError("Failed to load resources");
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to load resources");
     } finally {
       setLoading(false);
     }
@@ -65,8 +65,8 @@ export default function ProjectResourcesPage() {
     try {
       await attachProjectResources(projectId, [identifier]);
       await load();
-    } catch {
-      setError("Failed to attach resource");
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to attach resource");
     }
   };
 
@@ -87,8 +87,8 @@ export default function ProjectResourcesPage() {
     try {
       await detachProjectResource(projectId, resourceId);
       await load();
-    } catch {
-      setError("Failed to detach resource");
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to detach resource");
     }
   };
 
@@ -100,7 +100,7 @@ export default function ProjectResourcesPage() {
           resourceName={termsResource.name}
           onAccept={handleTermsAccept}
           onCancel={handleTermsCancel}
-          requireAcceptance={false}
+          requireAcceptance={true}
         />
       )}
 

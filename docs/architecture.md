@@ -251,6 +251,16 @@ Role templates:
 | maintainer | All moderator + `output.release`, `environment.manage`, `data.manage`, `build.customize`, `validation.run` |
 | admin | All capabilities |
 
+### Advanced Permissions
+
+The `build.customize` capability is a separately grantable permission that controls access to the Custom Build strategy. It is:
+
+- Assigned to `maintainer` and `admin` roles by default.
+- Grantable to individual users (including researchers) through the user management UI.
+- Enforced at the API layer — users without it see only "Institutional Build" in the UI and receive a policy error if they attempt to submit a Custom Build bundle.
+
+This pattern (a capability that is not part of the standard role template) establishes the model for future advanced permissions.
+
 ### Project Membership
 
 ProjectMembership answers one question only: does this User participate in this Project?
@@ -259,6 +269,19 @@ ProjectMembership answers one question only: does this User participate in this 
 - No roles, capabilities, or permissions are stored on membership.
 - The project creator becomes the first member automatically.
 - Access requires: (1) membership in the project, (2) the required capability.
+
+### Institutional Personas
+
+EpiBridge defines four institutional personas, each with a distinct scope of responsibility. The persona is derived from the user's role and is surfaced in the UI (header, homepage quick actions, Projects list filtering).
+
+| Persona | Role | Responsibilities |
+|---------|------|------------------|
+| **Researcher** | `researcher` | Create projects, create analysis bundles, run validation, submit for review, request execution |
+| **Moderator** | `moderator` | All researcher capabilities plus: review and approve/reject bundles, review and approve/reject output sets |
+| **Maintainer** | `maintainer` | All moderator capabilities plus: release outputs, manage execution environments, manage data resources, use Custom Build |
+| **Administrator** | `admin` | All capabilities including: user management, terms management, full audit access |
+
+The persona is a UI concept derived from the role. The policy layer never consults personas or roles — it only checks capabilities.
 
 ### User Administration
 
@@ -292,6 +315,23 @@ The policy layer (`app.auth.policy`) exposes three functions:
 | `require_owner(user, resource)` | Raise `PolicyError` if user is not the resource owner/creator |
 
 Policy is entirely capability-based. Roles are never consulted by the policy layer.
+
+### Runtime Capability Derivation
+
+Capabilities are assigned at user creation time by copying from the role's capability template:
+
+```python
+for cap in role.default_capabilities:
+    user_capabilities.append(UserCapability(user=user, capability=cap))
+```
+
+After creation, capabilities become independent of the role. Changing a user's role does **not** alter existing capabilities. An administrator must explicitly add or remove capabilities through the user management UI.
+
+This design means:
+
+- Role templates are a **seeding convenience**, not an authorisation mechanism.
+- The `UserCapability` records in the database are the source of truth for what a user can do.
+- An administrator can grant individual capabilities beyond the role template (e.g., giving a researcher `build.customize` for a specific project).
 
 ---
 
@@ -501,6 +541,20 @@ Execution Environments define the **institutional execution contract** — they 
 
 An Execution Environment is more than a language runtime. It represents an institutional commitment that analyses targeting that environment will execute correctly and securely.
 
+### Execution Contracts
+
+Each Execution Environment defines an **execution contract** — a formal commitment about what the environment guarantees at runtime:
+
+- `/analysis` — bundle injection target (read-write at runtime, sourced from `put_archive`)
+- `/data` — resource mount namespace (read-only)
+- `/output` — writable results directory
+- `/work` — temporary storage (scratch space)
+- `nobody` user — least-privilege execution identity
+
+The execution contract is validated by **Execution Environment Acceptance Tests** (`frontend/e2e/execution-environment-acceptance/`). These tests verify that a published environment can install declared dependencies, build a runnable execution image, and produce expected outputs under governed execution conditions. Each environment must pass its acceptance test before it can be considered production-ready.
+
+Execution Environment Acceptance Tests are Tier 3 of the three-tier acceptance test framework. They depend on shared test helpers for institutional workflow (project provisioning, bundle creation, submission, approval, output release) but the environment's contract — not the workflow — is the object under test.
+
 ### Execution Environment Artefacts
 
 Each Execution Environment is defined by a directory of artefacts in the `execution-environments/` directory:
@@ -576,6 +630,18 @@ A **Project** is a collaboration space and permission boundary. Researchers crea
 - Project membership is **scope only** — no roles or capabilities are stored on the membership record.
 - Data Resources are attached to Projects via `ProjectResourceAllocation`.
 - Access to a Project requires: (1) membership in the Project, (2) the relevant capability for the action.
+
+### Responsibility-Oriented Projects
+
+Projects are surfaced in the UI according to the user's responsibility within the platform, not by flat ownership:
+
+- **Researcher**: sees projects they created or were added to as members.
+- **Moderator**: sees all projects with bundles pending review.
+- **Maintainer/Administrator**: sees all projects.
+
+The homepage presents role-based quick actions — a researcher sees "Create Project" and "View Bundles"; an administrator sees "Manage Users" and "Audit Log". The header displays the user's persona (derived from their role) for self-identification.
+
+This design prioritises institutional responsibility over implementation detail, making it clear what each user is expected to do on the platform.
 
 ---
 
@@ -1179,65 +1245,128 @@ The Build Strategy is recorded on the Analysis Bundle as explicit metadata (`bui
 
 ---
 
-## Researcher Workflows
+## Three Distinct Workflows
 
-EpiBridge validates three distinct researcher workflows through Playwright e2e tests:
+The platform supports three distinct execution workflows, each with different governance requirements:
 
-### 1. Canonical Governed Research Workflow
+### 1. Validation Workflow
+
+Researchers run advisory operational checks against representative datasets. No governance is involved — outputs are transient and researcher-visible only.
 
 ```
-1.  User authenticates (login)
-2.  Create a Project
-3.  Attach a Data Resource to the Project
-4.  Create an Analysis Bundle (define metadata, select environment, declare resources)
-5.  Upload bundle ZIP (source code, entrypoint)
-6.  Submit bundle (DRAFT → SUBMITTED)
-7.  Review and approve bundle (SUBMITTED → APPROVED_FOR_EXECUTION)
-8.  Create Execution Request (references the approved bundle)
-9.  Worker executes analysis (PENDING → RUNNING → COMPLETED)
+DRAFT bundle → Run Validation → Results displayed → (optional) Modify → Re-validate
+```
+
+Validation uses the **same execution pipeline** as governed execution (worker, Docker executor, image build, logging, timeout handling) but mounts **representative datasets only** — governed data resources are never accessed.
+
+### 2. Build Workflow
+
+Analysis Bundle dependency specifications are transformed into reusable Docker images. The build is driven by the declared Build Strategy (Institutional or Custom):
+
+```
+Bundle submitted → BuildRequest created → Worker builds image → ExecutionImage cached
+```
+
+The build is part of the submission-to-execution pipeline and is invisible to researchers. It is governed by the `execution_environment_id` and `dependency_hash` cache key.
+
+### 3. Governed Execution Workflow
+
+Approved bundles execute against governed data resources in isolated containers. Outputs pass through two-stage human review before release.
+
+```
+Bundle approved → Execution requested → Worker executes → Output Set → Review → Release
+```
+
+This is the primary institutional workflow — all governed analyses follow this path.
+
+## Acceptance Test Architecture
+
+Milestone 23 introduces a three-tier acceptance test framework, organised under `frontend/e2e/`:
+
+```
+frontend/e2e/
+├── acceptance/                    # Tier 1: Persona Acceptance
+│   ├── administrator.spec.ts      Proves the admin can manage users, terms, etc.
+│   ├── maintainer.spec.ts         Proves the maintainer can manage environments, release outputs
+│   ├── moderator.spec.ts          Proves the moderator can review bundles and outputs
+│   └── researcher.spec.ts         Proves the researcher can create projects, bundles, run analyses
+├── institution/                   # Tier 2: Institutional Acceptance
+│   └── canonical.spec.ts          Proves the full canonical workflow end-to-end
+├── execution-environment-acceptance/  # Tier 3: Execution Environment Acceptance
+│   ├── python-3.13.spec.ts        Proves python-3.13 honours its execution contract
+│   ├── python-3.14.spec.ts        Proves python-3.14 honours its execution contract
+│   └── conda.spec.ts              Proves the conda environment honours its execution contract
+└── helpers/                       Shared test infrastructure
+```
+
+### Tier 1 — Persona Acceptance
+
+Each persona test validates that a specific institutional role can complete its assigned responsibilities through the UI. These tests do not re-validate the full pipeline — they prove capability boundaries are correctly enforced.
+
+- **Administrator**: create users, publish terms, view audit log
+- **Maintainer**: manage environments, create projects with custom builds, release outputs
+- **Moderator**: review and approve/reject bundles and output sets
+- **Researcher**: create projects, create bundles, run validation, submit for review
+
+### Tier 2 — Institutional Acceptance
+
+The institutional acceptance test (`frontend/e2e/institution/canonical.spec.ts`) proves the entire platform works as an institutional system. It exercises the complete canonical workflow:
+
+```
+1. User authenticates (login)
+2. Create a Project
+3. Attach a Data Resource to the Project
+4. Create an Analysis Bundle (define metadata, select environment, declare resources)
+5. Upload bundle ZIP (source code, entrypoint)
+6. Submit bundle (DRAFT → SUBMITTED)
+7. Review and approve bundle (SUBMITTED → APPROVED_FOR_EXECUTION)
+8. Create Execution Request (references the approved bundle)
+9. Worker executes analysis (PENDING → RUNNING → COMPLETED)
 10. Output Set enters PENDING_REVIEW
 11. Review and approve Output Set (PENDING_REVIEW → APPROVED)
 12. Release Output Set (APPROVED → RELEASED) — Release Package ZIP created
 13. Download Release Package (contains outputs + execution metadata)
 ```
 
-The canonical workflow is validated by `frontend/e2e/canonical-workflow.spec.ts`.
+This is a system test — not UI, not API — covering frontend, backend, database, worker, Docker executor, provider abstraction, runtime contract, output registration, download endpoint, and audit ledger.
 
-### 2. Custom Environment Workflow
+### Tier 3 — Execution Environment Acceptance
 
-```
-1.  User authenticates (maintainer)
-2.  Create a Project
-3.  Create a Draft Bundle with Custom Build strategy
-4.  Upload bundle ZIP containing a root-level Dockerfile
-5.  Submit for review
-6.  Approve the bundle
-7.  Request execution
-8.  Worker builds from the custom Dockerfile
-9.  Worker executes against governed data
-10. Verify the custom Dockerfile was genuinely used (provenance marker)
-```
+Each execution environment acceptance test verifies that a published EE honours its execution contract. These tests validate that the environment can install declared dependencies, build a runnable execution image, and produce expected outputs under governed execution conditions. Institutional workflow (project provisioning, bundle creation, submission, approval, output release) is handled by helpers and is not under test here.
 
-The custom build workflow is validated by `frontend/e2e/custom-build-workflow.spec.ts`.
+### Legacy e2e tests
 
-### 3. Validation Workflow
+The following e2e tests continue to validate specific feature areas and are referenced from CI:
 
-```
-1.  User authenticates
-2.  Browse institutional publications (environments, resources)
-3.  Create a Project
-4.  Attach a Data Resource to the Project
-5.  Create a Draft Bundle
-6.  Upload analysis code that reads representative data
-7.  Run Validation (PENDING → RUNNING → COMPLETED)
-8.  View validation logs and output files
-9.  Verify "Validated" bundle consistency indicator
-10. Modify the bundle and verify "Bundle has changed since validation"
-11. Re-run validation to restore "Validated" state
-12. Submit for Review
-```
+- `frontend/e2e/custom-build-workflow.spec.ts` — custom build workflow
+- `frontend/e2e/validation-workflow.spec.ts` — validation workflow
 
-The validation workflow is validated by `frontend/e2e/validation-workflow.spec.ts`. It proves that researchers can verify operational correctness against representative datasets before submitting for institutional governance.
+## Notification Architecture
+
+The platform sends responsibility-transfer email notifications to keep the right people informed at the right time. Notifications are triggered by governance actions, not by every data change.
+
+### Events
+
+| Event | Recipients | Content |
+|-------|------------|---------|
+| `bundle.submitted` | Project members with `bundle.review` capability (excluding the submitter) | Project name, bundle name, submitter, review link |
+| `output.released` | Execution requester and bundle creator (excluding the releaser) | Project name, bundle name, results link |
+
+### Design Principles
+
+- **Recipient scoping**: Recipients are project members who possess the relevant capability. This avoids spamming unrelated users.
+- **Self-exclusion**: The acting user never receives a notification about their own action.
+- **Deduplication**: Duplicate recipients are collapsed into a single email.
+- **Data minimisation**: Email bodies do not contain sensitive data, analysis code, or output files. They contain only metadata (names, links) sufficient to direct the recipient to the platform.
+- **Asynchronous**: Notifications are sent via `BackgroundTasks` — they never block the API response.
+- **Configurable**: SMTP settings (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_USE_TLS`) and the deployment domain (`DOMAIN`) are configured through environment variables.
+
+### Implementation
+
+- `app/services/email_service.py` — low-level SMTP sending
+- `app/services/email_templates.py` — templated email bodies
+- `app/services/notification_triggers.py` — trigger functions called from route handlers
+- Requires no additional infrastructure beyond an SMTP relay
 
 ---
 
@@ -1312,6 +1441,10 @@ Identity validation (capability boundaries for each role) is maintained as separ
 19. **Validation Run is advisory operational verification. It never replaces or bypasses institutional governance.**
 20. **Representative datasets are repository-backed publication artefacts. They are not DataResource records.**
 21. **Validation mounts the same paths as production execution. Analysis code does not change between validation and production.**
+22. **Platform UI is organised around institutional responsibility, not implementation detail. The homepage, Projects list, and header all derive from the user's role.**
+23. **Execution Environments define execution contracts validated by dedicated acceptance tests.**
+24. **Email notifications are responsibility-transfer alerts, not status updates. They inform the right people at governance transition points, not on every data change.**
+25. **The three execution workflows (Validation, Build, Governed Execution) are architecturally distinct. Each has its own governance requirements and lifecycle.**
 
 ---
 
@@ -1320,9 +1453,10 @@ Identity validation (capability boundaries for each role) is maintained as separ
 ### Post-MVP
 
 - Pagination on list endpoints
-- Role and capability management UI (read-only currently available)
+- Role and capability management UI (edit capability assignments)
 - OIDC / enterprise IAM integration
 - Statistical disclosure control automation
 - Kubernetes execution backend
 - Federation (cross-institution analysis)
-- Notifications, quotas, multiple execution backends
+- Quotas, multiple execution backends
+- Notification preferences (opt-in/opt-out per event type)

@@ -254,6 +254,9 @@ def update_bundle(db: Session, bundle_id: uuid.UUID, data: dict) -> AnalysisBund
     if "description" in update_data:
         bundle.description = update_data["description"]
 
+    if "interpreter" in update_data:
+        bundle.interpreter = update_data["interpreter"]
+
     if "outputs" in update_data:
         if not isinstance(update_data["outputs"], list):
             raise ValueError("'outputs' must be a list")

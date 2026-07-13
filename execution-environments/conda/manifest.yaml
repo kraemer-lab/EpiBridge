@@ -4,3 +4,9 @@ runtime: conda
 description: "Conda environment builder via Micromamba 2.8.1 — language and packages defined by researcher's environment.yml"
 status: active
 image_reference: "epibridge/conda:latest"
+validation:
+  setup_command: >
+    if [ -f /analysis/environment.yml ]; then
+      micromamba install -y -n base -f /analysis/environment.yml
+      && micromamba clean --all --yes;
+    fi

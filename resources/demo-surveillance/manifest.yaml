@@ -3,12 +3,12 @@
 # The institutional publication manifest for this Data Resource.
 # The publication directory is derived from the identifier (resources/<identifier>/).
 
-identifier: mex-dengue-2026
-name: Mexico Dengue Surveillance 2026
-alias: mexico_dengue_2026
+identifier: demo-surveillance
+name: Demonstration Surveillance Dataset
+alias: demo_surveillance
 provider: csv
 endpoint:
-  path: mexico_dengue_2026
-description: "Dengue surveillance data for Mexico, 2026"
+  path: demo_surveillance
+description: "Synthetic surveillance dataset for demonstration, testing and documentation purposes only"
 version: "1.0.0"
 status: active

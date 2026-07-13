@@ -3,12 +3,6 @@ from app.models.user import UserRole
 
 
 class TestTermsManageCapabilitySeeding:
-    def test_terms_manage_in_maintainer_role(self):
-        from app.services.auth_framework_seeder import _ROLE_CAPABILITY_MAP
-
-        maintainer_caps = _ROLE_CAPABILITY_MAP[UserRole.MAINTAINER]
-        assert Capability.TERMS_MANAGE in maintainer_caps
-
     def test_terms_manage_in_admin_role(self):
         from app.services.auth_framework_seeder import _ROLE_CAPABILITY_MAP
 

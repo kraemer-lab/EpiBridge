@@ -1,11 +1,11 @@
-## Mexico Dengue Summary
+## Demonstration Surveillance Summary
 
-A minimal example analysis that reads dengue surveillance data and computes summary statistics.
+A minimal example analysis that reads the demonstration surveillance dataset and computes summary statistics.
 
 ### Prerequisites
 
 - [Python 3.14](/environments/python-3.14) Execution Environment
-- [Mexico Dengue Surveillance 2026](/resources/mex-dengue-2026) Data Resource
+- [Demonstration Surveillance Dataset](/resources/demo-surveillance) Data Resource
 
 ### Expected Output
 
@@ -23,7 +23,7 @@ A minimal example analysis that reads dengue surveillance data and computes summ
 docker pull epibridge/python-3.14:latest
 docker run --rm -it \
   -v $(pwd):/analysis \
-  -v $(pwd)/../../resources/mex-dengue-2026:/data/mexico_dengue_2026:ro \
+  -v $(pwd)/../../resources/demo-surveillance:/data/demo_surveillance:ro \
   epibridge/python-3.14:latest \
   python /analysis/run.py
 ```

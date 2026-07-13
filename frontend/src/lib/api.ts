@@ -6,6 +6,7 @@ export interface User {
   email: string;
   display_name: string;
   role: string;
+  roles: string[];
   capabilities: string[];
   created_at: string;
   updated_at: string;
@@ -631,6 +632,14 @@ export async function getProjectExecutionRequests(
   );
 }
 
+export async function getProjectOutputSets(
+  projectId: string,
+): Promise<OutputSetListItem[]> {
+  return request<OutputSetListItem[]>(
+    `/api/projects/${projectId}/output-sets`,
+  );
+}
+
 export async function getProjectExecutionRequest(
   projectId: string,
   requestId: string,
@@ -873,7 +882,14 @@ export interface UserCreate {
   email: string;
   display_name: string;
   password: string;
-  role: string;
+  roles: string[];
+}
+
+export interface UserUpdate {
+  display_name?: string;
+  password?: string;
+  roles?: string[];
+  advanced_capabilities?: string[];
 }
 
 export interface ProjectMember {
@@ -894,6 +910,16 @@ export async function getUser(id: string): Promise<User> {
 export async function createUser(data: UserCreate): Promise<User> {
   return request<User>("/api/admin/users", {
     method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateUser(
+  userId: string,
+  data: UserUpdate,
+): Promise<User> {
+  return request<User>(`/api/admin/users/${userId}`, {
+    method: "PUT",
     body: JSON.stringify(data),
   });
 }

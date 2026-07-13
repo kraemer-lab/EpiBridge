@@ -20,7 +20,7 @@ VALID_MANIFEST = {
     "version": "1.0.0",
     "entrypoint": "run.py",
     "description": "A test analysis",
-    "resource_identifiers": ["ukbb-phenotypes"],
+    "resource_identifiers": ["resource-one"],
     "outputs": ["summary.csv"],
     "parameters": {"threshold": 0.05},
 }
@@ -123,31 +123,29 @@ class TestValidateResources:
         project_id = uuid.uuid4()
         db = MagicMock()
         r1 = MagicMock()
-        r1.identifier = "ukbb-phenotypes"
+        r1.identifier = "resource-one"
         r1.id = uuid.uuid4()
         r2 = MagicMock()
-        r2.identifier = "mex-dengue-2026"
+        r2.identifier = "resource-two"
         r2.id = uuid.uuid4()
         db.query.return_value.filter.return_value.all.side_effect = [
             [r1, r2],
             [(r1.id,), (r2.id,)],
         ]
 
-        result = validate_resources(
-            ["ukbb-phenotypes", "mex-dengue-2026"], project_id, db
-        )
+        result = validate_resources(["resource-one", "resource-two"], project_id, db)
         assert len(result) == 2
 
     def test_missing_resource_raises(self):
         project_id = uuid.uuid4()
         db = MagicMock()
         r1 = MagicMock()
-        r1.identifier = "ukbb-phenotypes"
+        r1.identifier = "resource-one"
         r1.id = uuid.uuid4()
         db.query.return_value.filter.return_value.all.return_value = [r1]
 
-        with pytest.raises(ValueError, match="mex-dengue-2026"):
-            validate_resources(["ukbb-phenotypes", "mex-dengue-2026"], project_id, db)
+        with pytest.raises(ValueError, match="resource-two"):
+            validate_resources(["resource-one", "resource-two"], project_id, db)
 
     def test_empty_list_returns_empty(self):
         project_id = uuid.uuid4()
@@ -195,7 +193,7 @@ class TestCreateBundle:
 
         resource = MagicMock()
         resource.id = uuid.uuid4()
-        resource.identifier = "ukbb-phenotypes"
+        resource.identifier = "resource-one"
         mock_validate_resources.return_value = [resource]
         mock_validate_ee.return_value = MagicMock()
 

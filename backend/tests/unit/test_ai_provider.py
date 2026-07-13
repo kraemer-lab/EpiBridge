@@ -176,7 +176,7 @@ class TestOllamaProvider:
         context = AIReviewContext(
             runtime="python-3.13",
             entrypoint="run.py",
-            resource_identifiers=["mex-dengue-2026"],
+            resource_identifiers=["demo-surveillance"],
         )
         with TemporaryDirectory() as tmp:
             (Path(tmp) / "run.py").write_text("x = 1")
@@ -186,4 +186,4 @@ class TestOllamaProvider:
         prompt = sent_body["prompt"]
         assert "Runtime:      python-3.13" in prompt
         assert "Entrypoint:   run.py" in prompt
-        assert "mex-dengue-2026" in prompt
+        assert "demo-surveillance" in prompt

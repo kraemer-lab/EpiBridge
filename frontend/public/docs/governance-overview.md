@@ -8,14 +8,25 @@ Every action in the platform requires a specific capability:
 
 | Capability | Purpose |
 |---|---|
+| `project.manage` | Create and manage projects |
+| `project.members.manage` | Add or remove project members |
+| `project.resources.manage` | Attach or detach data resources |
 | `bundle.create` | Create and edit Analysis Bundles |
 | `bundle.submit` | Submit bundles for review |
-| `bundle.review` | Approve or reject submitted bundles |
+| `bundle.review` | Approve, reject, or supersede bundles |
 | `execution.run` | Request execution of approved bundles |
 | `output.review` | Approve or reject output sets |
-| `output.release` | Release approved outputs |
+| `output.release` | Release approved outputs to researchers |
+| `validation.run` | Run advisory validation against representative datasets |
+| `environment.manage` | Manage execution environments |
+| `data.manage` | Manage data resources |
+| `user.manage` | Manage user accounts |
+| `terms.manage` | Publish and manage terms of service |
+| `build.customize` | Use Custom Build strategy for bundles |
 
-Researchers typically have `bundle.create` and `bundle.submit`.
+Your account's capabilities depend on your role. Researchers typically have
+`project.manage`, `bundle.create`, `bundle.submit`, `execution.run`, and
+`validation.run`.
 
 ### Two-Stage Approval
 

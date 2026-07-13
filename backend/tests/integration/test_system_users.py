@@ -26,11 +26,11 @@ class TestSystemUserSeeding:
 
         system_user = db_session.query(User).filter(User.id == SYSTEM_USER_ID).first()
         assert system_user is not None
-        assert system_user.capabilities == []
+        assert system_user.advanced_capabilities == []
 
         worker_user = db_session.query(User).filter(User.id == WORKER_USER_ID).first()
         assert worker_user is not None
-        assert worker_user.capabilities == []
+        assert worker_user.advanced_capabilities == []
 
     def test_seeding_is_idempotent(self, db_session):
         seed_auth_framework(db_session)

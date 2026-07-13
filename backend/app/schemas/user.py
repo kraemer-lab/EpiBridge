@@ -12,6 +12,7 @@ class UserRead(BaseModel):
     email: str
     display_name: str
     role: UserRole
+    roles: list[UserRole]
     capabilities: list[str] = Field(validation_alias="capability_names")
     created_at: datetime
     updated_at: datetime
@@ -23,4 +24,11 @@ class UserCreate(BaseModel):
     email: ValidEmail
     display_name: str
     password: str = Field(min_length=8)
-    role: UserRole = UserRole.RESEARCHER
+    roles: list[UserRole] = [UserRole.RESEARCHER]
+
+
+class UserUpdate(BaseModel):
+    display_name: str | None = None
+    password: str | None = Field(default=None, min_length=8)
+    roles: list[UserRole] | None = None
+    advanced_capabilities: list[str] | None = None

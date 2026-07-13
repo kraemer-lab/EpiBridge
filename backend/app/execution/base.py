@@ -22,4 +22,5 @@ class Executor(ABC):
         output_dir: Path,
         timeout: int,
         env: dict[str, str],
+        network_enabled: bool = False,
     ) -> ExecutionResult: ...

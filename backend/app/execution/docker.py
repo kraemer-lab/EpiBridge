@@ -42,6 +42,7 @@ class DockerExecutor(Executor):
         output_dir: Path,
         timeout: int,
         env: dict[str, str],
+        network_enabled: bool = False,
     ) -> ExecutionResult:
         try:
             self._client.images.get(image)
@@ -69,7 +70,7 @@ class DockerExecutor(Executor):
         container = self._client.containers.create(
             image,
             command=command,
-            network_disabled=True,
+            network_disabled=not network_enabled,
             working_dir=WORKDIR,
             user=NONROOT_USER,
             volumes=volume_bindings,

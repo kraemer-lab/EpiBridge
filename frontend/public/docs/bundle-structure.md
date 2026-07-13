@@ -1,6 +1,6 @@
 ## Bundle Structure
 
-An Analysis Bundle is a ZIP archive containing your analysis code and optional dependency specifications.
+An Analysis Bundle is a ZIP archive containing your analysis code, optional dependency specifications, and (for Custom Build) a Dockerfile.
 
 ### Minimal Structure
 
@@ -18,6 +18,13 @@ environment.yml     # Conda environment definition (conda runtime only)
 data/               # Local test data (not included in upload)
 output/             # Local test output (not included in upload)
 ```
+
+### Custom Build
+
+If your bundle uses the **Custom Build** strategy, include a `Dockerfile` at the root
+of the ZIP. The Dockerfile receives `ARG BASE_IMAGE` (the selected execution environment's
+image reference) and extends the institutional environment. Custom Build requires the
+`build.customize` capability.
 
 ### Entrypoint
 

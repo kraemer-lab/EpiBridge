@@ -166,11 +166,11 @@ class TestCsvProvider:
 
     def test_executor_resolves_mount_target(self):
         provider = CsvProvider()
-        config = provider.prepare_runtime({"path": "mexico_dengue_2026/dengue.csv"})
+        config = provider.prepare_runtime({"path": "demo_surveillance/records.csv"})
 
         assert len(config.mounts) == 1
         mount = config.mounts[0]
-        assert mount.source == "/read-only-data/mexico_dengue_2026/dengue.csv"
+        assert mount.source == "/read-only-data/demo_surveillance/records.csv"
         assert mount.read_only is True
 
         assert config.env == {}

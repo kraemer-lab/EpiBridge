@@ -59,7 +59,7 @@ class TestSeedSystemUsers:
 
         users = [call[0][0] for call in db.add.call_args_list]
         for u in users:
-            assert u.capabilities == []
+            assert u.advanced_capabilities == []
 
     def test_system_user_uses_well_known_id(self):
         db = MagicMock()

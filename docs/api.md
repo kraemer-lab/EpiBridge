@@ -74,10 +74,30 @@ Outputs are governed as a collection (Output Set), not individually. The Output 
 - `POST /api/admin/output-sets/{id}/release` — release (APPROVED → RELEASED), creates ZIP
 - `GET /api/admin/outputs/{id}` — inspect individual output artefact (admin)
 
+### Validation
+
+Validation runs execute an Analysis Bundle against representative datasets before submission. They use the same execution pipeline as governed execution but produce transient, researcher-visible outputs.
+
+- `POST /api/projects/{project_id}/bundles/{id}/validate` — create a validation request
+- `GET /api/projects/{project_id}/bundles/{id}/validation` — get the latest validation status and results
+- `GET /api/projects/{project_id}/bundles/{id}/validation-status` — get bundle consistency indicator (validated vs changed)
+
+### Terms of Service
+
+Terms endpoints are unauthenticated (for reading current terms) or require `terms.manage` (for publishing).
+
+- `GET /api/terms/platform/current` — get current platform terms
+- `POST /api/terms/platform/accept` — accept the current platform terms
+- `GET /api/terms/resources/{id}/current` — get current dataset terms for a resource
+- `POST /api/terms/resources/{id}/accept` — accept dataset terms for a resource
+- `GET /api/terms/status` — get acceptance status for all terms
+- `GET /api/terms/check?resource_ids=...` — check acceptance status for specific resources
+
 ### Data Resources
 
 - `GET /api/admin/resources` — list all data resources (admin)
 - `GET /api/admin/resources/{id}` — get data resource details (admin)
+- `POST /api/admin/resources/{id}/terms/publish` — publish dataset terms (requires `terms.manage`)
 
 ### Execution Environments
 
@@ -87,18 +107,21 @@ Outputs are governed as a collection (Output Set), not individually. The Output 
 
 ### Administration
 
-- `POST /api/admin/bundles/{id}/approve` — approve a bundle for execution
-- `POST /api/admin/bundles/{id}/reject` — reject a bundle
-- `POST /api/admin/bundles/{id}/supersede` — supersede a bundle
-- `GET /api/admin/bundles` — list all bundles (admin)
-- `GET /api/admin/bundles/{id}` — get bundle details (admin)
-- `POST /api/admin/output-sets/{id}/approve` — approve output set
-- `POST /api/admin/output-sets/{id}/reject` — reject output set
-- `POST /api/admin/output-sets/{id}/release` — release output set
-- `GET /api/admin/audit-events` — query the audit ledger
-- `GET /api/admin/users` — list all users
-- `GET /api/admin/users/{id}` — get user details
-- `POST /api/admin/users` — create a user
+- `POST /api/admin/terms/platform` — publish platform terms (requires `terms.manage`)
+- `GET /api/admin/terms/status` — view terms management status (requires `terms.manage`)
+- `POST /api/admin/bundles/{id}/approve` — approve a bundle for execution (requires `bundle.review`)
+- `POST /api/admin/bundles/{id}/reject` — reject a bundle (requires `bundle.review`)
+- `POST /api/admin/bundles/{id}/supersede` — supersede a bundle (requires `bundle.review`)
+- `GET /api/admin/bundles` — list all bundles (admin, tiered capability)
+- `GET /api/admin/bundles/{id}` — get bundle details (admin, tiered capability)
+- `POST /api/admin/output-sets/{id}/approve` — approve output set (requires `output.review`)
+- `POST /api/admin/output-sets/{id}/reject` — reject output set (requires `output.review`)
+- `POST /api/admin/output-sets/{id}/release` — release output set (requires `output.release`)
+- `GET /api/admin/audit-events` — query the audit ledger (tiered capability)
+  - Supports filters: `project_id`, `actor_id`, `resource_type`, `resource_id`, `event_type`, `date_from`, `date_to`
+  - Supports pagination: `limit` (max 200), `offset`
+  - Supports ordering: `order` (`asc`/`desc`, default `desc`)
+  - Returns actor details (display name, email) via join to users table
 
 ### Health
 
@@ -109,11 +132,18 @@ Outputs are governed as a collection (Output Set), not individually. The Output 
 ## Job Lifecycle
 
 ```
-DRAFT → SUBMITTED → APPROVED_FOR_EXECUTION
-                                   ↓
+DRAFT ─→ VALIDATION (advisory, optional)
+  │
+  ↓ (submit)
+SUBMITTED
+  ↓ (review/approve)
+APPROVED_FOR_EXECUTION
+  ↓
+BUILD (automated — ExecutionImage created or cache hit)
+  ↓
 Execution Request → PENDING → RUNNING → COMPLETED / FAILED
-                                   ↓
-                           Output Set → PENDING_REVIEW → APPROVED → RELEASED
+                                    ↓
+                            Output Set → PENDING_REVIEW → APPROVED → RELEASED
 ```
 
 ---
