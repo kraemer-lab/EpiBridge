@@ -632,6 +632,14 @@ export async function getProjectExecutionRequests(
   );
 }
 
+export async function getProjectOutputSets(
+  projectId: string,
+): Promise<OutputSetListItem[]> {
+  return request<OutputSetListItem[]>(
+    `/api/projects/${projectId}/output-sets`,
+  );
+}
+
 export async function getProjectExecutionRequest(
   projectId: string,
   requestId: string,

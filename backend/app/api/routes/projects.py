@@ -32,6 +32,8 @@ from app.models.audit_event import AuditEventType
 from app.models.build_request import BuildRequest
 from app.models.capability import Capability
 from app.models.data_resource import DataResource
+from app.models.execution_request import ExecutionRequest
+from app.models.output_set import OutputSet
 from app.models.project_data_resource import ProjectResourceAllocation
 from app.models.user import User
 from app.schemas.ai_bundle_review import AIBundleReviewRead
@@ -46,7 +48,7 @@ from app.schemas.execution_request import (
     ExecutionRequestRead,
 )
 from app.schemas.output import OutputRead
-from app.schemas.output_set import OutputSetRead
+from app.schemas.output_set import OutputSetListItem, OutputSetRead
 from app.schemas.project import (
     AddProjectMemberBody,
     ProjectCreate,
@@ -660,6 +662,41 @@ def get_project_execution_requests(
     require_project_membership(db, current_user, project_id)
     requests = list_execution_requests(db, project_id=project_id)
     return [request_to_read(r) for r in requests]
+
+
+@router.get(
+    "/projects/{project_id}/output-sets",
+    response_model=List[OutputSetListItem],
+)
+def get_project_output_sets(
+    project_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    require_project_membership(db, current_user, project_id)
+    output_sets = (
+        db.query(OutputSet)
+        .join(ExecutionRequest, OutputSet.execution_request_id == ExecutionRequest.id)
+        .filter(ExecutionRequest.project_id == project_id)
+        .order_by(OutputSet.created_at.desc())
+        .all()
+    )
+    result: list[OutputSetListItem] = []
+    for s in output_sets:
+        req = s.execution_request
+        result.append(
+            OutputSetListItem(
+                id=s.id,
+                execution_request_id=s.execution_request_id,
+                execution_request_name=req.name if req else "",
+                status=s.status,
+                file_count=len(s.outputs) if s.outputs else 0,
+                release_package_size=s.release_package_size,
+                created_at=s.created_at,
+                updated_at=s.updated_at,
+            )
+        )
+    return result
 
 
 @router.get(
