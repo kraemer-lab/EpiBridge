@@ -11,7 +11,7 @@ export const RESEARCHER_EMAIL =
   process.env.RESEARCHER_EMAIL || "researcher@epibridge.local";
 const RESEARCHER_PASSWORD = process.env.RESEARCHER_PASSWORD || "researcher";
 
-export const RESOURCE_IDENTIFIER = "mex-dengue-2026";
+export const RESOURCE_IDENTIFIER = "demo-surveillance";
 export const ENVIRONMENT_IDENTIFIER = "python-3.13";
 
 async function createApiContext(email: string, password: string): Promise<APIRequestContext> {

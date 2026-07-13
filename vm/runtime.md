@@ -119,15 +119,14 @@ Examples:
 
 ```
 /data
-  /ukbb
-  /mexico_dengue_2026
+  /demo_surveillance
   /weather
 ```
 
 If a resource resolves to a single file, it appears directly:
 
 ```
-/data/ukbb/phenotypes.csv
+/data/dataset.csv
 ```
 
 If a resource resolves to a directory, all files within are available:

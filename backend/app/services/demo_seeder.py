@@ -19,9 +19,9 @@ from app.services.terms_service import (
 )
 from app.workflow.bundle import approve_bundle, submit_bundle
 
-DEMO_PROJECT_NAME = "Dengue Analysis Demo"
-DEMO_BUNDLE_NAME = "Dengue Summary Statistics"
-DEMO_RESOURCE_IDENTIFIER = "mex-dengue-2026"
+DEMO_PROJECT_NAME = "Demonstration Analysis"
+DEMO_BUNDLE_NAME = "Demonstration Summary"
+DEMO_RESOURCE_IDENTIFIER = "demo-surveillance"
 DEMO_OUTPUT_FILENAME = "summary.csv"
 
 
@@ -56,9 +56,7 @@ def seed_demo_workspace(db: Session) -> dict:
 
     project = Project(
         name=DEMO_PROJECT_NAME,
-        description=(
-            "Dengue surveillance analysis demo for EpiBridge canonical workflow."
-        ),
+        description=("Demonstration analysis for EpiBridge canonical workflow."),
         owner_id=admin.id,
     )
     db.add(project)
@@ -107,7 +105,7 @@ def seed_demo_workspace(db: Session) -> dict:
         version="1.0.0",
         entrypoint="run.py",
         description=(
-            "Computes summary statistics from the Mexico dengue surveillance dataset."
+            "Computes summary statistics from the demonstration surveillance dataset."
         ),
         outputs=[DEMO_OUTPUT_FILENAME],
         parameters={},

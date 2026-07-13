@@ -258,9 +258,9 @@ The platform is provided as a research tool. No warranty is expressed or implied
 """
 
 DEFAULT_RESOURCE_TERMS_VERSION = "1.0.0"
-DEFAULT_RESOURCE_TERMS_TITLE = "Mexico Dengue Surveillance Data — Terms of Use"
+DEFAULT_RESOURCE_TERMS_TITLE = "Demonstration Surveillance Dataset — Terms of Use"
 DEFAULT_RESOURCE_TERMS_CONTENT = """\
-# Mexico Dengue Surveillance Data — Terms of Use
+# Demonstration Surveillance Dataset — Terms of Use
 
 ## Purpose
 
@@ -300,7 +300,7 @@ def seed_terms(db: Session) -> dict:
 
     resource = (
         db.query(DataResource)
-        .filter(DataResource.identifier == "mex-dengue-2026")
+        .filter(DataResource.identifier == "demo-surveillance")
         .first()
     )
     if resource is not None:

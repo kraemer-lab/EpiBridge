@@ -18,7 +18,7 @@ class TestAnalysisBundleModel:
             name="Survival Analysis",
             version="1.0.0",
             entrypoint="run.py",
-            description="A survival analysis on UK Biobank data",
+            description="A survival analysis on demonstration data",
             outputs=["summary.csv"],
             parameters={"threshold": 0.05},
         )
@@ -26,7 +26,7 @@ class TestAnalysisBundleModel:
         assert bundle.execution_environment_id == ee_id
         assert bundle.version == "1.0.0"
         assert bundle.entrypoint == "run.py"
-        assert bundle.description == "A survival analysis on UK Biobank data"
+        assert bundle.description == "A survival analysis on demonstration data"
         assert bundle.outputs == ["summary.csv"]
         assert bundle.parameters == {"threshold": 0.05}
 

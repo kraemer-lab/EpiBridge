@@ -12,7 +12,7 @@ const MAINTAINER_PASSWORD = process.env.MAINTAINER_PASSWORD || "maintainer";
 
 const ANALYSIS_CODE = `\
 import pandas as pd
-df = pd.read_csv("/data/mexico_dengue_2026/demo.csv")
+df = pd.read_csv("/data/demo_surveillance/demo.csv")
 summary = df.describe()
 summary.to_csv("/output/summary.csv")
 print(f"Complete. Processed {len(df)} rows.")
@@ -74,9 +74,9 @@ test("Canonical Workflow", async ({ page }) => {
 
   await page.getByRole("link", { name: "Resources", exact: true }).click();
   await expect(page.getByText("Configure Resources")).toBeVisible();
-  await page.locator("tr").filter({ hasText: "mex-dengue-2026" }).getByRole("button", { name: "Attach" }).click();
+  await page.locator("tr").filter({ hasText: "demo-surveillance" }).getByRole("button", { name: "Attach" }).click();
   await page.getByRole("button", { name: "Accept & Continue" }).click();
-  await expect(page.getByText("mex-dengue-2026")).toBeVisible();
+  await expect(page.getByText("demo-surveillance")).toBeVisible();
   await page.getByRole("button", { name: "Sign out" }).click();
 
   // Accept platform + resource terms for the researcher
@@ -85,7 +85,7 @@ test("Canonical Workflow", async ({ page }) => {
   const resReq = await page.request.get("/api/resources");
   if (resReq.ok()) {
     const resources = await resReq.json();
-    const resource = resources.find((r: any) => r.identifier === "mex-dengue-2026");
+    const resource = resources.find((r: any) => r.identifier === "demo-surveillance");
     if (resource) await page.request.post(`/api/terms/resources/${resource.id}/accept`).catch(() => {});
   }
 
@@ -112,7 +112,7 @@ test("Canonical Workflow", async ({ page }) => {
   const entrypointSelect = page.locator("select").filter({ has: page.locator('option[value="run.py"]') }).first();
   if (await entrypointSelect.isVisible()) await entrypointSelect.selectOption("run.py");
   await page.getByLabel("Interpreter").selectOption("Python");
-  await page.getByText("(mex-dengue-2026)").click();
+  await page.getByText("(demo-surveillance)").click();
 
   await page.getByRole("button", { name: "Run Validation" }).click();
   await expect(page.locator(".card").filter({ hasText: "Validation Run" }).getByText(/completed/)).toBeVisible({ timeout: 180_000 });

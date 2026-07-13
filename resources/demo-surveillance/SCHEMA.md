@@ -1,4 +1,4 @@
-# Mexico Dengue Surveillance 2026 — Schema
+# Demonstration Surveillance Dataset — Schema
 
 ## Columns
 
@@ -8,7 +8,7 @@
 | `age` | integer | Patient age in years |
 | `region` | string | Geographic region (North, South, East, West) |
 | `outcome` | string | Clinical outcome (recovered, deceased) |
-| `exposed` | string | Known dengue exposure (yes, no) |
+| `exposed` | string | Known exposure (yes, no) |
 | `vaccinated` | string | Vaccination status (yes, no) |
 
 ## Constraints
