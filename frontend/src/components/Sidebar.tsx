@@ -19,9 +19,9 @@ function hasAdminAccess(capabilities: string[]): boolean {
 }
 
 const links = [
-  { href: "/", label: "Dashboard" },
-  { href: "/resources", label: "Resources" },
+  { href: "/", label: "Home" },
   { href: "/projects", label: "Projects" },
+  { href: "/resources", label: "Resources" },
   { href: "/environments", label: "Environments" },
   { href: "/examples", label: "Examples" },
   { href: "/templates", label: "Templates" },

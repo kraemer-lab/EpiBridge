@@ -287,7 +287,7 @@ export default function HomePage() {
 
   return (
     <>
-      <h1 className="page-title">Dashboard</h1>
+      <h1 className="page-title">Home</h1>
       <ArrivalSummary sections={sections} />
     </>
   );

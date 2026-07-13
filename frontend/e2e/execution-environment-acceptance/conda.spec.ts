@@ -45,7 +45,7 @@ test("Conda execution environment acceptance", async ({ page }) => {
 
   // === VALIDATION (UI: upload, trigger, wait) ===
   await login(page, RESEARCHER_EMAIL, "researcher");
-  await page.getByRole("link", { name: "Projects" }).click();
+  await page.getByRole("link", { name: "Projects", exact: true }).click();
   await page.getByText(project.name).click();
   await page.getByRole("link", { name: "Analysis" }).click();
   await page.getByText(bundleName).click();
