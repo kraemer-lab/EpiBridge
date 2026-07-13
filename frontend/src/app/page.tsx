@@ -15,25 +15,9 @@ import {
 } from "@/lib/api";
 
 // ─── Role detection ──────────────────────────────────────────────────────
-// Temporary implementation: derive roles from capabilities.
-// Long-term direction: explicit role assignments will drive presentation.
-
-const RESEARCHER_CAPS = [
-  "bundle.create",
-  "bundle.submit",
-  "execution.run",
-  "validation.run",
-];
-
-const MODERATOR_CAPS = ["bundle.review", "output.review"];
-
-const MAINTAINER_CAPS = ["output.release", "environment.manage"];
-
-const ADMIN_CAPS = ["user.manage", "terms.manage", "data.manage"];
-
-function hasAny(caps: string[], targets: string[]): boolean {
-  return targets.some((t) => caps.includes(t));
-}
+// Roles are assigned explicitly — they are not derived from capabilities.
+// Each role maps to a homepage section.
+// Users may hold multiple roles (additive).
 
 // ─── Section model ───────────────────────────────────────────────────────
 
@@ -273,13 +257,13 @@ export default function HomePage() {
   useEffect(() => {
     if (authLoading || !user) return;
 
-    const caps = user.capabilities;
+    const roles = user.roles || [user.role];
     const loaders: Promise<SectionData>[] = [];
 
-    if (hasAny(caps, RESEARCHER_CAPS)) loaders.push(loadResearcher());
-    if (hasAny(caps, MODERATOR_CAPS)) loaders.push(loadModerator());
-    if (hasAny(caps, MAINTAINER_CAPS)) loaders.push(loadMaintainer());
-    if (hasAny(caps, ADMIN_CAPS)) loaders.push(loadAdministrator());
+    if (roles.includes("researcher")) loaders.push(loadResearcher());
+    if (roles.includes("moderator")) loaders.push(loadModerator());
+    if (roles.includes("maintainer")) loaders.push(loadMaintainer());
+    if (roles.includes("admin")) loaders.push(loadAdministrator());
 
     if (loaders.length === 0) {
       setSections([]);

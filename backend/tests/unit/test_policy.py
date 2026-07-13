@@ -13,7 +13,7 @@ def _make_user(capability_names: list[str] | None = None) -> User:
         role=UserRole.RESEARCHER,
     )
     if capability_names:
-        user.capabilities = [
+        user.advanced_capabilities = [
             UserCapability(capability_name=n) for n in capability_names
         ]
     return user
@@ -46,7 +46,7 @@ class TestRequireCapability:
             password_hash="hash",
             role=UserRole.ADMIN,
         )
-        user.capabilities = [
+        user.advanced_capabilities = [
             UserCapability(capability_name=c.value) for c in Capability
         ]
         for c in Capability:

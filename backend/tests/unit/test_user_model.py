@@ -48,7 +48,7 @@ def test_user_capabilities_empty_by_default():
         password_hash="hash",
         role=UserRole.RESEARCHER,
     )
-    assert user.capabilities == []
+    assert user.advanced_capabilities == []
 
 
 def test_user_with_capabilities():
@@ -59,6 +59,6 @@ def test_user_with_capabilities():
         role=UserRole.RESEARCHER,
     )
     cap = UserCapability(capability_name=Capability.BUNDLE_CREATE)
-    user.capabilities.append(cap)
+    user.advanced_capabilities.append(cap)
     assert user.has_capability(Capability.BUNDLE_CREATE) is True
     assert user.has_capability(Capability.EXECUTION_RUN) is False

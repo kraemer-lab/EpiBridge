@@ -83,6 +83,7 @@ def _load_artefact_directory(dir_path: Path, artefact_dirs: list[Path]) -> list[
 
         _validate_artefact_structure(artefact_dir)
 
+        validation = data.get("validation", {}) or {}
         entry = {
             "identifier": identifier,
             "name": data["name"],
@@ -91,6 +92,7 @@ def _load_artefact_directory(dir_path: Path, artefact_dirs: list[Path]) -> list[
             "status": data.get("status", "active"),
             "image_reference": data.get("image_reference", ""),
             "definition_path": artefact_dir.name,
+            "validation_setup_command": validation.get("setup_command"),
         }
         all_entries.append(entry)
 

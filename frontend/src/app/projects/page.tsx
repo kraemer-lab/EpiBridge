@@ -3,11 +3,14 @@
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { Project, getProjects } from "@/lib/api";
+import { useAuth } from "@/lib/AuthContext";
 import ProjectDialog from "@/components/ProjectDialog";
 
 export default function ProjectsPage() {
+  const { user } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
   const [showDialog, setShowDialog] = useState(false);
+  const canCreate = user?.capabilities.includes("project.manage");
 
   const loadProjects = useCallback(async () => {
     try {
@@ -26,9 +29,11 @@ export default function ProjectsPage() {
     <>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "var(--spacing-lg)" }}>
         <h1 className="page-title" style={{ marginBottom: 0 }}>Projects</h1>
-        <button className="btn btn-primary" onClick={() => setShowDialog(true)}>
-          Create Project
-        </button>
+        {canCreate && (
+          <button className="btn btn-primary" onClick={() => setShowDialog(true)}>
+            Create Project
+          </button>
+        )}
       </div>
 
       {projects.length === 0 ? (

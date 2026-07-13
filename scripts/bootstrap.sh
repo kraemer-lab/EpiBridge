@@ -166,13 +166,25 @@ echo "Seeding researcher account..."
 docker compose exec -T backend python -m app.cli seed-researcher
 
 ###############################################################################
-# 12. Seed platform terms
+# 12. Seed moderator account
+###############################################################################
+echo "Seeding moderator account..."
+docker compose exec -T backend python -m app.cli seed-moderator
+
+###############################################################################
+# 13. Seed developer account
+###############################################################################
+echo "Seeding developer account..."
+docker compose exec -T backend python -m app.cli seed-developer
+
+###############################################################################
+# 14. Seed platform terms
 ###############################################################################
 echo "Seeding platform terms..."
 docker compose exec -T backend python -m app.cli seed-terms
 
 ###############################################################################
-# 13. Health check
+# 16. Health check
 ###############################################################################
 echo "Running health checks..."
 ./scripts/healthcheck.sh

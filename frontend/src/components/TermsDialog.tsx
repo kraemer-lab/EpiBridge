@@ -41,8 +41,8 @@ export function TermsDialog({
     try {
       await acceptResourceTerms(resourceId);
       onAccept();
-    } catch {
-      setError("Failed to accept terms. Please try again.");
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to accept terms.");
       setAccepting(false);
     }
   };

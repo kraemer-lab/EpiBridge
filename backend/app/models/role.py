@@ -9,6 +9,7 @@ from app.db.base import Base
 
 if TYPE_CHECKING:
     from app.models.role_capability import RoleCapability
+    from app.models.user_role import UserRoleAssignment
 
 
 class RoleRecord(Base):
@@ -20,5 +21,8 @@ class RoleRecord(Base):
     name: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
 
     capability_assignments: Mapped[list["RoleCapability"]] = relationship(
+        back_populates="role", cascade="all, delete-orphan"
+    )
+    user_assignments: Mapped[list["UserRoleAssignment"]] = relationship(
         back_populates="role", cascade="all, delete-orphan"
     )

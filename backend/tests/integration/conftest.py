@@ -9,9 +9,11 @@ from app.db.migration import ensure_migrated
 from app.db.session import SessionLocal, engine
 from app.main import app
 from app.models.capability import ALL_CAPABILITIES, UserCapability
+from app.models.role import RoleRecord
 from app.models.user import User, UserRole
+from app.models.user_role import UserRoleAssignment
 from app.services.auth_framework_seeder import (
-    grant_role_capabilities,
+    cleanup_role_derived_capabilities,
     seed_auth_framework,
 )
 from app.services.session_service import create_session
@@ -71,6 +73,7 @@ def redis_client():
 
 @pytest.fixture
 def admin_user(db_session):
+    seed_auth_framework(db_session)
     user = User(
         email=settings.admin_email,
         display_name="Administrator",
@@ -80,12 +83,22 @@ def admin_user(db_session):
     db_session.add(user)
     db_session.flush()
 
+    role_record = (
+        db_session.query(RoleRecord)
+        .filter(RoleRecord.name == UserRole.ADMIN.value)
+        .first()
+    )
+    if role_record is not None:
+        db_session.add(UserRoleAssignment(user_id=user.id, role_id=role_record.id))
+
     for cap_name in ALL_CAPABILITIES:
         db_session.execute(
             text("INSERT INTO capabilities (name) VALUES (:n) ON CONFLICT DO NOTHING"),
             {"n": cap_name},
         )
         db_session.add(UserCapability(user_id=user.id, capability_name=cap_name))
+
+    cleanup_role_derived_capabilities(db_session, user)
 
     db_session.commit()
     db_session.refresh(user)
@@ -102,7 +115,11 @@ def _make_user(db_session, email, display_name, role):
     )
     db_session.add(user)
     db_session.flush()
-    grant_role_capabilities(db_session, user)
+    role_record = (
+        db_session.query(RoleRecord).filter(RoleRecord.name == role.value).first()
+    )
+    if role_record is not None:
+        db_session.add(UserRoleAssignment(user_id=user.id, role_id=role_record.id))
     db_session.commit()
     db_session.refresh(user)
     return user

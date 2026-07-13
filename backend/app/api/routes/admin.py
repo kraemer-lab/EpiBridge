@@ -26,7 +26,7 @@ from app.schemas.execution_request import ExecutionRequestRead
 from app.schemas.output import OutputRead
 from app.schemas.output_set import OutputSetListItem, OutputSetRead
 from app.schemas.terms import TermsOfServicePublish, TermsOfServiceRead
-from app.schemas.user import UserCreate, UserRead
+from app.schemas.user import UserCreate, UserRead, UserUpdate
 from app.services.analysis_bundle_service import (
     get_environment_runtime,
     get_resource_identifiers,
@@ -51,7 +51,12 @@ from app.services.terms_service import (
     publish_platform_terms,
     publish_resource_terms,
 )
-from app.services.user_service import create_user, get_user_by_id, list_users
+from app.services.user_service import (
+    create_user,
+    get_user_by_id,
+    list_users,
+    update_user,
+)
 from app.workflow.bundle import approve_bundle, reject_bundle, supersede_bundle
 from app.workflow.output_set import (
     approve_output_set,
@@ -727,10 +732,36 @@ def post_admin_user(
         email=data.email,
         display_name=data.display_name,
         password=data.password,
-        role=data.role,
+        roles=data.roles,
         actor_id=current_user.id,
     )
     return user
+
+
+@router.put("/admin/users/{user_id}", response_model=UserRead)
+def put_admin_user(
+    user_id: uuid.UUID,
+    data: UserUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _require_capability(current_user, Capability.USER_MANAGE)
+
+    updated = update_user(
+        db,
+        user_id=user_id,
+        display_name=data.display_name,
+        password=data.password,
+        roles=data.roles,
+        advanced_capabilities=data.advanced_capabilities,
+        actor_id=current_user.id,
+    )
+    if updated is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+    return updated
 
 
 # --- Audit event query ---

@@ -29,6 +29,7 @@ from app.models.session import Session
 from app.models.terms_acceptance import TermsAcceptance
 from app.models.terms_of_service import TermsOfService
 from app.models.user import User, UserRole
+from app.models.user_role import UserRoleAssignment
 from app.models.validation_request import ValidationRequest, ValidationRequestStatus
 
 __all__ = [
@@ -66,6 +67,7 @@ __all__ = [
     "User",
     "UserCapability",
     "UserRole",
+    "UserRoleAssignment",
     "ValidationRequest",
     "ValidationRequestStatus",
 ]

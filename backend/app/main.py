@@ -22,6 +22,8 @@ from app.core.config import settings
 from app.core.logging import configure_logging
 from app.db.migration import ensure_migrated
 from app.db.session import SessionLocal
+from app.models.user import set_role_capability_map
+from app.services.auth_framework_seeder import _ROLE_CAPABILITY_MAP as ROLE_CAP_MAP
 from app.services.directory_publication import (
     DirectoryPublication,
     create_publication_router,
@@ -41,6 +43,9 @@ logger = logging.getLogger("epibridge")
 async def lifespan(app: FastAPI):
     configure_logging(settings.log_level)
     ensure_migrated()
+
+    # Initialise the role capability map for runtime derivation.
+    set_role_capability_map(ROLE_CAP_MAP)
 
     db: Session = SessionLocal()
     try:

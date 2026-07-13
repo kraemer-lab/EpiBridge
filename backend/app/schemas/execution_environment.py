@@ -26,6 +26,7 @@ class ExecutionEnvironmentRead(BaseModel):
     description: str
     status: str
     image_reference: str
+    validation_setup_command: str | None = None
     created_at: datetime
     updated_at: datetime
 

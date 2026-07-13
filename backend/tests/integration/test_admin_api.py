@@ -168,7 +168,7 @@ class TestAdminUsers:
                 "email": "new@test.local",
                 "display_name": "New User",
                 "password": "test-secret",
-                "role": "researcher",
+                "roles": ["researcher"],
             },
         )
         assert response.status_code == 201
@@ -177,7 +177,7 @@ class TestAdminUsers:
         assert data["display_name"] == "New User"
         assert data["role"] == "researcher"
         assert "capabilities" in data
-        assert "project.manage" in data["capabilities"]
+        assert "project.manage" not in data["capabilities"]
         assert "user.manage" not in data["capabilities"]
 
     def test_create_user_default_role(self, client):
@@ -247,15 +247,15 @@ class TestAdminUsers:
                 "email": "mod@test.local",
                 "display_name": "Moderator",
                 "password": "test-secret",
-                "role": "moderator",
+                "roles": ["moderator"],
             },
         )
         assert response.status_code == 201
         caps = response.json()["capabilities"]
         assert "bundle.review" in caps
         assert "output.review" in caps
+        assert "project.manage" not in caps
         assert "output.release" not in caps
-        assert "data.manage" not in caps
 
     def test_create_user_maintainer(self, client):
         response = client.post(
@@ -264,11 +264,12 @@ class TestAdminUsers:
                 "email": "maint@test.local",
                 "display_name": "Maintainer",
                 "password": "test-secret",
-                "role": "maintainer",
+                "roles": ["maintainer"],
             },
         )
         assert response.status_code == 201
         caps = response.json()["capabilities"]
+        assert "project.manage" in caps
         assert "output.release" in caps
         assert "data.manage" in caps
         assert "user.manage" not in caps
@@ -280,9 +281,11 @@ class TestAdminUsers:
                 "email": "admin2@test.local",
                 "display_name": "Admin Two",
                 "password": "test-secret",
-                "role": "admin",
+                "roles": ["admin"],
             },
         )
         assert response.status_code == 201
         caps = response.json()["capabilities"]
         assert "user.manage" in caps
+        assert "terms.manage" in caps
+        assert "data.manage" not in caps

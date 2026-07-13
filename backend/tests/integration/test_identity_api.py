@@ -87,13 +87,12 @@ class TestResearcherCapabilities:
     """A Researcher should be able to perform research actions but NOT
     governance or administration actions."""
 
-    def test_can_create_project(self, researcher_client, researcher_user):
+    def test_cannot_create_project(self, researcher_client, researcher_user):
         response = researcher_client.post(
             "/api/projects",
             json={"name": "Researcher Project", "description": ""},
         )
-        assert response.status_code == 201
-        assert response.json()["owner_id"] == str(researcher_user.id)
+        assert response.status_code == 403
 
     @pytest.mark.usefixtures("project", "execution_environment")
     def test_can_create_bundle(
@@ -188,16 +187,15 @@ class TestModeratorCapabilities:
     """A Moderator should be able to review bundles and output sets, but NOT
     release outputs, manage resources, or manage users."""
 
-    def test_can_manage_members(
+    def test_cannot_manage_members(
         self, moderator_client, moderator_user, project, db_session
     ):
-        # Add another user to the project so we can manage them
         _add_to_project(db_session, project, moderator_user, project.owner_id)
         response = moderator_client.post(
             f"/api/projects/{project.id}/members",
             json={"email": "nonexistent@test.local"},
         )
-        assert response.status_code == 404  # user not found, but authorisation passed
+        assert response.status_code == 403
 
     def test_can_review_bundle(
         self,
@@ -283,7 +281,7 @@ class TestAdminCapabilities:
                 "email": "validated-admin@test.local",
                 "display_name": "Validated",
                 "password": "admin-secret",
-                "role": "admin",
+                "roles": ["admin"],
             },
         )
         assert response.status_code == 201
