@@ -256,8 +256,22 @@ class TestMaintainerCapabilities:
         )
         assert response.status_code == 404  # not found, but not 403
 
-    def test_cannot_manage_users(self, maintainer_client):
+    def test_can_read_users(self, maintainer_client):
+        """Maintainers can list users with user.read capability."""
         response = maintainer_client.get("/api/admin/users")
+        assert response.status_code == 200
+
+    def test_cannot_create_users(self, maintainer_client):
+        """Maintainers cannot create users — that requires user.manage."""
+        response = maintainer_client.post(
+            "/api/admin/users",
+            json={
+                "email": "new@test.local",
+                "display_name": "New",
+                "password": "password123",
+                "roles": ["researcher"],
+            },
+        )
         assert response.status_code == 403
 
 

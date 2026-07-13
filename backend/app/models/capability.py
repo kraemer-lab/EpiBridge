@@ -25,6 +25,7 @@ class Capability(str, enum.Enum):
     ENVIRONMENT_MANAGE = "environment.manage"
     DATA_MANAGE = "data.manage"
     USER_MANAGE = "user.manage"
+    USER_READ = "user.read"
     VALIDATION_RUN = "validation.run"
     BUILD_CUSTOMIZE = "build.customize"
     TERMS_MANAGE = "terms.manage"

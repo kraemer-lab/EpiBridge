@@ -30,9 +30,11 @@ _ROLE_CAPABILITY_MAP: dict[UserRole, set[str]] = {
         Capability.OUTPUT_RELEASE,
         Capability.ENVIRONMENT_MANAGE,
         Capability.DATA_MANAGE,
+        Capability.USER_READ,
     },
     UserRole.ADMIN: {
         Capability.USER_MANAGE,
+        Capability.USER_READ,
         Capability.TERMS_MANAGE,
     },
 }

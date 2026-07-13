@@ -77,6 +77,19 @@ def _require_capability(current_user: User, capability: Capability) -> None:
         )
 
 
+def _require_any_capability(current_user: User, capabilities: list[Capability]) -> None:
+    for cap in capabilities:
+        try:
+            require_capability(current_user, cap)
+            return
+        except PolicyError:
+            continue
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Forbidden",
+    )
+
+
 @router.get("/admin/resources", response_model=List[DataResourceRead])
 def list_resources(
     db: Session = Depends(get_db),
@@ -692,7 +705,9 @@ def list_admin_users(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _require_capability(current_user, Capability.USER_MANAGE)
+    _require_any_capability(
+        current_user, [Capability.USER_MANAGE, Capability.USER_READ]
+    )
     return list_users(db)
 
 
@@ -702,7 +717,9 @@ def get_admin_user(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _require_capability(current_user, Capability.USER_MANAGE)
+    _require_any_capability(
+        current_user, [Capability.USER_MANAGE, Capability.USER_READ]
+    )
     user = get_user_by_id(db, user_id)
     if user is None:
         raise HTTPException(
