@@ -4,6 +4,14 @@ import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { DataResource, getDataResources } from "@/lib/api";
 
+const PROVIDER_LABELS: Record<string, string> = {
+  csv: "CSV Dataset",
+  duckdb: "DuckDB Database",
+  postgres: "PostgreSQL Database",
+  excel: "Excel Spreadsheet",
+  parquet: "Parquet Dataset",
+};
+
 export default function ResourcesPage() {
   const [resources, setResources] = useState<DataResource[]>([]);
 
@@ -34,7 +42,7 @@ export default function ResourcesPage() {
             <thead>
               <tr>
                 <th>Name</th>
-                <th>Provider</th>
+                <th>Type</th>
                 <th>Version</th>
                 <th>Description</th>
               </tr>
@@ -51,7 +59,7 @@ export default function ResourcesPage() {
                     </Link>
                   </td>
                   <td style={{ color: "var(--color-text-secondary)" }}>
-                    {r.provider_type}
+                    {PROVIDER_LABELS[r.provider_type] || r.provider_type}
                   </td>
                   <td style={{ color: "var(--color-text-secondary)" }}>
                     {r.version}

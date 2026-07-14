@@ -5,10 +5,15 @@
 
 identifier: demo-surveillance
 name: Demonstration Surveillance Dataset
-alias: demo_surveillance
+alias: demo-surveillance
 provider: csv
 endpoint:
-  path: demo_surveillance
-description: "Synthetic surveillance dataset for demonstration, testing and documentation purposes only"
+  path: demo-surveillance/data
+description: >
+  A 50-record synthetic surveillance dataset for platform demonstration
+  and analysis development. Contains patient demographics (age, region),
+  exposure history, vaccination status, and clinical outcomes. Designed
+  for summary statistics, stratification, and basic epidemiological
+  exploration. Mounted at /data/demo-surveillance/ in execution containers.
 version: "1.0.0"
 status: active

@@ -68,7 +68,9 @@ The bundle is created in **DRAFT** status. You can edit it freely.
 
 1. In the bundle workspace, open the **Resources** section.
 2. Select the data resources your analysis needs from those attached to the project.
-3. Your analysis will access them at `/data/{alias}` — the same path structure works locally if you use the execution environment's base image.
+3. Your analysis will access them at `/data/{alias}`. For example, a resource with alias `demo-surveillance` is available at `/data/demo-surveillance/demo.csv`. The alias is displayed in the resource catalogue when you select it.
+
+The same path works in both validation (representative data) and governed execution (production data) — your code does not need to change between environments. The path also works locally during development if you use the execution environment's base image.
 
 ### Saving your work
 

@@ -1,5 +1,9 @@
 # Demonstration Surveillance Dataset — Schema
 
+Applies to:
+
+  `data/demo.csv`
+
 ## Columns
 
 | Column | Type | Description |

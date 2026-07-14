@@ -1,25 +1,64 @@
-# Demonstration Surveillance Dataset — Documentation
+# Demonstration Surveillance Dataset
 
 ## Overview
 
-This dataset contains synthetic surveillance records provided solely for demonstration, testing and documentation purposes. It is not derived from any real-world surveillance system or disease outbreak.
+A 50-record synthetic surveillance dataset for platform demonstration, analysis development and integration testing. Contains patient demographics, exposure history, vaccination status and clinical outcomes. Designed for summary statistics, stratification and basic epidemiological exploration.
 
-## Data Description
+All records are artificially generated. No conclusions drawn from this dataset have scientific validity.
 
-The dataset is a synthetically generated CSV containing structured records with the following fields: unique identifier, age, region, outcome, exposure history, and vaccination status. The data is designed to be representative of a typical surveillance analysis without corresponding to any actual population or disease.
+## Runtime Access
 
-## Known Caveats
+Inside an execution container, the dataset is mounted at:
+
+```
+/data/demo-surveillance/
+```
+
+Your analysis code reads files from this path using the container's standard I/O libraries. For example, with Python and pandas:
+
+```python
+import pandas as pd
+df = pd.read_csv("/data/demo-surveillance/demo.csv")
+print(df.describe())
+```
+
+This path is identical for validation runs (representative data) and governed execution (production data). Your code does not need to change between environments.
+
+### Runtime contents
+
+The dataset currently contains:
+
+- `demo.csv` — synthetic surveillance records (50 rows, 6 columns)
+  (1.4 KB)
+
+## Column Reference
+
+| Column | Type | Values | Description |
+|--------|------|--------|-------------|
+| `id` | integer | 1–50 | Unique patient identifier |
+| `age` | integer | 22–74 | Patient age in years |
+| `region` | string | North, South, East, West | Geographic region |
+| `outcome` | string | recovered, deceased | Clinical outcome |
+| `exposed` | string | yes, no | Known exposure to pathogen |
+| `vaccinated` | string | yes, no | Vaccination status |
+
+## Intended Analyses
+
+- Summary statistics
+- Stratification by region or outcome
+- Exposure–outcome contingency tables
+- Age distribution analysis
+- Demonstration of the standard Canada execution contract (CSV input,
+  pandas transformation, CSV output)
+
+## Caveats
 
 - **Synthetic data**: All records are artificially generated. No conclusions drawn from this dataset have scientific validity.
 - **Region labels**: Geographic region names (North, South, East, West) are placeholders and do not correspond to actual administrative boundaries.
+- **Sample size**: 50 records. Real-world surveillance datasets would be orders of magnitude larger.
 - **Outcome definition**: Outcome labels are illustrative only and do not reflect any real clinical classification system.
-
-## Usage Notes
-
-- The dataset is intended for platform demonstration, bundle development, and integration testing only.
-- The representative dataset (`representative.csv`) contains a 50-record sample suitable for local development and bundle validation.
-- Do not use this dataset for research, analysis, or any purpose beyond platform testing and demonstration.
 
 ## Related Resources
 
-- EpiBridge Documentation — Getting Started
+- [Demonstration Surveillance Summary](/examples/demo) — example analysis that reads this dataset
+- [Python 3.14](/environments/python-3.14) — execution environment used by the example analysis

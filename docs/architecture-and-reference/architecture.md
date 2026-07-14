@@ -473,6 +473,8 @@ EpiBridge does not own, store, or manage scientific data.
 
 A **Data Resource** represents an existing institutional data asset that has been registered for analysis. The institution owns and manages the underlying data; EpiBridge provides a catalogue of available resources, access control, and secure execution.
 
+For the runtime mount contract (where resources appear inside analysis containers), see the [Data Resources administrator guide](../administrator-guide/data-resources.md#runtime-access-contract).
+
 ### Resource Providers
 
 A **Resource Provider** is an abstraction that knows how to make a particular type of data resource available for analysis. Implementations include:

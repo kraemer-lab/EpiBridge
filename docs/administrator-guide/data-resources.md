@@ -10,6 +10,28 @@ EpiBridge does **not** own, store, or manage scientific data. It never copies da
 
 This separation is fundamental: the platform manages **metadata and access control**, not the data itself.
 
+## Runtime Access Contract
+
+When a Data Resource is allocated to a project and used in an analysis execution, it is mounted inside the analysis container at a predictable location:
+
+```
+/data/{alias}
+```
+
+The `alias` is defined in the manifest at resource creation time and is **stable for the lifetime of the resource**. Changing the alias is a breaking change — any analysis code that references the old path will fail.
+
+Analysis code always uses this path regardless of:
+- the provider type (CSV, DuckDB, Parquet, etc.);
+- the deployment model (OrbStack, native Docker);
+- whether the execution is validation (representative data) or governed (production data).
+
+```python
+import pandas as pd
+df = pd.read_csv("/data/demo-surveillance/demo.csv")
+```
+
+The alias and identifier often use the same value. This is the recommended convention. They may differ when an institution has a specific reason to separate the institutional label (`identifier`) from the runtime mount name (`alias`).
+
 ## How data resources work
 
 ### Environment-agnostic model
@@ -29,6 +51,7 @@ Data Resources are defined in YAML manifests. The manifest describes the resourc
 
 ```yaml
 identifier: "uk-biobank-serum"
+alias: "uk-biobank-serum"
 name: "UK Biobank Serum Biomarker Data"
 provider: "csv"
 endpoint:
@@ -142,7 +165,7 @@ EpiBridge supports multiple data backends through a **Provider** abstraction. Ea
 
 The provider describes *what* to expose (source path, type) and *how* to expose it (mount points, environment variables). An Executor (Docker, Kubernetes, etc.) translates these into the corresponding infrastructure.
 
-Researchers specify resources by their stable **alias**, which maps to `/data/{alias}` inside the container. The alias is defined in the manifest and never changes.
+For the stable runtime path where resources appear inside analysis containers, see [Runtime Access Contract](#runtime-access-contract).
 
 ## See also
 

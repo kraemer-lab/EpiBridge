@@ -11,7 +11,8 @@ from app.db.session import get_db
 from app.schemas.data_resource import DataResourceRead
 from app.services.resource_publication_service import (
     get_artefact_root,
-    list_artefact_files,
+    is_published_artefact,
+    list_published_artefacts,
 )
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
@@ -77,7 +78,7 @@ def list_resource_artefacts(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Data resource not found",
         )
-    files = list_artefact_files(resource)
+    files = list_published_artefacts(resource)
     return ArtefactList(artefacts=files)
 
 
@@ -117,6 +118,12 @@ def get_resource_artefact(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Path traversal blocked",
+        )
+
+    if not is_published_artefact(path):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Artefact not found",
         )
 
     if not requested.is_file():

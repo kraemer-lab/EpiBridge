@@ -23,7 +23,7 @@ A minimal example analysis that reads the demonstration surveillance dataset and
 docker pull epibridge/python-3.14:latest
 docker run --rm -it \
   -v $(pwd):/analysis \
-  -v $(pwd)/../../resources/demo-surveillance:/data/demo_surveillance:ro \
+  -v $(pwd)/../../resources/demo-surveillance/data:/data/demo-surveillance:ro \
   epibridge/python-3.14:latest \
   python /analysis/run.py
 ```

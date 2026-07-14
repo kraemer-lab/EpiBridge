@@ -4,6 +4,14 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { DataResource, getAdminResources } from "@/lib/api";
 
+const PROVIDER_LABELS: Record<string, string> = {
+  csv: "CSV Dataset",
+  duckdb: "DuckDB Database",
+  postgres: "PostgreSQL Database",
+  excel: "Excel Spreadsheet",
+  parquet: "Parquet Dataset",
+};
+
 export default function AdminPage() {
   const [resources, setResources] = useState<DataResource[]>([]);
   const [loading, setLoading] = useState(true);
@@ -34,7 +42,7 @@ export default function AdminPage() {
             <thead>
               <tr>
                 <th>Name</th>
-                <th>Provider</th>
+                <th>Type</th>
                 <th>Version</th>
                 <th>Status</th>
               </tr>
@@ -44,7 +52,7 @@ export default function AdminPage() {
                 <tr key={r.id}>
                   <td style={{ fontWeight: 500 }}>{r.name}</td>
                   <td style={{ color: "var(--color-text-secondary)" }}>
-                    {r.provider_type}
+                    {PROVIDER_LABELS[r.provider_type] || r.provider_type}
                   </td>
                   <td style={{ color: "var(--color-text-secondary)" }}>
                     {r.version}

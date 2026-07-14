@@ -12,6 +12,14 @@ import {
 } from "@/lib/api";
 import { TermsDialog } from "@/components/TermsDialog";
 
+const PROVIDER_LABELS: Record<string, string> = {
+  csv: "CSV Dataset",
+  duckdb: "DuckDB Database",
+  postgres: "PostgreSQL Database",
+  excel: "Excel Spreadsheet",
+  parquet: "Parquet Dataset",
+};
+
 export default function ProjectResourcesPage() {
   const params = useParams();
   const projectId = params.id as string;
@@ -137,7 +145,7 @@ export default function ProjectResourcesPage() {
                 <thead>
                   <tr>
                     <th>Name</th>
-                    <th>Provider</th>
+                    <th>Type</th>
                     <th>Identifier</th>
                     <th></th>
                   </tr>
@@ -147,7 +155,7 @@ export default function ProjectResourcesPage() {
                     <tr key={r.id}>
                       <td style={{ fontWeight: 500 }}>{r.name}</td>
                       <td style={{ color: "var(--color-text-secondary)" }}>
-                        {r.provider_type}
+                        {PROVIDER_LABELS[r.provider_type] || r.provider_type}
                       </td>
                       <td style={{ color: "var(--color-text-secondary)", fontFamily: "monospace", fontSize: "0.85rem" }}>
                         {r.identifier}
@@ -181,7 +189,7 @@ export default function ProjectResourcesPage() {
                 <thead>
                   <tr>
                     <th>Name</th>
-                    <th>Provider</th>
+                    <th>Type</th>
                     <th>Identifier</th>
                     <th></th>
                   </tr>
@@ -191,7 +199,7 @@ export default function ProjectResourcesPage() {
                     <tr key={r.id}>
                       <td style={{ fontWeight: 500 }}>{r.name}</td>
                       <td style={{ color: "var(--color-text-secondary)" }}>
-                        {r.provider_type}
+                        {PROVIDER_LABELS[r.provider_type] || r.provider_type}
                       </td>
                       <td style={{ color: "var(--color-text-secondary)", fontFamily: "monospace", fontSize: "0.85rem" }}>
                         {r.identifier}

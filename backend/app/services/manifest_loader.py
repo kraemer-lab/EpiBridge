@@ -1,8 +1,21 @@
+import re
 from pathlib import Path
 
 import yaml
 
 REQUIRED_FIELDS = {"identifier", "name", "alias", "provider", "endpoint"}
+
+VALID_ALIAS_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_-]*$")
+
+
+def validate_alias(alias: str, label: str) -> None:
+    if not VALID_ALIAS_RE.match(alias):
+        msg = (
+            f"{label}: alias '{alias}' is not a valid mount name. "
+            "Aliases must start with an alphanumeric character and contain "
+            "only alphanumerics, hyphens, and underscores."
+        )
+        raise ValueError(msg)
 
 
 def load_manifest(path: str | Path) -> list[dict]:
@@ -30,6 +43,8 @@ def load_manifest(path: str | Path) -> list[dict]:
         if not isinstance(entry.get("endpoint"), dict):
             msg = f"{entry_path}: 'endpoint' must be a dict"
             raise ValueError(msg)
+
+        validate_alias(entry["alias"], entry_path)
 
         validated.append(entry)
 
@@ -95,6 +110,8 @@ def load_resource_directory(dir_path: str | Path) -> list[dict]:
         if not isinstance(data.get("endpoint"), dict):
             msg = f"Manifest {manifest_file}: 'endpoint' must be a dict"
             raise ValueError(msg)
+
+        validate_alias(data["alias"], str(manifest_file))
 
         identifier = data["identifier"]
         if identifier != resource_dir.name:

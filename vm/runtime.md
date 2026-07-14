@@ -119,7 +119,7 @@ Examples:
 
 ```
 /data
-  /demo_surveillance
+  /demo-surveillance
   /weather
 ```
 
@@ -164,7 +164,7 @@ This is a fundamental security boundary enforced by the execution environment.
 
 ### Development
 
-In development, `docker-compose.yml` mounts `./examples/resources/` at
+In development, `docker-compose.yml` mounts `./resources/` at
 `/read-only-data`. This exercises the exact same provider abstraction used in
 production.
 

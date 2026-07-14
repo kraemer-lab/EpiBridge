@@ -24,6 +24,8 @@ Every execution environment guarantees the following runtime contract inside an 
 
 This contract is validated by **Execution Environment Acceptance Tests** — automated tests that verify a published environment can install declared dependencies, build a runnable execution image, and produce expected outputs under governed conditions. Each environment must pass its acceptance test before it can be considered production-ready.
 
+For details of how data resources are mapped to mount paths inside containers, see the [Data Resources guide](data-resources.md#runtime-access-contract).
+
 ## Currently supported environments
 
 | Name | Runtime | Base image |

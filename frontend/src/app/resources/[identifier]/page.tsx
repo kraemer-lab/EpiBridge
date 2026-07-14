@@ -18,17 +18,23 @@ import {
 } from "@/lib/api";
 import { TermsDialog } from "@/components/TermsDialog";
 
+const PROVIDER_LABELS: Record<string, string> = {
+  csv: "CSV Dataset",
+  duckdb: "DuckDB Database",
+  postgres: "PostgreSQL Database",
+  excel: "Excel Spreadsheet",
+  parquet: "Parquet Dataset",
+};
+
 const MARKDOWN_FILES = new Set(["SCHEMA.md", "DOCUMENTATION.md"]);
-const REPRESENTATIVE_EXTENSIONS = new Set([".csv", ".tsv", ".json", ".parquet"]);
 
 function stripFirstHeading(md: string): string {
   return md.replace(/^#{1,3}\s+.*\n?/, "").trim();
 }
 
 function isRepresentativeFile(name: string): boolean {
-  const ext = name.includes(".") ? "." + name.split(".").pop()?.toLowerCase() : "";
-  return REPRESENTATIVE_EXTENSIONS.has(ext)
-    && (name.toLowerCase().startsWith("representative") || name.toLowerCase().startsWith("sample"));
+  return name.startsWith("representative/")
+    || name.startsWith("sample/");
 }
 
 export default function ResourceDetailPage() {
@@ -39,7 +45,6 @@ export default function ResourceDetailPage() {
   const [artefacts, setArtefacts] = useState<string[] | null>(null);
   const [schemaMd, setSchemaMd] = useState<string | null>(null);
   const [docMd, setDocMd] = useState<string | null>(null);
-  const [representativeFile, setRepresentativeFile] = useState<string | null>(null);
   const [relatedExamples, setRelatedExamples] = useState<ExampleAnalysis[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [termsStatus, setTermsStatus] = useState<{ resource_id: string; version: string; title: string; accepted: boolean } | null>(null);
@@ -66,11 +71,6 @@ export default function ResourceDetailPage() {
         pending.push(
           getResourceArtefactContent(identifier, "DOCUMENTATION.md").then(setDocMd),
         );
-      }
-
-      const repFile = files.find(isRepresentativeFile);
-      if (repFile) {
-        setRepresentativeFile(repFile);
       }
 
       await Promise.all(pending);
@@ -102,11 +102,24 @@ export default function ResourceDetailPage() {
     load();
   }, [load]);
 
+  const dataFiles = useMemo(
+    () => (artefacts ?? []).filter((f) => f.startsWith("data/")),
+    [artefacts],
+  );
+
+  const representativeFiles = useMemo(
+    () => (artefacts ?? []).filter(isRepresentativeFile),
+    [artefacts],
+  );
+
   const remainingArtefacts = useMemo(
     () =>
       artefacts
         ? Array.from(new Set(artefacts)).sort().filter(
-            (f) => f !== "manifest.yaml" && !MARKDOWN_FILES.has(f) && !isRepresentativeFile(f),
+            (f) => f !== "manifest.yaml"
+              && !MARKDOWN_FILES.has(f)
+              && !f.startsWith("data/")
+              && !isRepresentativeFile(f),
           )
         : [],
     [artefacts],
@@ -133,6 +146,39 @@ export default function ResourceDetailPage() {
       content: (
         <div>
           <p className="overview-description">{resource.description || "No description provided."}</p>
+
+          {dataFiles.length > 0 && (
+            <div
+              className="card"
+              style={{
+                marginTop: "var(--spacing-md)",
+                padding: "var(--spacing-sm) var(--spacing-md)",
+              }}
+            >
+              <h4
+                style={{
+                  fontSize: "0.85rem",
+                  fontWeight: 600,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.05em",
+                  marginBottom: "var(--spacing-xs)",
+                }}
+              >
+                Runtime Access
+              </h4>
+              <p
+                style={{
+                  fontSize: "0.85rem",
+                  color: "var(--color-text-secondary)",
+                  lineHeight: 1.5,
+                }}
+              >
+                Data is mounted at <code>/data/{resource.alias}/</code> inside
+                execution containers. See the Documentation tab and
+                the resource description for details on available files.
+              </p>
+            </div>
+          )}
 
           {termsStatus && (
             <div
@@ -183,7 +229,7 @@ export default function ResourceDetailPage() {
       });
     }
 
-    if (representativeFile) {
+    if (representativeFiles.length > 0) {
       result.push({
         id: "representative",
         label: "Representative Dataset",
@@ -193,13 +239,19 @@ export default function ResourceDetailPage() {
               A sample dataset for local development and bundle testing.
               Download to use in your analysis workspace.
             </p>
-            <a
-              href={getResourceArtefactUrl(identifier, representativeFile)}
-              className="btn btn-primary"
-              download
-            >
-              Download {representativeFile}
-            </a>
+            <ul style={{ margin: 0, paddingLeft: "0", listStyle: "none" }}>
+              {representativeFiles.map((file) => (
+                <li key={file} style={{ marginBottom: "var(--spacing-xs)" }}>
+                  <a
+                    href={getResourceArtefactUrl(identifier, file)}
+                    className="btn btn-primary"
+                    download
+                  >
+                    Download {file.replace("representative/", "").replace("sample/", "")}
+                  </a>
+                </li>
+              ))}
+            </ul>
           </div>
         ),
       });
@@ -263,7 +315,7 @@ export default function ResourceDetailPage() {
     }
 
     return result;
-  }, [resource, schemaMd, docMd, representativeFile, remainingArtefacts, identifier, termsStatus, relatedExamples]);
+  }, [resource, schemaMd, docMd, dataFiles, representativeFiles, remainingArtefacts, identifier, termsStatus, relatedExamples]);
 
   if (error) {
     return (
@@ -296,8 +348,14 @@ export default function ResourceDetailPage() {
             <dd>{resource.identifier}</dd>
           </div>
           <div>
-            <dt>Provider</dt>
-            <dd>{resource.provider_type}</dd>
+            <dt>Mount Path</dt>
+            <dd>
+              <code>/data/{resource.alias}/</code>
+            </dd>
+          </div>
+          <div>
+            <dt>Type</dt>
+            <dd>{PROVIDER_LABELS[resource.provider_type] || resource.provider_type}</dd>
           </div>
           <div>
             <dt>Version</dt>
