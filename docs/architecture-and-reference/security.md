@@ -93,6 +93,9 @@ Capabilities are authoritative. Roles seed capabilities at user creation
 time, after which capabilities are independent. The policy layer never
 consults roles.
 
+For a task-oriented guide to user and capability management, see the
+[Users & Roles](../administrator-guide/users-and-roles.md) administrator guide.
+
 Project Membership is **scope only** — it answers "does this user
 participate in this project?" without storing roles or capabilities.
 

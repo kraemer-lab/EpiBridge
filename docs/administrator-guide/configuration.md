@@ -1,0 +1,118 @@
+# Configuration
+
+Configuring EpiBridge for your institution.
+
+## The `.env` file
+
+EpiBridge is configured through a single `.env` file at the repository root. It is created automatically during installation and preserved across re-installations.
+
+### Required settings
+
+| Variable | Description | Notes |
+|----------|-------------|-------|
+| `SECRET_KEY` | Application signing key | Minimum 32 characters. Generate with `openssl rand -base64 32`. Shared across all services. |
+| `ADMIN_PASSWORD` | Administrator account password | Used only during initial seeding. Can be changed later through the admin UI. |
+| `PUBLIC_URL` | Canonical external URL | Used in notification email links and browser redirects. Must include protocol and port if non-standard. |
+
+### Public URL
+
+`PUBLIC_URL` must be the address at which users reach EpiBridge in their browser. Examples:
+
+| Deployment | `PUBLIC_URL` |
+|------------|--------------|
+| Local evaluation | `https://localhost` |
+| Production (standard port) | `https://epibridge.institution.edu` |
+| Production (non-standard port) | `https://epibridge.institution.edu:8443` |
+
+This value is used in email notification links. If it is wrong, users will receive emails with unreachable links.
+
+### Database credentials
+
+| Variable | Generated | Purpose |
+|----------|-----------|---------|
+| `POSTGRES_PASSWORD` | Yes | PostgreSQL password for the application user |
+| `REDIS_PASSWORD` | Yes | Redis password for authentication |
+
+These are generated automatically during installation. Regenerate them by deleting `.env` and re-installing.
+
+### SMTP (email notifications)
+
+Email notifications are optional. Without SMTP configuration, the platform functions normally but does not send responsibility-transfer notifications.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SMTP_HOST` | — | SMTP relay hostname |
+| `SMTP_PORT` | 587 | SMTP relay port |
+| `SMTP_USER` | — | SMTP authentication username |
+| `SMTP_PASSWORD` | — | SMTP authentication password |
+| `SMTP_USE_TLS` | `true` | Enable STARTTLS |
+
+When configuring SMTP:
+
+- The `From` address is derived from the SMTP username and the `PUBLIC_URL` domain.
+- Email is sent asynchronously via `BackgroundTasks` — it never blocks API responses.
+- If the SMTP relay is unreachable, notification failures are logged but do not affect platform operation.
+
+### HTTPS and certificates
+
+EpiBridge requires HTTPS for secure session cookies. In development, trusted certificates are generated automatically using mkcert.
+
+**Regenerate certificates:**
+
+```bash
+make certs
+```
+
+In production, configure TLS at the reverse proxy level. The Docker Compose deployment includes a Caddy reverse proxy that handles TLS termination. Configure your domain's DNS to point to the EpiBridge server, and Caddy will obtain Let's Encrypt certificates automatically.
+
+### Security settings
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `session_ttl_seconds` | 86400 (24h) | Per-session time-to-live. Active sessions expire after this duration of inactivity. |
+| `max_session_ttl_seconds` | 604800 (7d) | Absolute maximum session lifetime. Sessions are destroyed after this time regardless of activity. |
+| `secure_cookie` | `false` | Set to `true` when deploying behind TLS. Ensures cookies are only transmitted over HTTPS. |
+| `rate_limit_max_attempts` | 10 | Maximum failed login attempts within the rate limit window before the client is temporarily blocked. |
+| `rate_limit_window_seconds` | 300 (5min) | Duration of the rate limit window. |
+
+### Execution resource limits
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `execution_mem_limit` | — | Maximum memory per analysis container (e.g., `2g`) |
+| `execution_cpu_limit` | — | Maximum CPU cores per analysis container (e.g., `1.5`) |
+| `execution_pids_limit` | — | Maximum process count per analysis container |
+| `max_output_size_mb` | — | Maximum total output size before the execution is terminated |
+
+If not set, the platform uses Docker Engine defaults.
+
+### Logging
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `LOG_LEVEL` | `INFO` | Logging level. Valid values: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`. |
+
+Logs are written to stderr in a structured format with UTC timestamps. Module loggers for Alembic, SQLAlchemy engine, and Uvicorn default to `WARN` to reduce noise.
+
+### AI assistance
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `AI_ASSIST_ENABLED` | `false` | Enable AI-assisted analysis summaries. Requires Ollama service and a downloaded model. |
+
+See [AI Assistance](../architecture-and-reference/ai-assistance.md) for configuration details.
+
+### Manifest directories
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `RESOURCE_MANIFEST_DIR` | (deployment-specific) | Directory containing data resource YAML manifests |
+| `ENVIRONMENT_MANIFEST_DIR` | (deployment-specific) | Directory containing execution environment YAML manifests |
+
+In development, these point to `resources/` and `execution-environments/` in the repository. In production, they may point to external directories managed by the institution.
+
+## Next steps
+
+- [Deployment](deployment.md) — production setup
+- [Data Resources](data-resources.md) — managing data resource manifests
+- [Backup & Recovery](backup-and-recovery.md) — protecting configuration

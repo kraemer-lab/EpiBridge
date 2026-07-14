@@ -3,7 +3,7 @@
 
 Secure remote analysis for sensitive epidemiological data.
 
-EpiBridge is a platform that allows researchers to analyse sensitive datasets without the data ever leaving the host institution.
+EpiBridge is an institutional platform for secure execution of approved analyses against institution-managed Data Resources, governed by a two-stage human approval workflow. Sensitive data never leaves the host institution.
 
 Researchers develop analyses locally using schema documentation and synthetic datasets, submit analysis bundles to EpiBridge, and receive approved outputs after execution within a secure environment.
 
@@ -13,7 +13,9 @@ Researchers develop analyses locally using schema documentation and synthetic da
 
 ## Quick Start
 
-**Requirements**: Git, OrbStack, Make, [mkcert](https://github.com/FiloSottile/mkcert).
+Install EpiBridge as an institutional platform.
+
+**Requirements**: Git, a container runtime, Make, [mkcert](https://github.com/FiloSottile/mkcert).
 
 No other host dependencies are required. Python, Node.js, and PostgreSQL all run inside the platform.
 
@@ -33,14 +35,14 @@ cd EpiBridge
 make install
 ```
 
-This creates an OrbStack VM (if needed), installs EpiBridge, generates trusted local HTTPS certificates, creates the administrator account, publishes institutional assets, and leaves the platform running.
+This creates your EpiBridge installation, generates trusted local HTTPS certificates, creates the administrator account, publishes institutional assets, and leaves the platform running.
 
 On the first installation, `.env` is created automatically with secure defaults. The administrator password is stored as `ADMIN_PASSWORD` in this file and is never displayed in the terminal. Subsequent installations reuse the existing configuration.
 
-To install into a different target:
+The default installation uses OrbStack (macOS VM). To deploy with native Docker instead:
 
 ```bash
-make install TARGET=native    # native Docker (no VM)
+make install TARGET=native    # native Docker deployment
 ```
 
 ### Evaluation
@@ -54,7 +56,7 @@ This creates evaluation accounts (researcher, moderator, maintainer) and prints 
 Once evaluation accounts are ready, follow the guided tutorial:
 
 ```
-docs/quickstart.md
+docs/getting-started/quick-start.md
 ```
 
 ---
@@ -77,12 +79,12 @@ To regenerate all secrets, delete `.env` and run `make install` again.
 
 | Command | Purpose |
 |---------|---------|
-| `make install` | Install EpiBridge (default: OrbStack VM; use `TARGET=native` for native Docker) |
+| `make install` | Install EpiBridge (default: OrbStack; use `TARGET=native` for Docker-native deployment) |
 | `make demo` | Prepare an evaluation environment |
 | `make dev` | Daily development workflow |
 | `make uninstall` | Remove the local EpiBridge installation |
 
-`make uninstall` stops the platform, deletes the OrbStack VM (or Docker resources), and preserves the repository and `.env`. To fully reset, delete `.env` and the OrbStack VM manually before reinstalling.
+`make uninstall` stops the platform services, removes the installation environment, and preserves the repository and `.env`. To fully reset, delete `.env` before reinstalling.
 
 ---
 
@@ -102,11 +104,11 @@ See `vm/runtime.md` for the development environment reference.
 
 | Document | Purpose |
 |----------|---------|
-| `docs/quickstart.md` | Guided tutorial through the institutional workflow |
-| `docs/architecture.md` | System architecture and trust boundaries |
-| `docs/security.md` | Security model and threat analysis |
-| `docs/api.md` | API reference |
-| `docs/testing.md` | Testing strategy and test runner reference |
+| `docs/getting-started/quick-start.md` | Guided tutorial through the institutional workflow |
+| `docs/architecture-and-reference/architecture.md` | System architecture and trust boundaries |
+| `docs/architecture-and-reference/security.md` | Security model and threat analysis |
+| `docs/architecture-and-reference/api.md` | API reference |
+| `docs/architecture-and-reference/testing.md` | Testing strategy and test runner reference |
 | `vm/runtime.md` | Deployment runtime specification |
 
 ---
@@ -120,7 +122,22 @@ See `vm/runtime.md` for the development environment reference.
 * Isolated container execution
 * Human approval before output release
 * Complete audit trail
-* Cloud-ready architecture
+
+## Repository Structure
+
+The repository layout is primarily relevant for contributors and operators.
+
+```
+frontend/    Next.js application
+backend/     FastAPI application
+worker/      Python job executor
+execution-environments/  Base images and execution contracts
+scripts/     Orchestration scripts
+docs/        Documentation (Getting Started, User Guides, Administrator Guide, Architecture & Reference)
+examples/    Synthetic datasets, analysis templates, and environment definitions
+vm/          Cloud-init configuration and runtime specification
+resources/   Institutional resource publications
+```
 
 ## Technology
 
@@ -131,17 +148,3 @@ See `vm/runtime.md` for the development environment reference.
 * Worker: Python
 * Execution: Docker
 * Authentication: Local Identity Provider (Argon2, server-side sessions)
-
-## Repository Structure
-
-```
-frontend/    Next.js application
-backend/     FastAPI application
-worker/      Python job executor
-execution-environments/  Base images and execution contracts
-scripts/     Orchestration scripts
-docs/        Architecture, security, API, and testing documentation
-examples/    Synthetic datasets, analysis templates, and environment definitions
-vm/          Cloud-init configuration and runtime specification
-resources/   Institutional resource publications
-```
