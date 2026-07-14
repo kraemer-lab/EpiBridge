@@ -136,6 +136,77 @@ endif
 		echo ".env preserved at $$PWD/.env"; \
 	fi
 
+# Enable and prepare AI assistance for this EpiBridge installation.
+# Configures the platform, starts AI services, pulls the configured
+# model, restarts affected services, and verifies AI is operational.
+# Idempotent — safe to run at any time.
+.PHONY: ai
+OLLAMA_MODEL := $(shell grep '^OLLAMA_MODEL=' .env 2>/dev/null | cut -d= -f2-)
+OLLAMA_MODEL ?= llama3.2
+
+ai:
+	./scripts/setup-ai.sh
+	@if [ -f .epibridge-context ]; then \
+		echo "Starting AI services..."; \
+		if [ "$(EPIBRIDGE_TARGET)" = "orbstack" ]; then \
+			./scripts/orbstack.sh ssh 'cd $(VM_DIR) && $(DOCKER_COMPOSE) --profile ai up -d' || { \
+				echo ""; \
+				echo "Failed to start AI services."; \
+				echo "Check Docker status and try again."; \
+				false; }; \
+		else \
+			docker compose --profile ai up -d || { \
+				echo ""; \
+				echo "Failed to start AI services."; \
+				echo "Check Docker status and try again."; \
+				false; }; \
+		fi; \
+		echo "Pulling AI model ($(OLLAMA_MODEL))..."; \
+		if [ "$(EPIBRIDGE_TARGET)" = "orbstack" ]; then \
+			./scripts/orbstack.sh ssh 'cd $(VM_DIR) && $(DOCKER_COMPOSE) exec -T ollama ollama pull $(OLLAMA_MODEL)' || { \
+				echo ""; \
+				echo "Failed to pull AI model."; \
+				echo "Check network connectivity and Ollama status."; \
+				false; }; \
+		else \
+			docker compose exec -T ollama ollama pull $(OLLAMA_MODEL) || { \
+				echo ""; \
+				echo "Failed to pull AI model."; \
+				echo "Check network connectivity and Ollama status."; \
+				false; }; \
+		fi; \
+		echo "Restarting backend..."; \
+		if [ "$(EPIBRIDGE_TARGET)" = "orbstack" ]; then \
+			./scripts/orbstack.sh ssh 'cd $(VM_DIR) && docker compose restart backend' || true; \
+		else \
+			docker compose restart backend || true; \
+		fi; \
+		echo "Verifying AI readiness..."; \
+		for i in 1 2 3 4 5 6 7 8 9 10 11 12; do \
+			if [ "$(EPIBRIDGE_TARGET)" = "orbstack" ]; then \
+				./scripts/orbstack.sh ssh 'cd $(VM_DIR) && docker compose exec -T backend python -m app.cli check-ai-status' 2>/dev/null; \
+			else \
+				docker compose exec -T backend python -m app.cli check-ai-status 2>/dev/null; \
+			fi; \
+			if [ $$? -eq 0 ]; then \
+				echo ""; \
+				echo "=== AI assistance is operational ==="; \
+				echo "Model: $(OLLAMA_MODEL)"; \
+				echo ""; \
+				echo "AI review is not yet enabled."; \
+				echo "Enable it in the admin interface:"; \
+				echo "  Admin > Settings > Enable AI-assisted bundle review"; \
+				exit 0; \
+			fi; \
+			sleep 5; \
+		done; \
+		echo ""; \
+		echo "=== AI verification timed out ==="; \
+		echo "Run the CLI command to diagnose:"; \
+		echo "  docker compose exec backend python -m app.cli check-ai-status"; \
+		false; \
+	fi
+
 # --- Evaluation ----------------------------------------------------------------
 # demo seeds evaluation personas and prints the welcome message.
 # Dispatch depends on the execution context (.epibridge-context).

@@ -10,17 +10,12 @@ from app.core.config import settings
 
 
 class TestGetAIProvider:
-    def test_returns_none_when_disabled(self):
-        settings.ai_assist_enabled = False
-        assert get_ai_provider() is None
-
-    def test_returns_ollama_when_enabled(self):
-        settings.ai_assist_enabled = True
+    def test_returns_ollama_provider(self):
         provider = get_ai_provider()
         assert isinstance(provider, OllamaProvider)
         assert provider.base_url == settings.ollama_base_url
         assert provider.model == settings.ollama_model
-        settings.ai_assist_enabled = False
+        assert provider.timeout == settings.ollama_timeout_seconds
 
 
 class TestOllamaProvider:

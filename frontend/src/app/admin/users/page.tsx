@@ -9,6 +9,7 @@ import {
   getUsers,
   updateUser,
 } from "@/lib/api";
+import { useAuth } from "@/lib/AuthContext";
 
 const ROLE_OPTIONS = [
   {
@@ -116,9 +117,11 @@ function RoleBadges({ roles }: { roles: string[] }) {
 }
 
 export default function AdminUsersPage() {
+  const { user: currentUser } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [capChangeWarning, setCapChangeWarning] = useState(false);
 
   const [showForm, setShowForm] = useState(false);
   const [email, setEmail] = useState("");
@@ -195,6 +198,7 @@ export default function AdminUsersPage() {
     if (editRoles.length === 0) return;
     setSaving(true);
     setError(null);
+    setCapChangeWarning(false);
     try {
       const data: UserUpdate = {
         roles: editRoles,
@@ -207,6 +211,9 @@ export default function AdminUsersPage() {
       setEditingUserId(null);
       setEditPassword("");
       setShowPasswordReset(false);
+      if (currentUser && userId === currentUser.id) {
+        setCapChangeWarning(true);
+      }
       await load();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to update user");
@@ -235,6 +242,21 @@ export default function AdminUsersPage() {
           {showForm ? "Cancel" : "Create User"}
         </button>
       </div>
+
+      {capChangeWarning && (
+        <div
+          className="card"
+          style={{
+            background: "#d1ecf1",
+            color: "#0c5460",
+            marginBottom: "var(--spacing-md)",
+            padding: "var(--spacing-sm)",
+          }}
+        >
+          Your capabilities have been updated. Please sign out and sign back in
+          for the changes to take effect.
+        </div>
+      )}
 
       {error && (
         <div

@@ -20,6 +20,7 @@ from app.models.execution_image import ExecutionImage
 from app.models.execution_request import ExecutionRequest, ExecutionRequestStatus
 from app.models.output import Output
 from app.models.output_set import OutputSet, OutputSetStatus
+from app.models.platform_setting import PlatformSetting, SettingKey
 from app.models.project import Project
 from app.models.project_data_resource import ProjectResourceAllocation
 from app.models.project_membership import ProjectMembership
@@ -57,10 +58,12 @@ __all__ = [
     "OutputSet",
     "OutputSetStatus",
     "Project",
+    "PlatformSetting",
     "ProjectMembership",
     "ProjectResourceAllocation",
     "RoleCapability",
     "RoleRecord",
+    "SettingKey",
     "Session",
     "TermsAcceptance",
     "TermsOfService",

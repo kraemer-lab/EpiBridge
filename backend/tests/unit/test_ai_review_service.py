@@ -12,8 +12,6 @@ class TestRequestReview:
         mock_bundle = MagicMock(spec=AnalysisBundle)
 
         mock_db = MagicMock()
-        # First query (for existing review) returns None
-        # Second query (for bundle) returns the bundle
         mock_db.query.return_value.filter.return_value.first.side_effect = [
             None,
             mock_bundle,
@@ -42,7 +40,6 @@ class TestRequestReview:
         )
 
         mock_db = MagicMock()
-        # First query returns existing review (no need to query bundle)
         mock_db.query.return_value.filter.return_value.first.return_value = existing
 
         with patch("app.services.ai_review_service.SessionLocal", return_value=mock_db):
@@ -61,7 +58,6 @@ class TestRequestReview:
         bundle_id = uuid.uuid4()
 
         mock_db = MagicMock()
-        # No existing review and no bundle found
         mock_db.query.return_value.filter.return_value.first.side_effect = [None, None]
 
         with patch("app.services.ai_review_service.SessionLocal", return_value=mock_db):
@@ -118,6 +114,10 @@ class TestPerformReview:
                 return_value=mock_provider,
             ),
             patch("app.services.ai_review_service.get_bundle_store"),
+            patch(
+                "app.services.ai_review_service.get_setting_bool",
+                return_value=True,
+            ),
         ]
         for p in patchers:
             p.start()
@@ -156,6 +156,10 @@ class TestPerformReview:
                 return_value=mock_provider,
             ),
             patch("app.services.ai_review_service.get_bundle_store"),
+            patch(
+                "app.services.ai_review_service.get_setting_bool",
+                return_value=True,
+            ),
         ]
         for p in patchers:
             p.start()
@@ -170,7 +174,7 @@ class TestPerformReview:
         mock_db.commit.assert_called_once()
         mock_db.close.assert_called_once()
 
-    def test_unavailable_when_provider_is_none(self):
+    def test_unavailable_when_review_disabled(self):
         bundle_id = uuid.uuid4()
         review = AIBundleReview(bundle_id=bundle_id, status="pending")
 
@@ -179,7 +183,10 @@ class TestPerformReview:
 
         with (
             patch("app.services.ai_review_service.SessionLocal", return_value=mock_db),
-            patch("app.services.ai_review_service.get_ai_provider", return_value=None),
+            patch(
+                "app.services.ai_review_service.get_setting_bool",
+                return_value=False,
+            ),
         ):
             perform_review(bundle_id)
 
@@ -202,6 +209,10 @@ class TestPerformReview:
             patch(
                 "app.services.ai_review_service.get_ai_provider",
                 side_effect=Exception("boom"),
+            ),
+            patch(
+                "app.services.ai_review_service.get_setting_bool",
+                return_value=True,
             ),
         ):
             perform_review(bundle_id)

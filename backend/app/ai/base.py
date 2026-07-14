@@ -18,6 +18,12 @@ class AIReviewResult:
         return bool(self.errors)
 
 
+@dataclass
+class ProviderStatus:
+    ready: bool
+    reason: str | None = None
+
+
 class AIProvider(ABC):
     @abstractmethod
     def review(
@@ -25,3 +31,6 @@ class AIProvider(ABC):
         analysis_dir: Path,
         context: AIReviewContext | None = None,
     ) -> AIReviewResult: ...
+
+    @abstractmethod
+    def check_status(self) -> ProviderStatus: ...

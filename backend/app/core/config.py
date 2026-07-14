@@ -55,9 +55,9 @@ class Settings(BaseSettings):
     host_data_root: str = ""
     host_resource_manifest_dir: str = ""
 
-    ai_assist_enabled: bool = False
     ollama_base_url: str = "http://ollama:11434"
     ollama_model: str = "llama3.2"
+    ollama_timeout_seconds: int = 120
 
     image_registry_prefix: str = "epibridge/builds"
 

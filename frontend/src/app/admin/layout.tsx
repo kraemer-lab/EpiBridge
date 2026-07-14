@@ -20,6 +20,7 @@ const adminTabs: AdminTab[] = [
   { href: "/admin/terms", label: "Terms", requiredCapability: "terms.manage" },
   { href: "/admin/audit", label: "Audit Log", requiredCapability: "bundle.review" },
   { href: "/admin/users", label: "Users", requiredCapability: "user.manage" },
+  { href: "/admin/settings", label: "Settings", requiredCapability: "settings.manage" },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

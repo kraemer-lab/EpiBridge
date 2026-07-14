@@ -16,6 +16,7 @@ from app.models.build_request import BuildRequest
 from app.models.capability import Capability
 from app.models.data_resource import DataResource
 from app.models.execution_environment import ExecutionEnvironment
+from app.models.platform_setting import SettingKey
 from app.models.user import User
 from app.schemas.ai_bundle_review import AIBundleReviewRead
 from app.schemas.analysis_bundle import AnalysisBundleRead
@@ -25,6 +26,7 @@ from app.schemas.execution_environment import ExecutionEnvironmentAdminRead
 from app.schemas.execution_request import ExecutionRequestRead
 from app.schemas.output import OutputRead
 from app.schemas.output_set import OutputSetListItem, OutputSetRead
+from app.schemas.platform_setting import PlatformSettingRead, PlatformSettingUpdate
 from app.schemas.terms import TermsOfServicePublish, TermsOfServiceRead
 from app.schemas.user import UserCreate, UserRead, UserUpdate
 from app.services.analysis_bundle_service import (
@@ -45,6 +47,10 @@ from app.services.output_set_service import (
     get_output_set_by_execution,
     list_output_sets,
     list_outputs_by_set,
+)
+from app.services.platform_settings_service import (
+    get_all_settings,
+    set_setting,
 )
 from app.services.terms_service import (
     get_acceptance_counts,
@@ -970,6 +976,26 @@ def post_admin_supersede_bundle(
     db.commit()
     db.refresh(bundle)
     return _admin_bundle_to_read(bundle, db=db)
+
+
+@router.get("/admin/settings", response_model=dict[str, str])
+def get_admin_settings(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _require_capability(current_user, Capability.SETTINGS_MANAGE)
+    return get_all_settings(db)
+
+
+@router.put("/admin/settings/{key}", response_model=PlatformSettingRead)
+def put_admin_setting(
+    key: SettingKey,
+    body: PlatformSettingUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _require_capability(current_user, Capability.SETTINGS_MANAGE)
+    return set_setting(db, key, body.value)
 
 
 @router.post(

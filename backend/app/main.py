@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from app.api.routes.admin import router as admin_router
+from app.api.routes.ai import router as ai_router
 from app.api.routes.environments import router as environments_router
 from app.api.routes.health import router as health_router
 from app.api.routes.me import router as me_router
@@ -97,6 +98,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="EpiBridge", lifespan=lifespan)
 
 app.include_router(health_router, prefix="/api")
+app.include_router(ai_router, prefix="/api")
 app.include_router(me_router, prefix="/api")
 app.include_router(
     projects_router,

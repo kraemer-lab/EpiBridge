@@ -1017,3 +1017,36 @@ export async function checkResourceTerms(resourceIdentifiers: string[]): Promise
 }> {
   return request(`/api/terms/check?resource_ids=${resourceIdentifiers.join(",")}`);
 }
+
+// --- AI Status ----------------------------------------------------------------
+
+export interface AIStatus {
+  ready: boolean;
+  reason: string | null;
+  review_enabled: boolean;
+}
+
+export async function getAIStatus(): Promise<AIStatus> {
+  return request<AIStatus>("/api/ai/status");
+}
+
+// --- Platform Settings (admin) ------------------------------------------------
+
+export interface PlatformSetting {
+  key: string;
+  value: string;
+}
+
+export async function getAdminSettings(): Promise<Record<string, string>> {
+  return request<Record<string, string>>("/api/admin/settings");
+}
+
+export async function updateAdminSetting(
+  key: string,
+  value: string,
+): Promise<PlatformSetting> {
+  return request<PlatformSetting>(`/api/admin/settings/${key}`, {
+    method: "PUT",
+    body: JSON.stringify({ value }),
+  });
+}

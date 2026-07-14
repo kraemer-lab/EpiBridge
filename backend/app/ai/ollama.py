@@ -1,11 +1,14 @@
 import json
+import logging
 import os
 import urllib.error
 import urllib.request
 from pathlib import Path
 
-from app.ai.base import AIProvider, AIReviewResult
+from app.ai.base import AIProvider, AIReviewResult, ProviderStatus
 from app.ai.context import AIReviewContext
+
+logger = logging.getLogger("epibridge.ai.ollama")
 
 SOURCE_EXTENSIONS = {".py", ".R", ".r", ".sh", ".js", ".ipynb", ".txt", ".md"}
 
@@ -76,20 +79,25 @@ REVIEW_PROMPT = (
 
 
 class OllamaProvider(AIProvider):
-    def __init__(self, base_url: str, model: str = "llama3.2"):
+    def __init__(self, base_url: str, model: str = "llama3.2", timeout: int = 120):
         self.base_url = base_url.rstrip("/")
         self.model = model
+        self.timeout = timeout
 
     def review(
         self, analysis_dir: Path, context: AIReviewContext | None = None
     ) -> AIReviewResult:
         if not analysis_dir.is_dir():
+            logger.warning("Analysis directory not found: %s", analysis_dir)
             return AIReviewResult(
                 errors=[f"Analysis directory not found: {analysis_dir}"]
             )
 
         source_code = self._read_source_files(analysis_dir)
         if not source_code.strip():
+            logger.warning(
+                "No source files found in analysis bundle at %s", analysis_dir
+            )
             return AIReviewResult(errors=["No source files found in analysis bundle"])
 
         metadata = self._build_metadata(context or AIReviewContext())
@@ -101,15 +109,19 @@ class OllamaProvider(AIProvider):
         try:
             response = self._call_ollama(prompt)
         except urllib.error.URLError:
+            logger.warning("AI provider unreachable at %s", self.base_url)
             return AIReviewResult(errors=["AI provider unreachable"])
         except urllib.error.HTTPError as e:
+            logger.warning("AI provider returned HTTP %d", e.code)
             return AIReviewResult(errors=[f"AI provider returned HTTP {e.code}"])
         except OSError:
+            logger.warning("AI provider unreachable (OS error) at %s", self.base_url)
             return AIReviewResult(errors=["AI provider unreachable"])
 
         try:
             data = json.loads(response)
         except (json.JSONDecodeError, ValueError):
+            logger.warning("Failed to parse AI response: invalid JSON")
             return AIReviewResult(errors=["Failed to parse AI response"])
 
         summary = data.get("summary", "")
@@ -118,6 +130,7 @@ class OllamaProvider(AIProvider):
         reviewer_notes = data.get("reviewer_notes", "")
 
         if not summary:
+            logger.warning("AI response missing summary")
             return AIReviewResult(errors=["AI response missing summary"])
 
         if assessment_confidence not in ("High", "Medium", "Low"):
@@ -129,6 +142,24 @@ class OllamaProvider(AIProvider):
             assessment_confidence=assessment_confidence,
             reviewer_notes=reviewer_notes,
         )
+
+    def check_status(self) -> ProviderStatus:
+        try:
+            req = urllib.request.Request(f"{self.base_url}/api/tags")
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+            models = [m["name"] for m in data.get("models", [])]
+            model_available = any(m.startswith(self.model) for m in models)
+            if not model_available:
+                logger.info("AI model %s not found in provider", self.model)
+                return ProviderStatus(ready=False, reason="model_missing")
+            return ProviderStatus(ready=True, reason=None)
+        except urllib.error.URLError:
+            logger.warning("AI provider unreachable at %s", self.base_url)
+            return ProviderStatus(ready=False, reason="provider_unreachable")
+        except Exception:
+            logger.warning("AI provider status check failed", exc_info=True)
+            return ProviderStatus(ready=False, reason="provider_error")
 
     def _build_metadata(self, context: AIReviewContext) -> str:
         lines = ["Analysis Bundle"]
@@ -174,7 +205,7 @@ class OllamaProvider(AIProvider):
             method="POST",
         )
 
-        with urllib.request.urlopen(req, timeout=120) as resp:
+        with urllib.request.urlopen(req, timeout=self.timeout) as resp:
             result = json.loads(resp.read().decode("utf-8"))
 
         return result.get("response", "")

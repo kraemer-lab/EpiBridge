@@ -1,7 +1,10 @@
 import sys
 
+from app.core.config import settings
+from app.core.logging import configure_logging
 from app.db.session import SessionLocal
 from app.models.user import UserRole
+from app.services.ai_status_service import check_ai_status
 from app.services.demo_seeder import seed_demo_workspace
 from app.services.terms_service import seed_terms
 from app.services.user_service import (
@@ -204,6 +207,17 @@ def seed_developer():
         db.close()
 
 
+def check_ai_status_cli():
+    configure_logging(settings.log_level)
+    status = check_ai_status()
+    if status.ready:
+        print("AI is ready")
+        sys.exit(0)
+    else:
+        print(f"AI is not ready: {status.reason}")
+        sys.exit(1)
+
+
 def seed_demo():
     db = SessionLocal()
     try:
@@ -252,6 +266,8 @@ def main():
         seed_demo()
     elif command == "create-user":
         create_researcher()
+    elif command == "check-ai-status":
+        check_ai_status_cli()
     else:
         print(f"Unknown command: {command}")
         sys.exit(1)

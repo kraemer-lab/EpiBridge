@@ -23,6 +23,7 @@ from app.auth.policy import (
     require_project_membership,
 )
 from app.db.session import get_db
+from app.models.ai_bundle_review import AIBundleReview, AIBundleReviewStatus
 from app.models.analysis_bundle import (
     AnalysisBundle,
     AnalysisBundleStatus,
@@ -34,6 +35,7 @@ from app.models.capability import Capability
 from app.models.data_resource import DataResource
 from app.models.execution_request import ExecutionRequest
 from app.models.output_set import OutputSet
+from app.models.platform_setting import SettingKey
 from app.models.project_data_resource import ProjectResourceAllocation
 from app.models.user import User
 from app.schemas.ai_bundle_review import AIBundleReviewRead
@@ -55,7 +57,7 @@ from app.schemas.project import (
     ProjectMemberRead,
     ProjectRead,
 )
-from app.services.ai_review_service import request_and_perform_review
+from app.services.ai_review_service import perform_review
 from app.services.analysis_bundle_service import (
     create_bundle,
     get_environment_runtime,
@@ -77,6 +79,7 @@ from app.services.output_set_service import (
     list_outputs_by_set,
     stream_release_package,
 )
+from app.services.platform_settings_service import get_setting_bool
 from app.services.project_service import (
     add_member,
     create_project,
@@ -517,7 +520,25 @@ async def post_project_bundle_upload(
 
     update_bundle(db, bundle.id, {"source_path": store_path})
 
-    background_tasks.add_task(request_and_perform_review, bundle.id)
+    if get_setting_bool(db, SettingKey.AI_REVIEW_ENABLED):
+        review = (
+            db.query(AIBundleReview)
+            .filter(AIBundleReview.bundle_id == bundle.id)
+            .first()
+        )
+        if review is None:
+            review = AIBundleReview(
+                bundle_id=bundle.id, status=AIBundleReviewStatus.PENDING
+            )
+            db.add(review)
+        else:
+            review.status = AIBundleReviewStatus.PENDING
+            review.summary = None
+            review.assessment = None
+            review.assessment_confidence = None
+            review.reviewer_notes = None
+        db.commit()
+        background_tasks.add_task(perform_review, bundle.id)
 
     db.refresh(bundle)
     return _bundle_to_read(bundle)
@@ -630,7 +651,22 @@ def post_bundle_ai_review(
             detail="Analysis bundle not found",
         )
 
-    background_tasks.add_task(request_and_perform_review, bundle.id)
+    review = (
+        db.query(AIBundleReview).filter(AIBundleReview.bundle_id == bundle.id).first()
+    )
+    if review is None:
+        review = AIBundleReview(
+            bundle_id=bundle.id, status=AIBundleReviewStatus.PENDING
+        )
+        db.add(review)
+    else:
+        review.status = AIBundleReviewStatus.PENDING
+        review.summary = None
+        review.assessment = None
+        review.assessment_confidence = None
+        review.reviewer_notes = None
+    db.commit()
+    background_tasks.add_task(perform_review, bundle.id)
 
     db.refresh(bundle)
     return _bundle_to_read(bundle)

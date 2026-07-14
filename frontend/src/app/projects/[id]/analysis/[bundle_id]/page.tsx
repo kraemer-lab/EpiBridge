@@ -25,6 +25,8 @@ import {
   createExecutionRequest,
   updateProjectBundle,
   triggerAiReview,
+  getAIStatus,
+  AIStatus,
   checkResourceTerms,
   BundleValidationStatus,
   createValidationRequest,
@@ -61,6 +63,7 @@ export default function AnalysisDetailPage() {
   const [projectResources, setProjectResources] = useState<DataResource[]>([]);
   const [selectedResources, setSelectedResources] = useState<string[]>([]);
   const [savingDraft, setSavingDraft] = useState(false);
+  const [aiStatus, setAiStatus] = useState<AIStatus | null>(null);
 
   const initializedRef = useRef(false);
 
@@ -169,6 +172,10 @@ export default function AnalysisDetailPage() {
       .catch(() => setError("Failed to load analysis bundle"))
       .finally(() => setLoading(false));
   }, [fetchBundle]);
+
+  useEffect(() => {
+    getAIStatus().then(setAiStatus).catch(() => setAiStatus(null));
+  }, []);
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -680,24 +687,37 @@ export default function AnalysisDetailPage() {
           </div>
         </div>
 
+        {aiStatus?.review_enabled && (
         <div className="card" style={{ maxWidth: "640px", marginTop: "var(--spacing-lg)" }}>
           <h3 style={{ fontSize: "1rem", fontWeight: 600, marginBottom: "var(--spacing-md)" }}>
             AI Analysis Summary
           </h3>
 
-          {bundle.ai_review === null && (
+          {aiStatus === null && (
             <div style={{ marginBottom: "var(--spacing-md)" }}>
-              <div>Not available for this deployment</div>
+              <div style={{ color: "var(--color-text-secondary)" }}>Checking AI availability...</div>
             </div>
           )}
 
-          {bundle.ai_review?.status === "pending" && (
+          {aiStatus !== null && !aiStatus.ready && (
+            <div style={{ marginBottom: "var(--spacing-md)" }}>
+              <div style={{ color: "var(--color-text-secondary)" }}>
+                AI assistance is not available
+                {aiStatus.reason === "provider_unreachable" && " (AI service unreachable)"}
+                {aiStatus.reason === "model_missing" && " (AI model not found)"}
+                {aiStatus.reason === "provider_error" && " (AI service error)"}
+                {aiStatus.reason === null && ""}
+              </div>
+            </div>
+          )}
+
+          {aiStatus !== null && aiStatus.ready && bundle.ai_review?.status === "pending" && (
             <div style={{ marginBottom: "var(--spacing-md)" }}>
               <div>Status: Pending</div>
             </div>
           )}
 
-          {bundle.ai_review?.status === "completed" && (
+          {aiStatus !== null && aiStatus.ready && bundle.ai_review?.status === "completed" && (
             <>
               <div style={{ marginBottom: "var(--spacing-md)" }}>
                 <div style={{ fontSize: "0.8rem", color: "var(--color-text-secondary)", marginBottom: "var(--spacing-xs)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
@@ -732,13 +752,13 @@ export default function AnalysisDetailPage() {
             </>
           )}
 
-          {(bundle.ai_review?.status === "unavailable" || bundle.ai_review?.status === "failed") && (
+          {aiStatus !== null && aiStatus.ready && (bundle.ai_review?.status === "unavailable" || bundle.ai_review?.status === "failed") && (
             <div style={{ marginBottom: "var(--spacing-md)" }}>
               <div>Status: Unavailable</div>
             </div>
           )}
 
-          {bundle.ai_review?.status !== "pending" && (
+          {aiStatus !== null && aiStatus.ready && bundle.ai_review?.status !== "pending" && (
             <button
               className="btn"
               onClick={handleTriggerReview}
@@ -748,6 +768,7 @@ export default function AnalysisDetailPage() {
             </button>
           )}
         </div>
+        )}
       </div>
     );
   }
