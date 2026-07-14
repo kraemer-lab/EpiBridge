@@ -41,7 +41,12 @@ jobs:
     - name: Bootstrap EpiBridge
       run: make ci
 
-    - name: Run canonical workflow e2e test
+    - name: Run integration tests
+      run: |
+        cd backend
+        python -m pytest tests/integration -v --no-header -q
+
+    - name: Run acceptance test suite
       run: |
         cd frontend
         npm ci
