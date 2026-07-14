@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-MACHINE="epibridge-dev"
+MACHINE="epibridge"
 CLOUD_INIT="vm/cloud-init.yaml"
 
 case "${1:-help}" in
@@ -30,8 +30,8 @@ case "${1:-help}" in
     echo "Usage: $0 <command>"
     echo ""
     echo "Commands:"
-    echo "  create           Create the development VM"
-    echo "  delete           Delete the development VM"
+    echo "  create           Create the installation VM"
+    echo "  delete           Delete the installation VM"
     echo "  mount            Symlink repo into /opt/epibridge"
     echo "  ssh [cmd]        Run command in the VM (or start a shell)"
     echo "  ip               Show VM IP address"

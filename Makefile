@@ -5,46 +5,142 @@ SSH          ?= ssh $(VM_USER)@$(VM_HOST)
 PYTHON       ?= python3
 DOCKER_COMPOSE ?= docker compose
 
-.PHONY: dev dev-ai clean clean-db install up down upgrade backup restore dev-install dev-up dev-down dev-shell dev-logs dev-build test dev-test format lint fix playwright bootstrap ci ci-clean
+# Load execution context (silent if absent — defaults to native Docker).
+-include .epibridge-context
+EPIBRIDGE_TARGET ?= native
 
-# --- Shared bootstrap (no VM, no SSH) ---------------------------------------
-# Bootstrap initialises EpiBridge from scratch. Requires:
-#   - current directory = repository root
-#   - Docker + Docker Compose available
-# Used by both development (inside OrbStack VM) and CI (natively).
+.PHONY: dev dev-ai dev-destroy clean-db install uninstall up down upgrade backup restore dev-up dev-down dev-shell dev-logs dev-build test dev-test format lint fix playwright ci ci-clean demo deploy deploy-dev seed-institution seed-personas seed-developer seed-demo reset
 
-bootstrap:
+# --- Installation ----------------------------------------------------------------
+# install is the canonical first-run experience.  Accepts an optional TARGET
+# parameter:
+#
+#   TARGET=orbstack  (default)  — OrbStack VM installation
+#   TARGET=native               — native Docker installation (no VM)
+#
+# Installs the platform, seeds the institution, and writes the execution context.
+# Idempotent — safe to run repeatedly.
+
+TARGET ?= orbstack
+
+install:
+	$(eval ENV_FRESH := $(shell [ -f .env ] && echo "no" || echo "yes"))
+	@if [ "$(TARGET)" != "orbstack" ] && [ "$(TARGET)" != "native" ]; then \
+		echo "Unsupported installation target: $(TARGET)"; \
+		echo "Supported targets: orbstack, native"; \
+		exit 1; \
+	fi
+ifeq ($(TARGET),orbstack)
+	./scripts/orbstack.sh create || true
+	./scripts/orbstack.sh mount
+	./scripts/orbstack.sh ssh 'cd $(VM_DIR) && ./scripts/install.sh --dev && ./scripts/seed-institution.sh'
+	@echo "EPIBRIDGE_TARGET=$(TARGET)" > .epibridge-context
+	@echo "EPIBRIDGE_VM=epibridge" >> .epibridge-context
+else
 	./scripts/bootstrap.sh
+	./scripts/seed-institution.sh
+	@echo "EPIBRIDGE_TARGET=$(TARGET)" > .epibridge-context
+endif
+	@echo ""
+	@echo "=== EpiBridge installed ==="
+	@echo ""
+	@echo "Frontend:"
+	@echo "  https://localhost/"
+	@echo ""
+	@echo "Administrator account:"
+	@echo "  Email:"
+	@echo "      admin@epibridge.local"
+	@echo "  Password:"
+	@echo "      Stored as ADMIN_PASSWORD in .env"
+	@echo ""
+	@echo "Configuration:"
+	@if [ "$(ENV_FRESH)" = "yes" ]; then \
+		echo "  .env was created automatically from .env.example"; \
+		echo "  and contains installation-specific configuration,"; \
+		echo "  including:"; \
+		echo ""; \
+		echo "    - administrator password"; \
+		echo "    - application secrets"; \
+		echo "    - optional SMTP configuration"; \
+	else \
+		echo "  Existing .env configuration reused."; \
+	fi
+	@echo ""
+	@echo "Platform status:"
+	@echo "  - Platform running"
+	@echo "  - Platform Terms published"
+	@echo "  - Institutional publications registered"
+	@echo ""
+	@echo "To prepare an evaluation environment:"
+	@echo ""
+	@echo "    make demo"
+
+# --- Uninstall -------------------------------------------------------------------
+# uninstall stops the platform and removes the installation.
+# Dispatch depends on the execution context (.epibridge-context).
+# The Git working tree and .env are preserved.
+
+uninstall:
+	@echo "=== EpiBridge Uninstall ==="
+ifeq ($(EPIBRIDGE_TARGET),orbstack)
+	-./scripts/orbstack.sh ssh 'cd $(VM_DIR) && docker compose down' 2>/dev/null || true
+	-./scripts/orbstack.sh delete || true
+else
+	-docker compose down -v 2>/dev/null || true
+endif
+	@rm -f .epibridge-context
+	@if [ -f .env ]; then \
+		echo ""; \
+		echo ".env preserved at $$PWD/.env"; \
+	fi
+
+# --- Evaluation ----------------------------------------------------------------
+# demo seeds evaluation personas and prints the welcome message.
+# Dispatch depends on the execution context (.epibridge-context).
+
+demo:
+ifeq ($(EPIBRIDGE_TARGET),orbstack)
+	./scripts/orbstack.sh ssh 'cd $(VM_DIR) && ./scripts/seed-personas.sh && ./scripts/seed-demo.sh'
+else
+	./scripts/seed-personas.sh
+	./scripts/seed-demo.sh
+endif
 
 reset:
 	$(MAKE) clean-db
-	./scripts/orbstack.sh ssh 'cd $(VM_DIR) && ./scripts/bootstrap.sh'
+	./scripts/orbstack.sh ssh 'cd $(VM_DIR) && ./scripts/bootstrap.sh && ./scripts/seed-institution.sh && ./scripts/seed-personas.sh && ./scripts/seed-developer.sh'
 	@echo "=== Development environment reset to known-good state ==="
 
-# --- CI targets (native Linux) -----------------------------------------------
-# CI bootstraps EpiBridge directly on the runner, runs the canonical workflow test,
-# then tears everything down.
+# --- CI (native Linux) ---------------------------------------------------------
+# CI bootstraps the platform natively (no OrbStack) and seeds all accounts needed
+# by the test suite.  Composes the same internal building blocks as install.
 
-ci: bootstrap
+ci:
+	./scripts/bootstrap.sh
+	./scripts/seed-institution.sh
+	./scripts/seed-personas.sh
+	./scripts/seed-developer.sh
 
 ci-clean:
 	docker compose down -v
 	rm -f .env
 
-# --- Development (OrbStack VM) -----------------------------------------------
-# Development provisions an OrbStack VM, mounts the repo, then bootstraps
-# EpiBridge inside the VM using the exact same bootstrap.sh script.
+# --- Development ----------------------------------------------------------------
+# dev rebuilds and restarts application services for the edit–build–run cycle.
+# It deliberately skips bootstrap (EE image builds, health wait) and does NOT
+# reseed users or terms — those are one-time concerns managed by install/reset.
+# Dispatch depends on the execution context (.epibridge-context).
 
 dev:
-	./scripts/orbstack.sh create || true
-	./scripts/orbstack.sh mount
-	$(MAKE) dev-install
+ifeq ($(EPIBRIDGE_TARGET),orbstack)
+	./scripts/orbstack.sh ssh 'cd $(VM_DIR) && docker compose build backend frontend worker && docker compose up -d'
+else
+	docker compose build backend frontend worker
+	docker compose up -d
+endif
 
 dev-ai:
 	./scripts/orbstack.sh ssh 'cd $(VM_DIR) && $(DOCKER_COMPOSE) --profile ai up -d'
-
-dev-install:
-	./scripts/orbstack.sh ssh 'cd $(VM_DIR) && ./scripts/install.sh --dev'
 
 dev-up:
 	./scripts/orbstack.sh ssh 'cd $(VM_DIR) && docker compose up -d'
@@ -65,10 +161,10 @@ dev-build:
 
 # --- Production deployment (SSH to Ubuntu VM) --------------------------------
 
-install:
+deploy:
 	$(SSH) 'cd $(VM_DIR) && ./scripts/install.sh'
 
-install-dev:
+deploy-dev:
 	$(SSH) 'cd $(VM_DIR) && ./scripts/install.sh --dev'
 
 up:
@@ -114,6 +210,7 @@ fix:
 # --- Testing (requires full stack) -------------------------------------------
 
 playwright:
+	export ADMIN_PASSWORD=$$(grep ^ADMIN_PASSWORD= .env | cut -d= -f2-); \
 	cd frontend && npx playwright test
 
 # --- Maintenance -------------------------------------------------------------
@@ -122,7 +219,7 @@ clean-db:
 	./scripts/orbstack.sh ssh 'cd $(VM_DIR) && docker compose start postgres 2>/dev/null; docker compose exec -T postgres psql -U epibridge -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;" 2>/dev/null || (docker compose up -d postgres && sleep 3 && docker compose exec -T postgres psql -U epibridge -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"); docker compose restart backend'
 	@echo "=== Database reset (all tables recreated on startup) ==="
 
-clean:
+dev-destroy:
 	@echo "=== EpiBridge Clean ==="
 	-./scripts/orbstack.sh ssh 'cd $(VM_DIR) && docker compose down -v' 2>/dev/null || true
 	-./scripts/orbstack.sh delete || true

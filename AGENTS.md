@@ -555,8 +555,7 @@ The platform sends responsibility-transfer email notifications to keep the right
 
 ### Seeded development accounts
 
-The following personas are seeded during `bootstrap.sh` and are available for
-manual validation:
+The following personas are seeded during `make install` (via `seed-institution.sh` and `seed-personas.sh`) and are available for manual validation:
 
 | Persona | Email | Password | Role |
 |---------|-------|----------|------|
@@ -590,15 +589,16 @@ make test         # run tests
 - `alembic revision --autogenerate -m "description"` — generate a new migration from model changes
 
 **Infrastructure** (from repo root):
-- `./scripts/bootstrap.sh` — single entry point (clone → install → verify)
-- `./scripts/install.sh` — first-time install
+- `./scripts/bootstrap.sh` — platform boot only (build, start, wait, health)
+- `./scripts/install.sh` — first-time install (clone repo + bootstrap)
 - `./scripts/upgrade.sh` — application upgrade
 - `./scripts/backup.sh` — database + data backup
 - `./scripts/restore.sh <file>` — restore from backup
 - `./scripts/healthcheck.sh` — verify services
 
 **Makefile targets** (portable, assumes SSH access to an Ubuntu VM):
-- `make install` — run install.sh
+- `make deploy` — production install (SSH: install.sh)
+- `make install` — local installation (OrbStack VM)
 - `make up` — docker compose up -d
 - `make down` — docker compose down
 - `make upgrade` — run upgrade.sh
@@ -639,33 +639,33 @@ Key settings for deployment:
 | `secure_cookie` | False | Set `true` when deploying behind TLS. |
 | `rate_limit_max_attempts` | 10 | Login attempts per window before rate limiting. |
 | `rate_limit_window_seconds` | 300 (5min) | Rate limit window. |
-The bootstrap process (`bootstrap.sh`) creates this database automatically.
+The `seed-developer.sh` script (run by `make dev` and `make ci`) creates this database automatically.
 For local native runs, create it manually:
 ```
 createdb epibridge_test
 ```
 
 **CI** (from repo root, requires Docker):
-- `make ci` — bootstrap full stack (build, start, seed), same as `make bootstrap`
+- `make ci` — bootstrap full stack (build, start, seed)
 - `make ci-clean` — tear down all Docker resources and remove `.env`
 - `make playwright` — run canonical workflow e2e test (must be run after `make ci`)
 - `make playwright CMD=e2e/custom-build-workflow.spec.ts` — run custom build workflow e2e test
 - `make playwright CMD=e2e/validation-workflow.spec.ts` — run validation workflow e2e test
 
 **Shared bootstrap** (from repo root, requires Docker):
-- `make bootstrap` — idempotent bootstrap used by both development and CI.
+- `make install` — canonical first-run installation (defaults to OrbStack VM).
   Generates `.env` if missing, builds images, starts services, seeds admin.
   Safe to run multiple times.
 
 **Makefile dev targets** (OrbStack-specific, uses `scripts/orbstack.sh` under the hood):
-- `make dev` — one-command: create VM, mount repo, install, start, verify
+- `make install` — first-run: create VM, mount repo, bootstrap, seed
+- `make dev` — incremental: rebuild code containers, restart services (no seeding)
 - `make dev-ai` — start the optional Ollama service on an already-running stack
-- `make dev-install` — install with `--dev` flag (individual step)
 - `make dev-up` — start services (individual step)
 - `make dev-down` — stop services (individual step)
 - `make dev-shell` — interactive VM shell (individual step)
 - `make dev-logs` — tail container logs (individual step)
-- `make clean` — factory reset (remove containers, volumes, VM, .env)
+- `make dev-destroy` — factory reset (remove containers, volumes, VM, .env)
 - `make clean-db` — reset database (all researcher artefacts dropped, schema recreated on next startup)
 - `make dev-build SVC=frontend` — rebuild and restart a single service (fastest iteration)
 

@@ -113,7 +113,9 @@ test("Administrator Acceptance", async ({ page }) => {
   await moderatorRow.getByRole("button", { name: "Edit" }).click();
 
   // Open password reset form
-  await page.getByRole("button", { name: "Reset Password" }).click();
+  await expect(async () => {
+    await page.getByRole("button", { name: "Reset Password" }).click();
+  }).toPass({ timeout: 500 });
 
   // Enter new password
   await page.getByPlaceholder("Minimum 8 characters").fill(newPassword);

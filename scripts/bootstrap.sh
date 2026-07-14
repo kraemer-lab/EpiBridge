@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# bootstrap.sh — shared EpiBridge bootstrap
+# bootstrap.sh — platform boot only
 #
-# bootstrap.sh initialises the application.
-# It is NOT an infrastructure provisioning script.
+# bootstrap.sh brings the platform into an operational state.
+# It does NOT seed users, terms, or any other application state.
 #
-# Idempotent application initialisation. Safe to run multiple times.
+# Idempotent platform initialisation. Safe to run multiple times.
 #
 # Environment contract:
 #   - Current directory is the repository root.
@@ -28,18 +28,11 @@ if [ ! -f .env ]; then
   SECRET_KEY=$(openssl rand -base64 64 | tr -d '\n')
   ADMIN_PASSWORD=$(openssl rand -base64 32 | tr -d '\n')
 
-  python3 -c "
-import os
-path = '.env'
-with open(path) as f:
-    c = f.read()
-c = c.replace('POSTGRES_PASSWORD=__GENERATED__', 'POSTGRES_PASSWORD=$POSTGRES_PASSWORD')
-c = c.replace('REDIS_PASSWORD=__GENERATED__', 'REDIS_PASSWORD=$REDIS_PASSWORD')
-c = c.replace('SECRET_KEY=__GENERATED__', 'SECRET_KEY=$SECRET_KEY')
-c = c.replace('ADMIN_PASSWORD=__GENERATED__', 'ADMIN_PASSWORD=$ADMIN_PASSWORD')
-with open(path, 'w') as f:
-    f.write(c)
-"
+  sed -i.bak "s|POSTGRES_PASSWORD=__GENERATED__|POSTGRES_PASSWORD=$POSTGRES_PASSWORD|" .env && rm -f .env.bak
+  sed -i.bak "s|REDIS_PASSWORD=__GENERATED__|REDIS_PASSWORD=$REDIS_PASSWORD|" .env && rm -f .env.bak
+  sed -i.bak "s|SECRET_KEY=__GENERATED__|SECRET_KEY=$SECRET_KEY|" .env && rm -f .env.bak
+  sed -i.bak "s|ADMIN_PASSWORD=__GENERATED__|ADMIN_PASSWORD=$ADMIN_PASSWORD|" .env && rm -f .env.bak
+
   chmod 600 .env
   echo ".env created"
 fi
@@ -47,37 +40,32 @@ fi
 ###############################################################################
 # 2. Discover deployment environment
 ###############################################################################
-DOCKER_GID="$(getent group docker | cut -d: -f3)"
-if [ -z "$DOCKER_GID" ]; then
-  echo "ERROR: Docker group not found. Is Docker installed?"
+if command -v getent &>/dev/null; then
+  DOCKER_GID="$(getent group docker | cut -d: -f3)"
+  if [ -z "$DOCKER_GID" ]; then
+    echo "ERROR: Docker group not found. Is Docker installed?"
+    exit 1
+  fi
+elif [[ "$(uname)" == "Darwin" ]]; then
+  # Docker Desktop on macOS: socket permissions vary; use the socket's group.
+  DOCKER_GID=$(stat -f '%g' /var/run/docker.sock 2>/dev/null || echo "0")
+else
+  echo "ERROR: Cannot determine Docker group ID."
   exit 1
 fi
 export DOCKER_GID
 echo "Docker group GID: $DOCKER_GID"
 
 # Persist DOCKER_GID to .env so that all subsequent docker compose
-# invocations (make clean-db, make reset, CI, etc.) automatically
-# consume it without shell exports or hardcoded fallbacks.
-#
-# DOCKER_GID is deployment metadata discovered from the local
-# environment.  It is generated automatically by bootstrap.sh and
-# is not intended to be manually edited.
+# invocations (clean-db, CI, etc.) automatically consume it.
 if grep -q "^DOCKER_GID=" .env 2>/dev/null; then
-  sed -i.bak "s/^DOCKER_GID=.*/DOCKER_GID=$DOCKER_GID/" .env && rm -f .env.bak
+  sed -i.bak "s|^DOCKER_GID=.*|DOCKER_GID=$DOCKER_GID|" .env && rm -f .env.bak
 else
   echo "DOCKER_GID=$DOCKER_GID" >> .env
 fi
 
 ###############################################################################
 # 3. Set HOST_DATA_ROOT for Docker-outside-of-Docker bind mounts
-#
-# The worker runs in a container, so provider mount sources like
-# /read-only-data/* are not visible to Docker Engine on the host.
-# This variable remaps them to the host-visible path.
-#
-# Derive from the bootstrap script location so it works in development
-# (OrbStack VM at /opt/epibridge), CI (GitHub workspace), and any
-# future deployment context. Can be overridden via environment.
 ###############################################################################
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
@@ -98,26 +86,18 @@ for dir in execution-environments/*/; do
 done
 
 ###############################################################################
-# 4. Provision application storage
-#
-# The mkdir below is a defensive measure — it ensures the directories
-# exist even if infrastructure provisioning (cloud-init.yaml or CI)
-# hasn't run yet.  Ownership is an infrastructure responsibility and
-# is never modified here.  If the application user cannot write to
-# these directories, the containers will fail with a clear permission
-# error, correctly directing the operator to check provisioning.
+# 5. Provision application storage
 ###############################################################################
-echo "Provisioning storage directories..."
 mkdir -p /var/lib/epibridge/bundles /var/lib/epibridge/outputs /var/lib/epibridge/releases
 
 ###############################################################################
-# 5. Start services
+# 6. Start services
 ###############################################################################
 echo "Starting services..."
 docker compose up -d
 
 ###############################################################################
-# 6. Wait for PostgreSQL
+# 7. Wait for PostgreSQL
 ###############################################################################
 echo "Waiting for PostgreSQL..."
 until docker compose exec -T postgres pg_isready -U epibridge 2>/dev/null; do
@@ -126,7 +106,7 @@ done
 echo "PostgreSQL is ready."
 
 ###############################################################################
-# 7. Wait for backend API to be ready
+# 8. Wait for backend API to be ready
 ###############################################################################
 echo "Waiting for backend API..."
 until docker compose exec -T backend python3 -c "
@@ -142,59 +122,10 @@ done
 echo "Backend API is ready."
 
 ###############################################################################
-# 8. Create test database
-###############################################################################
-echo "Creating test database..."
-docker compose exec -T postgres psql -U epibridge -c "CREATE DATABASE epibridge_test;" 2>/dev/null || true
-
-###############################################################################
-# 9. Seed admin account
-###############################################################################
-echo "Seeding administrator account..."
-docker compose exec -T backend python -m app.cli seed-admin
-
-###############################################################################
-# 10. Seed maintainer account
-###############################################################################
-echo "Seeding maintainer account..."
-docker compose exec -T backend python -m app.cli seed-maintainer
-
-###############################################################################
-# 11. Seed researcher account
-###############################################################################
-echo "Seeding researcher account..."
-docker compose exec -T backend python -m app.cli seed-researcher
-
-###############################################################################
-# 12. Seed moderator account
-###############################################################################
-echo "Seeding moderator account..."
-docker compose exec -T backend python -m app.cli seed-moderator
-
-###############################################################################
-# 13. Seed developer account
-###############################################################################
-echo "Seeding developer account..."
-docker compose exec -T backend python -m app.cli seed-developer
-
-###############################################################################
-# 14. Seed platform terms
-###############################################################################
-echo "Seeding platform terms..."
-docker compose exec -T backend python -m app.cli seed-terms
-
-###############################################################################
-# 16. Health check
+# 9. Health check
 ###############################################################################
 echo "Running health checks..."
 ./scripts/healthcheck.sh
 
 echo ""
-echo "=== Seeded development accounts ==="
-echo "  Administrator  admin@epibridge.local   (from ADMIN_PASSWORD in .env)"
-echo "  Maintainer     maintainer@epibridge.local  / maintainer"
-echo "  Researcher     researcher@epibridge.local  / researcher"
-echo ""
-echo "Platform terms: published (acceptance required at first login)"
-echo "Dataset terms for Demonstration Surveillance Dataset: published"
-echo "=== EpiBridge bootstrap complete ==="
+echo "=== EpiBridge platform boot complete ==="

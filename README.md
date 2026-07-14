@@ -7,9 +7,103 @@ EpiBridge is a platform that allows researchers to analyse sensitive datasets wi
 
 Researchers develop analyses locally using schema documentation and synthetic datasets, submit analysis bundles to EpiBridge, and receive approved outputs after execution within a secure environment.
 
-## Core Principle
+**Move the computation to the data, not the data to the computation.**
 
-Move the computation to the data, not the data to the computation.
+---
+
+## Quick Start
+
+**Requirements**: Git, OrbStack, Make.
+
+No other host dependencies are required. Python, Node.js, and PostgreSQL all run inside the platform.
+
+### Installation
+
+```bash
+git clone https://github.com/kraemer-lab/EpiBridge.git
+
+cd EpiBridge
+
+make install
+```
+
+This creates an OrbStack VM (if needed), installs EpiBridge, creates the administrator account, publishes institutional assets, and leaves the platform running.
+
+On the first installation, `.env` is created automatically with secure defaults. The administrator password is stored as `ADMIN_PASSWORD` in this file and is never displayed in the terminal. Subsequent installations reuse the existing configuration.
+
+To install into a different target:
+
+```bash
+make install TARGET=native    # native Docker (no VM)
+```
+
+### Evaluation
+
+```bash
+make demo
+```
+
+This creates evaluation accounts (researcher, moderator, maintainer) and prints a welcome message with credentials and next steps.
+
+Once evaluation accounts are ready, follow the guided tutorial:
+
+```
+docs/quickstart.md
+```
+
+---
+
+## Configuration
+
+The only user-facing configuration file is `.env`, created automatically by `make install`. It contains installation-specific settings:
+
+- `ADMIN_PASSWORD` — the administrator account password (generated)
+- `POSTGRES_PASSWORD` and `REDIS_PASSWORD` — database credentials (generated)
+- `SECRET_KEY` — application signing key (generated)
+- `DOMAIN` — deployment domain (default: `localhost`)
+- Optional SMTP configuration for email notifications
+
+To regenerate all secrets, delete `.env` and run `make install` again.
+
+---
+
+## Public lifecycle
+
+| Command | Purpose |
+|---------|---------|
+| `make install` | Install EpiBridge (default: OrbStack VM; use `TARGET=native` for native Docker) |
+| `make demo` | Prepare an evaluation environment |
+| `make dev` | Daily development workflow |
+| `make uninstall` | Remove the local EpiBridge installation |
+
+`make uninstall` stops the platform, deletes the OrbStack VM (or Docker resources), and preserves the repository and `.env`. To fully reset, delete `.env` and the OrbStack VM manually before reinstalling.
+
+---
+
+## Development
+
+After installation, `make dev` is the normal edit–build–run workflow for contributors. It rebuilds and restarts application services without reseeding users or institutional state.
+
+```bash
+make dev
+```
+
+See `vm/runtime.md` for the development environment reference.
+
+---
+
+## Where next?
+
+| Document | Purpose |
+|----------|---------|
+| `docs/quickstart.md` | Guided tutorial through the institutional workflow |
+| `docs/architecture.md` | System architecture and trust boundaries |
+| `docs/security.md` | Security model and threat analysis |
+| `docs/api.md` | API reference |
+| `docs/testing.md` | Testing strategy and test runner reference |
+| `vm/runtime.md` | Deployment runtime specification |
+
+---
 
 ## Features
 
@@ -35,35 +129,13 @@ Move the computation to the data, not the data to the computation.
 ## Repository Structure
 
 ```
-frontend/
-backend/
-worker/
-vm/
-scripts/
-docs/
+frontend/    Next.js application
+backend/     FastAPI application
+worker/      Python job executor
+execution-environments/  Base images and execution contracts
+scripts/     Orchestration scripts
+docs/        Architecture, security, API, and testing documentation
+examples/    Synthetic datasets, analysis templates, and environment definitions
+vm/          Cloud-init configuration and runtime specification
+resources/   Institutional resource publications
 ```
-
-## Development
-
-See `vm/runtime.md` for the development quickstart.
-
-The only host dependencies are Git and a VM runtime (OrbStack, Multipass, etc.).
-
-No Python, Node.js, or PostgreSQL is ever installed on the host.
-
-```bash
-make dev
-```
-
-## Documentation
-
-See the `docs/` directory for:
-
-* Architecture
-* Security
-* API
-* Vision
-
-# Status
-
-Current stage: MVP release.

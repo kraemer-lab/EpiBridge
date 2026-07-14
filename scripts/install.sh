@@ -55,6 +55,3 @@ cd "$EPIBRIDGE_HOME"
 # Delegate all application-level bootstrapping
 ./scripts/bootstrap.sh
 
-echo ""
-echo "=== EpiBridge installation complete ==="
-echo "Frontend: https://$(grep ^DOMAIN "$EPIBRIDGE_HOME/.env" 2>/dev/null || echo "localhost")/"

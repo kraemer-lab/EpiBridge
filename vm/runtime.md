@@ -258,19 +258,22 @@ No Python, Node.js, or PostgreSQL is ever installed on the host.
 From the repo root:
 
 ```bash
-make dev
+make install
 ```
 
-This creates the OrbStack VM (if needed), mounts the repo into `/opt/epibridge`, builds Docker images, starts all services, runs database migrations, seeds the admin account, and verifies health.
+This creates the OrbStack VM (if needed), mounts the repo into `/opt/epibridge`, builds Docker images, starts all services, seeds the admin account and platform terms, and verifies health.
 
 First run takes ~3 minutes. Subsequent runs are near-instant.
+
+After installation, `make dev` is the normal edit–build–run workflow for contributors.
 
 ### Individual steps
 
 For debugging or CI:
 
 ```bash
-make dev-install    # install with --dev flag (skips git operations)
+make install        # full installation (idempotent)
+make dev            # rebuild and restart application services
 make dev-up         # start all services
 make dev-down       # stop all services
 make dev-shell      # interactive VM shell
@@ -291,7 +294,7 @@ Unit tests work anywhere. Integration tests require running services. Smoke test
 The same Makefile supports production VMs and other hypervisors via SSH:
 
 ```bash
-make install SSH="ssh -i key.pem ubuntu@192.168.1.100"
+make deploy SSH="ssh -i key.pem ubuntu@192.168.1.100"
 make up    SSH="ssh -i key.pem ubuntu@192.168.1.100"
 make down  SSH="ssh -i key.pem ubuntu@192.168.1.100"
 ```
@@ -310,7 +313,7 @@ Provider-specific setup examples:
 ```bash
 multipass launch --cloud-init vm/cloud-init.yaml 24.04 --name epibridge-dev
 multipass mount . epibridge-dev:/opt/epibridge
-make install SSH="ssh ubuntu@epibridge-dev.local"
+make deploy SSH="ssh ubuntu@epibridge-dev.local"
 ```
 
 ### Manual (VMware, KVM, Proxmox, etc.)
@@ -320,7 +323,7 @@ make install SSH="ssh ubuntu@epibridge-dev.local"
 # 2. Copy the repository
 rsync -avz --exclude .git . epibridge@vm-ip:/opt/epibridge
 # 3. Install
-make install SSH="ssh epibridge@vm-ip"
+make deploy SSH="ssh epibridge@vm-ip"
 ```
 
 ## Deployment Targets
