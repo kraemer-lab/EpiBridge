@@ -16,7 +16,7 @@ class Settings(BaseSettings):
 
     secret_key: str
 
-    domain: str = "localhost"
+    public_url: str = "https://localhost"
     admin_email: str = "admin@epibridge.local"
     admin_password: str = "admin"
     session_ttl_seconds: int = 86400
@@ -34,6 +34,13 @@ class Settings(BaseSettings):
                 "Generate one with: openssl rand -base64 32"
             )
         return v
+
+    @field_validator("public_url")
+    @classmethod
+    def validate_public_url(cls, v: str) -> str:
+        if not v.startswith(("http://", "https://")):
+            raise ValueError("PUBLIC_URL must start with http:// or https://")
+        return v.rstrip("/")
 
     auto_register_resources: bool = True
     resource_manifest_dir: str = ""

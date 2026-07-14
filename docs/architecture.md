@@ -1359,7 +1359,7 @@ The platform sends responsibility-transfer email notifications to keep the right
 - **Deduplication**: Duplicate recipients are collapsed into a single email.
 - **Data minimisation**: Email bodies do not contain sensitive data, analysis code, or output files. They contain only metadata (names, links) sufficient to direct the recipient to the platform.
 - **Asynchronous**: Notifications are sent via `BackgroundTasks` — they never block the API response.
-- **Configurable**: SMTP settings (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_USE_TLS`) and the deployment domain (`DOMAIN`) are configured through environment variables.
+- **Configurable**: SMTP settings (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_USE_TLS`) and the deployment domain (`PUBLIC_URL`) are configured through environment variables.
 
 ### Implementation
 

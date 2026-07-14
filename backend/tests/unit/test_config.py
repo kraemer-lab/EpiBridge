@@ -17,7 +17,7 @@ def test_settings_loads_with_minimal_env():
     assert s.postgres_host == "localhost"
     assert s.postgres_port == 5432
     assert s.postgres_db == "epibridge"
-    assert s.domain == "localhost"
+    assert str(s.public_url) == "https://localhost"
     assert s.admin_email == "admin@epibridge.local"
 
 

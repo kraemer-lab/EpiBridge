@@ -308,8 +308,13 @@ Alembic is the single authoritative mechanism for database schema management.
 **Migration workflow:**
 
 - **SQLAlchemy models remain the source of truth** — models define the schema, Alembic generates migrations from them.
-- The initial migration (`alembic/versions/`) was generated via `alembic revision --autogenerate` and represents the current schema.
+- The initial migration (`alembic/versions/`) represents the current schema and was generated from model metadata with schema comparison verification against the prior migration chain.
 - All future schema changes require a new Alembic migration, never manual DDL or `create_all()`.
+
+> **Migration history reset (Milestone 24.4):** The development migration chain was
+> squashed to a single baseline. Existing local development databases created
+> before this squash must be recreated. Run `make clean-db` or `make install` to
+> initialise a fresh database using the new baseline.
 
 **Developer workflow for schema changes:**
 
@@ -544,7 +549,7 @@ The platform sends responsibility-transfer email notifications to keep the right
 - **Deduplication**: Duplicate recipients are collapsed into a single email.
 - **Data minimisation**: Email bodies do not contain sensitive data, analysis code, or output files. They contain only metadata (names, links) sufficient to direct the recipient to the platform.
 - **Asynchronous**: Notifications are sent via `BackgroundTasks` — they never block the API response.
-- **Configurable**: SMTP settings (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_USE_TLS`) and the deployment domain (`DOMAIN`) are configured through environment variables.
+- **Configurable**: SMTP settings (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_USE_TLS`) and the deployment domain (`PUBLIC_URL`) are configured through environment variables.
 
 #### Implementation
 

@@ -9,7 +9,7 @@ DOCKER_COMPOSE ?= docker compose
 -include .epibridge-context
 EPIBRIDGE_TARGET ?= native
 
-.PHONY: dev dev-ai dev-destroy clean-db install uninstall up down upgrade backup restore dev-up dev-down dev-shell dev-logs dev-build test dev-test format lint fix playwright ci ci-clean demo deploy deploy-dev seed-institution seed-personas seed-developer seed-demo reset
+.PHONY: certs dev dev-ai dev-destroy clean-db install uninstall up down upgrade backup restore dev-up dev-down dev-shell dev-logs dev-build test dev-test format lint fix playwright ci ci-clean demo deploy deploy-dev seed-institution seed-personas seed-developer seed-demo reset
 
 # --- Installation ----------------------------------------------------------------
 # install is the canonical first-run experience.  Accepts an optional TARGET
@@ -23,7 +23,48 @@ EPIBRIDGE_TARGET ?= native
 
 TARGET ?= orbstack
 
-install:
+# Generate and apply TLS certificates for the hostname derived from PUBLIC_URL.
+# Applies the certificate configuration to the running installation: generates
+# or refreshes certificates, then restarts the reverse proxy so that new
+# certificates take effect immediately.
+# Uses mkcert when available; falls back to self-signed certificates.
+# Idempotent: safe to run at any time.
+certs:
+	./scripts/setup-certs.sh
+	@if [ -f .epibridge-context ]; then \
+		echo "Restarting reverse proxy..."; \
+		if [ "$(EPIBRIDGE_TARGET)" = "orbstack" ]; then \
+			./scripts/orbstack.sh ssh 'cd $(VM_DIR) && docker compose restart reverse-proxy' || { \
+				echo ""; \
+				echo "Certificates were generated successfully."; \
+				echo ""; \
+				echo "The new certificates are not yet active because the reverse"; \
+				echo "proxy could not be restarted automatically."; \
+				echo ""; \
+				echo "Please restart the reverse proxy manually, then revisit:"; \
+				echo ""; \
+				echo "    https://localhost"; \
+				echo ""; \
+				false; }; \
+		else \
+			docker compose restart reverse-proxy || { \
+				echo ""; \
+				echo "Certificates were generated successfully."; \
+				echo ""; \
+				echo "The new certificates are not yet active because the reverse"; \
+				echo "proxy could not be restarted automatically."; \
+				echo ""; \
+				echo "Please restart the reverse proxy manually, then revisit:"; \
+				echo ""; \
+				echo "    https://localhost"; \
+				echo ""; \
+				false; }; \
+		fi; \
+		echo ""; \
+		echo "✓ Certificate configuration applied."; \
+	fi
+
+install: certs
 	$(eval ENV_FRESH := $(shell [ -f .env ] && echo "no" || echo "yes"))
 	@if [ "$(TARGET)" != "orbstack" ] && [ "$(TARGET)" != "native" ]; then \
 		echo "Unsupported installation target: $(TARGET)"; \
@@ -89,6 +130,7 @@ else
 	-docker compose down -v 2>/dev/null || true
 endif
 	@rm -f .epibridge-context
+	@rm -rf certs
 	@if [ -f .env ]; then \
 		echo ""; \
 		echo ".env preserved at $$PWD/.env"; \

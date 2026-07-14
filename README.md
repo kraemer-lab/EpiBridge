@@ -13,9 +13,15 @@ Researchers develop analyses locally using schema documentation and synthetic da
 
 ## Quick Start
 
-**Requirements**: Git, OrbStack, Make.
+**Requirements**: Git, OrbStack, Make, [mkcert](https://github.com/FiloSottile/mkcert).
 
 No other host dependencies are required. Python, Node.js, and PostgreSQL all run inside the platform.
+
+[mkcert](https://github.com/FiloSottile/mkcert) provides trusted local HTTPS certificates so that browsers do not show security warnings when accessing `https://localhost`. Install it before running `make install`:
+
+```bash
+brew install mkcert
+```
 
 ### Installation
 
@@ -27,7 +33,7 @@ cd EpiBridge
 make install
 ```
 
-This creates an OrbStack VM (if needed), installs EpiBridge, creates the administrator account, publishes institutional assets, and leaves the platform running.
+This creates an OrbStack VM (if needed), installs EpiBridge, generates trusted local HTTPS certificates, creates the administrator account, publishes institutional assets, and leaves the platform running.
 
 On the first installation, `.env` is created automatically with secure defaults. The administrator password is stored as `ADMIN_PASSWORD` in this file and is never displayed in the terminal. Subsequent installations reuse the existing configuration.
 
@@ -60,7 +66,7 @@ The only user-facing configuration file is `.env`, created automatically by `mak
 - `ADMIN_PASSWORD` — the administrator account password (generated)
 - `POSTGRES_PASSWORD` and `REDIS_PASSWORD` — database credentials (generated)
 - `SECRET_KEY` — application signing key (generated)
-- `DOMAIN` — deployment domain (default: `localhost`)
+- `PUBLIC_URL` — canonical external URL (default: `https://localhost`)
 - Optional SMTP configuration for email notifications
 
 To regenerate all secrets, delete `.env` and run `make install` again.

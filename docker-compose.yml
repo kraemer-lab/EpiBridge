@@ -176,8 +176,11 @@ services:
     ports:
       - "80:80"
       - "443:443"
+    environment:
+      PUBLIC_URL_HOST: ${PUBLIC_URL_HOST:-localhost}
     volumes:
       - ./vm/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./certs:/certs:ro
       - caddydata:/data
       - caddyconfig:/config
     depends_on:

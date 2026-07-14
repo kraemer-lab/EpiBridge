@@ -36,8 +36,14 @@ for SERVICE in reverse-proxy frontend backend postgres redis worker; do
   fi
 done
 
+# Derive default URL from PUBLIC_URL in .env, falling back to localhost
+if [ -z "${PUBLIC_URL:-}" ] && [ -f .env ]; then
+  PUBLIC_URL="$(sed -n 's/^PUBLIC_URL=//p' .env 2>/dev/null || true)"
+fi
+DEFAULT_URL="${PUBLIC_URL:-https://localhost}"
+
 # Check API health endpoint through reverse proxy
-API_URL="${API_URL:-https://localhost}"
+API_URL="${API_URL:-$DEFAULT_URL}"
 if curl -skf --connect-timeout 5 "${API_URL}/api/health" >/dev/null 2>&1; then
   echo "  [PASS] API health endpoint"
 else
@@ -46,7 +52,7 @@ else
 fi
 
 # Check frontend is serving through reverse proxy
-FRONTEND_URL="${FRONTEND_URL:-https://localhost}"
+FRONTEND_URL="${FRONTEND_URL:-$DEFAULT_URL}"
 if curl -skf --connect-timeout 5 "${FRONTEND_URL}/" >/dev/null 2>&1; then
   echo "  [PASS] Frontend"
 else

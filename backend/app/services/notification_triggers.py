@@ -44,8 +44,7 @@ def trigger_bundle_submitted_notifications(
     background_tasks: BackgroundTasks,
 ) -> None:
     """Notify project moderators that a bundle has been submitted."""
-    domain = settings.domain
-    review_url = f"https://{domain}/admin/bundles/{bundle.id}"
+    review_url = f"{settings.public_url}/admin/bundles/{bundle.id}"
 
     moderators = _get_project_members_with_capability(
         db,
@@ -78,9 +77,8 @@ def trigger_output_released_notifications(
 ) -> None:
     """Notify the execution requester and bundle creator that results are
     available.  Duplicate recipients are collapsed into one email."""
-    domain = settings.domain
     project_id = output_set.execution_request.project_id
-    results_url = f"https://{domain}/projects/{project_id}/outputs"
+    results_url = f"{settings.public_url}/projects/{project_id}/outputs"
 
     requester = output_set.execution_request.requested_by
     bundle_creator = output_set.execution_request.analysis_bundle.created_by

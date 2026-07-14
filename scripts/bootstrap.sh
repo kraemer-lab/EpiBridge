@@ -73,7 +73,22 @@ export HOST_DATA_ROOT="${HOST_DATA_ROOT:-${REPO_ROOT}/examples/resources}"
 export HOST_RESOURCE_MANIFEST_DIR="${HOST_RESOURCE_MANIFEST_DIR:-${REPO_ROOT}/resources}"
 
 ###############################################################################
-# 4. Build Docker images
+# 4. Derive PUBLIC_URL_HOST from PUBLIC_URL for Caddy
+#     PUBLIC_URL_HOST is exported as a runtime environment variable only —
+#     never stored in .env. The direction of dependency is:
+#       PUBLIC_URL (config) → PUBLIC_URL_HOST (derived) → Caddy
+###############################################################################
+PUBLIC_URL="$(sed -n 's/^PUBLIC_URL=//p' .env 2>/dev/null || true)"
+PUBLIC_URL="${PUBLIC_URL:-https://localhost}"
+# Strip scheme and port to extract bare hostname
+PUBLIC_URL_HOST="${PUBLIC_URL#https://}"
+PUBLIC_URL_HOST="${PUBLIC_URL_HOST#http://}"
+PUBLIC_URL_HOST="${PUBLIC_URL_HOST%%:*}"
+export PUBLIC_URL_HOST
+echo "Public URL: $PUBLIC_URL (hostname: $PUBLIC_URL_HOST)"
+
+###############################################################################
+# 5. Build Docker images
 ###############################################################################
 echo "Building application images..."
 docker compose build
@@ -86,18 +101,34 @@ for dir in execution-environments/*/; do
 done
 
 ###############################################################################
-# 5. Provision application storage
+# 6. Provision application storage
 ###############################################################################
 mkdir -p /var/lib/epibridge/bundles /var/lib/epibridge/outputs /var/lib/epibridge/releases
 
 ###############################################################################
-# 6. Start services
+# 7. Generate TLS certificates if not present
+#     If mkcert has already generated trusted certificates (via make certs or
+#     setup-certs.sh), they are reused.  Otherwise, self-signed certificates
+#     are generated for CI and environments without mkcert.
+###############################################################################
+if [ ! -f "certs/${PUBLIC_URL_HOST}.pem" ]; then
+  echo "Generating self-signed certificate for: $PUBLIC_URL_HOST"
+  mkdir -p certs
+  openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+    -keyout "certs/${PUBLIC_URL_HOST}-key.pem" \
+    -out "certs/${PUBLIC_URL_HOST}.pem" \
+    -subj "/CN=${PUBLIC_URL_HOST}" 2>/dev/null
+  echo "Certificate generated: certs/${PUBLIC_URL_HOST}.pem"
+fi
+
+###############################################################################
+# 8. Start services
 ###############################################################################
 echo "Starting services..."
 docker compose up -d
 
 ###############################################################################
-# 7. Wait for PostgreSQL
+# 9. Wait for PostgreSQL
 ###############################################################################
 echo "Waiting for PostgreSQL..."
 until docker compose exec -T postgres pg_isready -U epibridge 2>/dev/null; do
@@ -106,7 +137,7 @@ done
 echo "PostgreSQL is ready."
 
 ###############################################################################
-# 8. Wait for backend API to be ready
+# 10. Wait for backend API to be ready
 ###############################################################################
 echo "Waiting for backend API..."
 until docker compose exec -T backend python3 -c "
@@ -122,7 +153,7 @@ done
 echo "Backend API is ready."
 
 ###############################################################################
-# 9. Health check
+# 11. Health check
 ###############################################################################
 echo "Running health checks..."
 ./scripts/healthcheck.sh
