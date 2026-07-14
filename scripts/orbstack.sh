@@ -23,8 +23,8 @@ case "${1:-help}" in
     orbctl info "$MACHINE" | grep -oE '\b([0-9]{1,3}\.){3}[0-9]{1,3}\b' | head -1
     ;;
   delete)
-    orbctl delete --force "$MACHINE" 2>/dev/null || true
-    echo "Deleted VM $MACHINE"
+    echo "Deleting VM $MACHINE..."
+    orbctl delete --force "$MACHINE"
     ;;
   help|*)
     echo "Usage: $0 <command>"

@@ -3,13 +3,12 @@ VM_USER      ?= epibridge
 VM_DIR       ?= /opt/epibridge
 SSH          ?= ssh $(VM_USER)@$(VM_HOST)
 PYTHON       ?= python3
-DOCKER_COMPOSE ?= docker compose
 
 # Load execution context (silent if absent — defaults to native Docker).
 -include .epibridge-context
 EPIBRIDGE_TARGET ?= native
 
-.PHONY: certs dev dev-ai dev-destroy clean-db install uninstall up down upgrade backup restore dev-up dev-down dev-shell dev-logs dev-build test dev-test format lint fix playwright ci ci-clean demo deploy deploy-dev seed-institution seed-personas seed-developer seed-demo reset
+.PHONY: install uninstall certs ai demo up down logs shell build upgrade backup restore clean-db reset deploy deploy-dev dev test format lint fix playwright ci ci-clean
 
 # --- Installation ----------------------------------------------------------------
 # install is the canonical first-run experience.  Accepts an optional TARGET
@@ -33,35 +32,22 @@ certs:
 	./scripts/setup-certs.sh
 	@if [ -f .epibridge-context ]; then \
 		echo "Restarting reverse proxy..."; \
-		if [ "$(EPIBRIDGE_TARGET)" = "orbstack" ]; then \
-			./scripts/orbstack.sh ssh 'cd $(VM_DIR) && docker compose restart reverse-proxy' || { \
-				echo ""; \
-				echo "Certificates were generated successfully."; \
-				echo ""; \
-				echo "The new certificates are not yet active because the reverse"; \
-				echo "proxy could not be restarted automatically."; \
-				echo ""; \
-				echo "Please restart the reverse proxy manually, then revisit:"; \
-				echo ""; \
-				echo "    https://localhost"; \
-				echo ""; \
-				false; }; \
+		if ./scripts/platform.sh restart reverse-proxy; then \
+			echo ""; \
+			echo "✓ Certificate configuration applied."; \
 		else \
-			docker compose restart reverse-proxy || { \
-				echo ""; \
-				echo "Certificates were generated successfully."; \
-				echo ""; \
-				echo "The new certificates are not yet active because the reverse"; \
-				echo "proxy could not be restarted automatically."; \
-				echo ""; \
-				echo "Please restart the reverse proxy manually, then revisit:"; \
-				echo ""; \
-				echo "    https://localhost"; \
-				echo ""; \
-				false; }; \
+			echo ""; \
+			echo "Certificates were generated successfully."; \
+			echo ""; \
+			echo "The new certificates are not yet active because the reverse"; \
+			echo "proxy could not be restarted automatically."; \
+			echo ""; \
+			echo "Please restart the reverse proxy manually, then revisit:"; \
+			echo ""; \
+			echo "    https://localhost"; \
+			echo ""; \
+			false; \
 		fi; \
-		echo ""; \
-		echo "✓ Certificate configuration applied."; \
 	fi
 
 install: certs
@@ -74,12 +60,13 @@ install: certs
 ifeq ($(TARGET),orbstack)
 	./scripts/orbstack.sh create || true
 	./scripts/orbstack.sh mount
-	./scripts/orbstack.sh ssh 'cd $(VM_DIR) && ./scripts/install.sh --dev && ./scripts/seed-institution.sh'
 	@echo "EPIBRIDGE_TARGET=$(TARGET)" > .epibridge-context
 	@echo "EPIBRIDGE_VM=epibridge" >> .epibridge-context
+	./scripts/platform.sh run ./scripts/install.sh --dev
+	./scripts/platform.sh run ./scripts/seed-institution.sh
 else
-	./scripts/bootstrap.sh
-	./scripts/seed-institution.sh
+	./scripts/platform.sh run ./scripts/bootstrap.sh
+	./scripts/platform.sh run ./scripts/seed-institution.sh
 	@echo "EPIBRIDGE_TARGET=$(TARGET)" > .epibridge-context
 endif
 	@echo ""
@@ -123,12 +110,8 @@ endif
 
 uninstall:
 	@echo "=== EpiBridge Uninstall ==="
-ifeq ($(EPIBRIDGE_TARGET),orbstack)
-	-./scripts/orbstack.sh ssh 'cd $(VM_DIR) && docker compose down' 2>/dev/null || true
-	-./scripts/orbstack.sh delete || true
-else
-	-docker compose down -v 2>/dev/null || true
-endif
+	-./scripts/platform.sh compose down 2>/dev/null || true
+	-./scripts/platform.sh destroy || true
 	@rm -f .epibridge-context
 	@rm -rf certs
 	@if [ -f .env ]; then \
@@ -148,46 +131,22 @@ ai:
 	./scripts/setup-ai.sh
 	@if [ -f .epibridge-context ]; then \
 		echo "Starting AI services..."; \
-		if [ "$(EPIBRIDGE_TARGET)" = "orbstack" ]; then \
-			./scripts/orbstack.sh ssh 'cd $(VM_DIR) && $(DOCKER_COMPOSE) --profile ai up -d' || { \
-				echo ""; \
-				echo "Failed to start AI services."; \
-				echo "Check Docker status and try again."; \
-				false; }; \
-		else \
-			docker compose --profile ai up -d || { \
-				echo ""; \
-				echo "Failed to start AI services."; \
-				echo "Check Docker status and try again."; \
-				false; }; \
-		fi; \
+		./scripts/platform.sh compose --profile ai up -d || { \
+			echo ""; \
+			echo "Failed to start AI services."; \
+			echo "Check Docker status and try again."; \
+			false; }; \
 		echo "Pulling AI model ($(OLLAMA_MODEL))..."; \
-		if [ "$(EPIBRIDGE_TARGET)" = "orbstack" ]; then \
-			./scripts/orbstack.sh ssh 'cd $(VM_DIR) && $(DOCKER_COMPOSE) exec -T ollama ollama pull $(OLLAMA_MODEL)' || { \
-				echo ""; \
-				echo "Failed to pull AI model."; \
-				echo "Check network connectivity and Ollama status."; \
-				false; }; \
-		else \
-			docker compose exec -T ollama ollama pull $(OLLAMA_MODEL) || { \
-				echo ""; \
-				echo "Failed to pull AI model."; \
-				echo "Check network connectivity and Ollama status."; \
-				false; }; \
-		fi; \
+		./scripts/platform.sh exec ollama ollama pull $(OLLAMA_MODEL) || { \
+			echo ""; \
+			echo "Failed to pull AI model."; \
+			echo "Check network connectivity and Ollama status."; \
+			false; }; \
 		echo "Restarting backend..."; \
-		if [ "$(EPIBRIDGE_TARGET)" = "orbstack" ]; then \
-			./scripts/orbstack.sh ssh 'cd $(VM_DIR) && docker compose restart backend' || true; \
-		else \
-			docker compose restart backend || true; \
-		fi; \
+		./scripts/platform.sh restart backend || true; \
 		echo "Verifying AI readiness..."; \
 		for i in 1 2 3 4 5 6 7 8 9 10 11 12; do \
-			if [ "$(EPIBRIDGE_TARGET)" = "orbstack" ]; then \
-				./scripts/orbstack.sh ssh 'cd $(VM_DIR) && docker compose exec -T backend python -m app.cli check-ai-status' 2>/dev/null; \
-			else \
-				docker compose exec -T backend python -m app.cli check-ai-status 2>/dev/null; \
-			fi; \
+			./scripts/platform.sh exec backend python -m app.cli check-ai-status 2>/dev/null; \
 			if [ $$? -eq 0 ]; then \
 				echo ""; \
 				echo "=== AI assistance is operational ==="; \
@@ -203,7 +162,7 @@ ai:
 		echo ""; \
 		echo "=== AI verification timed out ==="; \
 		echo "Run the CLI command to diagnose:"; \
-		echo "  docker compose exec backend python -m app.cli check-ai-status"; \
+		echo "  ./scripts/platform.sh exec backend python -m app.cli check-ai-status"; \
 		false; \
 	fi
 
@@ -212,92 +171,74 @@ ai:
 # Dispatch depends on the execution context (.epibridge-context).
 
 demo:
-ifeq ($(EPIBRIDGE_TARGET),orbstack)
-	./scripts/orbstack.sh ssh 'cd $(VM_DIR) && ./scripts/seed-personas.sh && ./scripts/seed-demo.sh'
-else
-	./scripts/seed-personas.sh
-	./scripts/seed-demo.sh
-endif
+	./scripts/platform.sh run ./scripts/seed-personas.sh
+	./scripts/platform.sh run ./scripts/seed-demo.sh
 
-reset:
-	$(MAKE) clean-db
-	./scripts/orbstack.sh ssh 'cd $(VM_DIR) && ./scripts/bootstrap.sh && ./scripts/seed-institution.sh && ./scripts/seed-personas.sh && ./scripts/seed-developer.sh'
-	@echo "=== Development environment reset to known-good state ==="
+# --- Platform lifecycle ---------------------------------------------------------
+
+up:
+	./scripts/platform.sh compose up -d
+
+down:
+	./scripts/platform.sh compose down
+
+logs:
+	./scripts/platform.sh logs -f
+
+shell:
+	./scripts/platform.sh shell
+
+SVC ?=
+build:
+	./scripts/platform.sh compose build $(SVC)
+	./scripts/platform.sh compose up -d $(SVC)
 
 # --- CI (native Linux) ---------------------------------------------------------
-# CI bootstraps the platform natively (no OrbStack) and seeds all accounts needed
-# by the test suite.  Composes the same internal building blocks as install.
 
 ci:
-	./scripts/bootstrap.sh
-	./scripts/seed-institution.sh
-	./scripts/seed-personas.sh
-	./scripts/seed-developer.sh
+	./scripts/platform.sh run ./scripts/bootstrap.sh
+	./scripts/platform.sh run ./scripts/seed-institution.sh
+	./scripts/platform.sh run ./scripts/seed-personas.sh
+	./scripts/platform.sh run ./scripts/seed-developer.sh
+	@echo "EPIBRIDGE_TARGET=native" > .epibridge-context
 
 ci-clean:
-	docker compose down -v
+	./scripts/platform.sh compose down -v
 	rm -f .env
 
 # --- Development ----------------------------------------------------------------
-# dev rebuilds and restarts application services for the edit–build–run cycle.
-# It deliberately skips bootstrap (EE image builds, health wait) and does NOT
-# reseed users or terms — those are one-time concerns managed by install/reset.
-# Dispatch depends on the execution context (.epibridge-context).
 
 dev:
-ifeq ($(EPIBRIDGE_TARGET),orbstack)
-	./scripts/orbstack.sh ssh 'cd $(VM_DIR) && docker compose build backend frontend worker && docker compose up -d'
-else
-	docker compose build backend frontend worker
-	docker compose up -d
-endif
+	./scripts/platform.sh compose build backend frontend worker
+	./scripts/platform.sh compose up -d
 
-dev-ai:
-ifeq ($(EPIBRIDGE_TARGET),orbstack)
-	./scripts/orbstack.sh ssh 'cd $(VM_DIR) && $(DOCKER_COMPOSE) --profile ai up -d'
-else
-	docker compose --profile ai up -d
-endif
+dev-test:
+	./scripts/platform.sh exec backend python3 -m pytest tests/unit tests/integration tests/smoke -v --no-header -q --tb=short
 
-dev-up:
-	./scripts/orbstack.sh ssh 'cd $(VM_DIR) && docker compose up -d'
-
-dev-down:
-	./scripts/orbstack.sh ssh 'cd $(VM_DIR) && docker compose down'
-
-dev-shell:
-	./scripts/orbstack.sh ssh
-
-dev-logs:
-	./scripts/orbstack.sh ssh 'cd $(VM_DIR) && docker compose logs -f'
-
-SVC ?=
-
-dev-build:
-	./scripts/orbstack.sh ssh 'cd $(VM_DIR) && docker compose build $(SVC) && docker compose up -d $(SVC)'
-
-# --- Production deployment (SSH to Ubuntu VM) --------------------------------
+# --- Production deployment (SSH to Ubuntu VM) ----------------------------------
 
 deploy:
 	$(SSH) 'cd $(VM_DIR) && ./scripts/install.sh'
+	@echo "EPIBRIDGE_TARGET=remote" > .epibridge-context
+	@echo "EPIBRIDGE_HOST=$(VM_HOST)" >> .epibridge-context
+	@echo "EPIBRIDGE_USER=$(VM_USER)" >> .epibridge-context
+	@echo "EPIBRIDGE_DIR=$(VM_DIR)" >> .epibridge-context
 
 deploy-dev:
 	$(SSH) 'cd $(VM_DIR) && ./scripts/install.sh --dev'
-
-up:
-	$(SSH) 'cd $(VM_DIR) && docker compose up -d'
-
-down:
-	$(SSH) 'cd $(VM_DIR) && docker compose down'
+	@echo "EPIBRIDGE_TARGET=remote" > .epibridge-context
+	@echo "EPIBRIDGE_HOST=$(VM_HOST)" >> .epibridge-context
+	@echo "EPIBRIDGE_USER=$(VM_USER)" >> .epibridge-context
+	@echo "EPIBRIDGE_DIR=$(VM_DIR)" >> .epibridge-context
 
 upgrade:
-	$(SSH) 'cd $(VM_DIR) && ./scripts/upgrade.sh'
+	./scripts/platform.sh run ./scripts/upgrade.sh
 
 backup:
-	$(SSH) 'cd $(VM_DIR) && ./scripts/backup.sh'
+	./scripts/platform.sh run ./scripts/backup.sh
 
 restore:
-	$(SSH) 'cd $(VM_DIR) && ./scripts/restore.sh $(FILE)'
+	./scripts/platform.sh run ./scripts/restore.sh $(FILE)
 
 # --- Code quality ------------------------------------------------------------
 
@@ -310,9 +251,6 @@ test:
 	(cd backend && $(PYTHON) -m pytest tests/smoke -v --no-header -q) || failed=1; \
 	echo ""; \
 	if [ $$failed -eq 0 ]; then echo "=== All tests passed ==="; else echo "=== Some tests failed ==="; exit 1; fi
-
-dev-test:
-	./scripts/orbstack.sh ssh 'cd $(VM_DIR) && docker compose exec -T backend python3 -m pytest tests/unit tests/integration tests/smoke -v --no-header -q --tb=short'
 
 format:
 	cd backend && $(PYTHON) -m ruff format
@@ -333,13 +271,22 @@ playwright:
 # --- Maintenance -------------------------------------------------------------
 
 clean-db:
-	./scripts/orbstack.sh ssh 'cd $(VM_DIR) && docker compose start postgres 2>/dev/null; docker compose exec -T postgres psql -U epibridge -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;" 2>/dev/null || (docker compose up -d postgres && sleep 3 && docker compose exec -T postgres psql -U epibridge -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"); docker compose restart backend'
+	./scripts/platform.sh compose exec -T postgres psql -U epibridge -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;" 2>/dev/null || \
+		(./scripts/platform.sh compose up -d postgres && sleep 3 && \
+		 ./scripts/platform.sh compose exec -T postgres psql -U epibridge -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;")
+	./scripts/platform.sh restart backend
 	@echo "=== Database reset (all tables recreated on startup) ==="
 
+reset:
+	$(MAKE) clean-db
+	./scripts/platform.sh run ./scripts/bootstrap.sh
+	./scripts/platform.sh run ./scripts/seed-institution.sh
+	./scripts/platform.sh run ./scripts/seed-personas.sh
+	./scripts/platform.sh run ./scripts/seed-developer.sh
+	@echo "=== Development environment reset to known-good state ==="
+
+# --- Internal targets ---------------------------------------------------------
+
 dev-destroy:
-	@echo "=== EpiBridge Clean ==="
-	-./scripts/orbstack.sh ssh 'cd $(VM_DIR) && docker compose down -v' 2>/dev/null || true
-	-./scripts/orbstack.sh delete || true
-	@echo ""
-	@echo "Development environment reset."
-	@echo "Recreate with: make dev"
+	./scripts/platform.sh compose down
+	@echo "=== Development containers stopped ==="
