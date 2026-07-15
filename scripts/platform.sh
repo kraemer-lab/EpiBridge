@@ -20,8 +20,10 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-# Load execution context
-if [ -f "$REPO_ROOT/.epibridge-context" ]; then
+# Load execution context.  An explicit EPIBRIDGE_TARGET environment
+# variable takes precedence — this supports make uninstall TARGET=...
+# when the execution context is missing or stale.
+if [ -z "${EPIBRIDGE_TARGET:-}" ] && [ -f "$REPO_ROOT/.epibridge-context" ]; then
     . "$REPO_ROOT/.epibridge-context"
 fi
 EPIBRIDGE_TARGET="${EPIBRIDGE_TARGET:-native}"
@@ -63,8 +65,12 @@ _run() {
 
 # _compose <args...>
 #   Run docker compose on the platform host.
+#   Materialises the runtime environment from execution context
+#   before every invocation so that variables like PUBLIC_URL_HOST
+#   are available regardless of how services were started.
 _compose() {
-    _run "docker compose $(_q "$@")"
+    "$SCRIPT_DIR/prepare-env.sh" 2>/dev/null || true
+    _run "docker compose --env-file ./.env --env-file ./.epibridge-compose.env $(_q "$@")"
 }
 
 # — subcommands -------------------------------------------------------------------

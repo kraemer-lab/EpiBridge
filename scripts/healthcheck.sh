@@ -36,7 +36,10 @@ for SERVICE in reverse-proxy frontend backend postgres redis worker; do
   fi
 done
 
-# Derive default URL from PUBLIC_URL in .env, falling back to localhost
+# Resolve the reachable URL: explicit env var > execution context > .env > default
+if [ -z "${PUBLIC_URL:-}" ] && [ -f .epibridge-context ]; then
+  PUBLIC_URL="$(sed -n 's/^EPIBRIDGE_REACHABLE_URL=//p' .epibridge-context 2>/dev/null || true)"
+fi
 if [ -z "${PUBLIC_URL:-}" ] && [ -f .env ]; then
   PUBLIC_URL="$(sed -n 's/^PUBLIC_URL=//p' .env 2>/dev/null || true)"
 fi

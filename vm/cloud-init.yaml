@@ -1,7 +1,11 @@
 #cloud-config
 ---
+# Refresh Ubuntu package metadata for the packages: section.
+# We intentionally do not perform a full package upgrade during
+# first boot. This VM is an EpiBridge appliance rather than a
+# general-purpose server; unattended-upgrades provides ongoing
+# security updates after provisioning.
 package_update: true
-package_upgrade: true
 
 packages:
   - git

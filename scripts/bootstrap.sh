@@ -26,6 +26,11 @@ if [ ! -f .env ]; then
     exit 1
 fi
 
+# Materialise runtime environment from execution context.
+# Ensures PUBLIC_URL_HOST is available for docker compose --env-file.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+"$SCRIPT_DIR/prepare-env.sh"
+
 ###############################################################################
 # 1. Discover deployment environment
 ###############################################################################
@@ -67,20 +72,27 @@ export HOST_RESOURCE_MANIFEST_DIR="${HOST_RESOURCE_MANIFEST_DIR:-${REPO_ROOT}/re
 #     never stored in .env. The direction of dependency is:
 #       PUBLIC_URL (config) → PUBLIC_URL_HOST (derived) → Caddy
 ###############################################################################
-PUBLIC_URL="$(sed -n 's/^PUBLIC_URL=//p' .env 2>/dev/null || true)"
+if [ -f .epibridge-context ]; then
+    ctx_url="$(sed -n 's/^EPIBRIDGE_REACHABLE_URL=//p' .epibridge-context 2>/dev/null || true)"
+    if [ -n "$ctx_url" ]; then
+        PUBLIC_URL="$ctx_url"
+    fi
+fi
+if [ -z "${PUBLIC_URL:-}" ]; then
+    PUBLIC_URL="$(sed -n 's/^PUBLIC_URL=//p' .env 2>/dev/null || true)"
+fi
 PUBLIC_URL="${PUBLIC_URL:-https://localhost}"
 # Strip scheme and port to extract bare hostname
 PUBLIC_URL_HOST="${PUBLIC_URL#https://}"
 PUBLIC_URL_HOST="${PUBLIC_URL_HOST#http://}"
 PUBLIC_URL_HOST="${PUBLIC_URL_HOST%%:*}"
-export PUBLIC_URL_HOST
 echo "Public URL: $PUBLIC_URL (hostname: $PUBLIC_URL_HOST)"
 
 ###############################################################################
 # 5. Build Docker images
 ###############################################################################
 echo "Building application images..."
-docker compose build
+docker compose --env-file ./.env --env-file ./.epibridge-compose.env build
 
 echo "Building analysis container images..."
 for dir in "$REPO_ROOT"/execution-environments/*/; do
@@ -114,7 +126,7 @@ fi
 # 8. Start services
 ###############################################################################
 echo "Starting services..."
-docker compose up -d
+docker compose --env-file ./.env --env-file ./.epibridge-compose.env up -d
 
 ###############################################################################
 # 9. Wait for PostgreSQL

@@ -206,10 +206,58 @@ call inside `init-config.sh`.
 
 - Established during installation by `init-config.sh`.
 - The default is `https://localhost`, which is correct for OrbStack and native Docker.
-- Execution backends may establish different defaults for fresh installations (e.g., Multipass sets the VM IP).
-- Existing administrator configuration must never be overwritten — overrides only apply during initial `.env` creation.
-- Used by: Caddy (TLS site matching), certificate generation, email notification links, health checks.
+- Execution backends **never** silently mutate `PUBLIC_URL` in `.env`. Administrator configuration is authoritative.
+- Used by the backend for user-facing links (email notifications).
 - Derived at runtime by `bootstrap.sh` into `PUBLIC_URL_HOST` for Caddy configuration.
+
+## URL resolution
+
+Operator-facing components (certificate generation, bootstrap, health checks) resolve addresses through a hierarchy rather than reading `.env` directly:
+
+```
+$PUBLIC_URL env var              explicit override (any caller)
+        ↓
+EPIBRIDGE_REACHABLE_URL         execution context (.epibridge-context)
+        ↓
+PUBLIC_URL (.env)               application configuration
+        ↓
+https://localhost               platform default
+```
+
+`EPIBRIDGE_REACHABLE_URL` is the address through which the current execution environment is externally reachable. It is:
+
+- Backend-owned (set by the Makefile during installation).
+- Stored in `.epibridge-context` — generated, disposable, never application configuration.
+- Used by: `setup-certs.sh`, `bootstrap.sh`, `healthcheck.sh` for operator-facing operations.
+- Distinguished from `PUBLIC_URL`: `PUBLIC_URL` is administrator-owned application configuration; `EPIBRIDGE_REACHABLE_URL` is backend-owned execution metadata.
+
+For backends that produce a context (OrbStack, Multipass), operator components use the reachable URL from context. For backends that do not (native Docker, remote SSH), resolution falls through to `.env`'s `PUBLIC_URL`.
+
+## Runtime materialisation
+
+Docker Compose consumes runtime variables through a materialisation layer rather than reading execution metadata directly.
+
+```
+.epibridge-context (execution metadata)          .env (application configuration)
+        ↓                                                  │
+prepare-env.sh (materialisation)                           │
+        ↓                                                  │
+.epibridge-compose.env (runtime overrides)                 │
+        ↓                                                  │
+        └──────────────────┬───────────────────────────────┘
+                           ▼
+          docker compose --env-file ./.env \
+                         --env-file ./.epibridge-compose.env
+```
+
+`prepare-env.sh` reads `.epibridge-context` and generates `.epibridge-compose.env` with variables such as `PUBLIC_URL_HOST` for Docker Compose substitution. This file is:
+
+- Generated automatically by `platform.sh compose` and `bootstrap.sh`.
+- Never edited manually.
+- Listed in `.gitignore`.
+- Regenerated on every compose invocation.
+
+The `PUBLIC_URL_HOST` variable is derived from `EPIBRIDGE_REACHABLE_URL` at runtime and passed to the Caddy container so that TLS certificates match the address through which the platform is reachable.
 
 ### Security constraints (must preserve in implementation)
 
@@ -748,9 +796,15 @@ make test         # run tests
 - `make fix` — auto-fix all fixable issues (run this most often)
 
 **Testing** (from repo root):
-- `make dev-test` — run full suite inside the container via SSH (recommended developer workflow; requires OrbStack VM + Docker stack)
-- `make test` — run unit, integration, and smoke test suites natively (requires PostgreSQL + Redis on localhost; the `epibridge_test` database must exist)
-- `make playwright` — run institutional acceptance test (canonical workflow, requires full stack running)
+- `make test` — run the complete platform test suite.  Unit tests execute
+  natively for speed.  Integration and smoke tests execute through the
+  current execution backend so they always target the active platform.
+  Execution-environment transparent (Native, OrbStack, Multipass, Remote).
+- `make dev-test` — run full suite inside the backend container (useful
+  for debugging without native Python setup).
+- `make playwright` — run acceptance tests through Playwright.  The target
+  URL is derived from the standard resolution hierarchy:
+  `PLAYWRIGHT_BASE_URL > EPIBRIDGE_REACHABLE_URL > PUBLIC_URL > https://localhost`
 - `make playwright CMD=e2e/acceptance/researcher.spec.ts` — run researcher persona acceptance test
 - `make playwright CMD=e2e/acceptance/administrator.spec.ts` — run administrator persona acceptance test
 - `make playwright CMD=e2e/acceptance/moderator.spec.ts` — run moderator persona acceptance test
@@ -759,10 +813,8 @@ make test         # run tests
 - `make playwright CMD=e2e/execution-environment-acceptance/python-3.13.spec.ts` — run python-3.13 EE acceptance test
 - `make playwright CMD=e2e/execution-environment-acceptance/conda.spec.ts` — run conda EE acceptance test
 - `python -m pytest backend/tests/unit -v` — unit tests only (no database required)
-- `python -m pytest backend/tests/integration -v` — integration tests (requires PostgreSQL + Redis on localhost + `epibridge_test` database)
+- `python -m pytest backend/tests/integration -v` — integration tests (requires full stack running for non-native targets)
 - `python -m pytest backend/tests/smoke -v` — smoke tests (requires full stack running)
-
-Integration tests use a dedicated `epibridge_test` PostgreSQL database for isolation.
 
 ### Authentication configuration
 
