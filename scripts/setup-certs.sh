@@ -15,7 +15,7 @@ set -euo pipefail
 #
 # Output: certs/<hostname>.pem, certs/<hostname>-key.pem
 
-PUBLIC_URL="$(sed -n 's/^PUBLIC_URL=//p' .env 2>/dev/null || true)"
+PUBLIC_URL="${PUBLIC_URL:-$(sed -n 's/^PUBLIC_URL=//p' .env 2>/dev/null || true)}"
 PUBLIC_URL="${PUBLIC_URL:-https://localhost}"
 
 HOSTNAME="${PUBLIC_URL#https://}"

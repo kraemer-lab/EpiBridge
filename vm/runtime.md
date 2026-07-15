@@ -311,9 +311,24 @@ Provider-specific setup examples:
 ### Multipass
 
 ```bash
-multipass launch --cloud-init vm/cloud-init.yaml 24.04 --name epibridge-dev
-multipass mount . epibridge-dev:/opt/epibridge
-make deploy SSH="ssh ubuntu@epibridge-dev.local"
+make install TARGET=multipass
+```
+
+Creates the Multipass VM (if needed), mounts the repo at `/opt/epibridge`,
+builds Docker images, starts all services, seeds the admin account and
+platform terms, and verifies health.
+
+Individual lifecycle commands work identically to the OrbStack target:
+
+```bash
+make up       # start services
+make down     # stop services
+make logs     # tail container logs
+make shell    # interactive session inside the VM (as epibridge user)
+make certs    # regenerate TLS certificates
+make ai       # enable AI assistance
+make demo     # seed evaluation personas
+make uninstall  # stop services and delete the VM
 ```
 
 ### Manual (VMware, KVM, Proxmox, etc.)
@@ -359,3 +374,4 @@ All produced from this runtime specification:
 | `scripts/restore.sh`    | Restore from backup             |
 | `scripts/healthcheck.sh`| Service health check            |
 | `scripts/orbstack.sh`   | OrbStack dev helpers (optional) |
+| `scripts/multipass.sh`  | Multipass dev helpers (optional) |

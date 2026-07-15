@@ -52,6 +52,9 @@ fi
 
 cd "$EPIBRIDGE_HOME"
 
+# Initialise configuration (idempotent — safe if .env already exists)
+./scripts/init-config.sh
+
 # Delegate all application-level bootstrapping
 ./scripts/bootstrap.sh
 

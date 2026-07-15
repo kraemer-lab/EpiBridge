@@ -7,7 +7,8 @@ How to install EpiBridge for evaluation or production use.
 | Requirement | Version | Purpose |
 |-------------|---------|---------|
 | Git | any | Clone the repository |
-| OrbStack | latest | Linux VM for EpiBridge services (recommended) |
+| OrbStack | latest | Linux VM for EpiBridge services (recommended on macOS) |
+| Multipass | latest | Alternative VM provider (macOS, Linux, Windows) |
 | Docker | 24+ | Alternative: native Docker without VM |
 | Make | any | Convenience wrapper for installation commands |
 | mkcert | latest | Trusted local HTTPS certificates |
@@ -22,14 +23,26 @@ No other host dependencies are required. Python, Node.js, PostgreSQL, and Redis 
 
 ## Installation targets
 
-EpiBridge supports two installation modes:
+EpiBridge supports three installation modes:
 
-### OrbStack VM (recommended)
+### OrbStack VM (recommended on macOS)
 
 The default installation mode. Creates a dedicated Linux virtual machine, mounts the repository, and runs all services inside it. The VM provides a clean, isolated environment that mirrors a production deployment.
 
 ```bash
 make install
+```
+
+### Multipass VM (alternative)
+
+Uses Canonical Multipass to create a Linux VM. Available on macOS, Linux, and
+Windows. Use this target when OrbStack is not available or when you prefer
+Multipass.
+
+Prerequisites: [Multipass](https://multipass.run) must be installed.
+
+```bash
+make install TARGET=multipass
 ```
 
 ### Native Docker
@@ -44,7 +57,7 @@ make install TARGET=native
 
 `make install` performs these steps:
 
-1. **Create VM** (OrbStack mode only) — provisions the Linux VM if it does not already exist.
+1. **Create VM** (OrbStack or Multipass mode only) — provisions the Linux VM if it does not already exist.
 2. **Generate `.env`** — creates the configuration file with secure defaults if one does not exist. Existing `.env` is preserved across re-installation.
 3. **Build images** — builds the Docker images for frontend, backend, worker, and supporting services.
 4. **Start services** — starts all containers: reverse proxy, frontend, backend, PostgreSQL, Redis, worker.
@@ -126,7 +139,7 @@ To remove the local EpiBridge installation:
 make uninstall
 ```
 
-This stops the platform, deletes the OrbStack VM (or Docker resources), and preserves the repository and `.env`. To fully reset:
+This stops the platform, deletes the VM (OrbStack, Multipass) or tears down Docker resources, and preserves the repository and `.env`. To fully reset:
 
 ```bash
 rm .env

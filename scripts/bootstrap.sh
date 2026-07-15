@@ -1,44 +1,33 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# bootstrap.sh — platform boot only
+# bootstrap.sh — platform bootstrap
 #
-# bootstrap.sh brings the platform into an operational state.
+# Assumes application configuration has already been initialised
+# (run init-config.sh first).  Brings the platform into an operational
+# state by building images, starting services, and running migrations.
 # It does NOT seed users, terms, or any other application state.
 #
-# Idempotent platform initialisation. Safe to run multiple times.
+# Idempotent.  Safe to run multiple times.
 #
 # Environment contract:
+#   - .env exists with required secrets (run init-config.sh if not).
 #   - Current directory is the repository root.
 #   - Docker and Docker Compose are available.
 #   - Infrastructure provisioning has completed — storage directories
 #     (/var/lib/epibridge/...) exist with correct ownership.
-#   - Any required environment variables are already configured
-#     (otherwise .env will be generated from .env.example).
 
-###############################################################################
-# 1. Generate .env if not present
-###############################################################################
 if [ ! -f .env ]; then
-  echo "Generating .env from .env.example..."
-  cp .env.example .env
-
-  POSTGRES_PASSWORD=$(openssl rand -base64 32 | tr -d '\n')
-  REDIS_PASSWORD=$(openssl rand -base64 32 | tr -d '\n')
-  SECRET_KEY=$(openssl rand -base64 64 | tr -d '\n')
-  ADMIN_PASSWORD=$(openssl rand -base64 32 | tr -d '\n')
-
-  sed -i.bak "s|POSTGRES_PASSWORD=__GENERATED__|POSTGRES_PASSWORD=$POSTGRES_PASSWORD|" .env && rm -f .env.bak
-  sed -i.bak "s|REDIS_PASSWORD=__GENERATED__|REDIS_PASSWORD=$REDIS_PASSWORD|" .env && rm -f .env.bak
-  sed -i.bak "s|SECRET_KEY=__GENERATED__|SECRET_KEY=$SECRET_KEY|" .env && rm -f .env.bak
-  sed -i.bak "s|ADMIN_PASSWORD=__GENERATED__|ADMIN_PASSWORD=$ADMIN_PASSWORD|" .env && rm -f .env.bak
-
-  chmod 600 .env
-  echo ".env created"
+    echo "ERROR: Configuration has not been initialised." >&2
+    echo "" >&2
+    echo "Run the installation lifecycle or initialise configuration with:" >&2
+    echo "" >&2
+    echo "  ./scripts/init-config.sh" >&2
+    exit 1
 fi
 
 ###############################################################################
-# 2. Discover deployment environment
+# 1. Discover deployment environment
 ###############################################################################
 if command -v getent &>/dev/null; then
   DOCKER_GID="$(getent group docker | cut -d: -f3)"
@@ -94,7 +83,7 @@ echo "Building application images..."
 docker compose build
 
 echo "Building analysis container images..."
-for dir in execution-environments/*/; do
+for dir in "$REPO_ROOT"/execution-environments/*/; do
     tag="epibridge/$(basename "$dir"):latest"
     echo "  Building $tag..."
     docker build -t "$tag" "$dir"

@@ -14,13 +14,14 @@ EPIBRIDGE_TARGET ?= native
 # install is the canonical first-run experience.  Accepts an optional TARGET
 # parameter:
 #
-#   TARGET=orbstack  (default)  — OrbStack VM installation
-#   TARGET=native               — native Docker installation (no VM)
+#   TARGET=multipass (default)   — Multipass VM installation
+#   TARGET=orbstack              — OrbStack VM installation
+#   TARGET=native                — native Docker installation (no VM)
 #
 # Installs the platform, seeds the institution, and writes the execution context.
 # Idempotent — safe to run repeatedly.
 
-TARGET ?= orbstack
+TARGET ?= multipass
 
 # Generate and apply TLS certificates for the hostname derived from PUBLIC_URL.
 # Applies the certificate configuration to the running installation: generates
@@ -50,11 +51,11 @@ certs:
 		fi; \
 	fi
 
-install: certs
+install:
 	$(eval ENV_FRESH := $(shell [ -f .env ] && echo "no" || echo "yes"))
-	@if [ "$(TARGET)" != "orbstack" ] && [ "$(TARGET)" != "native" ]; then \
+	@if [ "$(TARGET)" != "orbstack" ] && [ "$(TARGET)" != "native" ] && [ "$(TARGET)" != "multipass" ]; then \
 		echo "Unsupported installation target: $(TARGET)"; \
-		echo "Supported targets: orbstack, native"; \
+		echo "Supported targets: orbstack, multipass, native"; \
 		exit 1; \
 	fi
 ifeq ($(TARGET),orbstack)
@@ -62,9 +63,29 @@ ifeq ($(TARGET),orbstack)
 	./scripts/orbstack.sh mount
 	@echo "EPIBRIDGE_TARGET=$(TARGET)" > .epibridge-context
 	@echo "EPIBRIDGE_VM=epibridge" >> .epibridge-context
+	./scripts/init-config.sh
+	$(MAKE) certs
+	./scripts/platform.sh run ./scripts/install.sh --dev
+	./scripts/platform.sh run ./scripts/seed-institution.sh
+else ifeq ($(TARGET),multipass)
+	./scripts/multipass.sh create || true
+	./scripts/multipass.sh mount
+	@echo "EPIBRIDGE_TARGET=$(TARGET)" > .epibridge-context
+	@echo "EPIBRIDGE_VM=epibridge" >> .epibridge-context
+	@VM_IP=$$(./scripts/multipass.sh ip 2>/dev/null); \
+	if [ -n "$$VM_IP" ]; then \
+		if [ "$(ENV_FRESH)" = "yes" ]; then \
+			PUBLIC_URL=https://$$VM_IP ./scripts/init-config.sh; \
+			PUBLIC_URL=https://$$VM_IP ./scripts/setup-certs.sh; \
+		else \
+			$(MAKE) certs; \
+		fi; \
+	fi
 	./scripts/platform.sh run ./scripts/install.sh --dev
 	./scripts/platform.sh run ./scripts/seed-institution.sh
 else
+	./scripts/init-config.sh
+	$(MAKE) certs
 	./scripts/platform.sh run ./scripts/bootstrap.sh
 	./scripts/platform.sh run ./scripts/seed-institution.sh
 	@echo "EPIBRIDGE_TARGET=$(TARGET)" > .epibridge-context
@@ -73,7 +94,11 @@ endif
 	@echo "=== EpiBridge installed ==="
 	@echo ""
 	@echo "Frontend:"
+ifeq ($(TARGET),multipass)
+	@echo "  https://$$(./scripts/multipass.sh ip 2>/dev/null)/"
+else
 	@echo "  https://localhost/"
+endif
 	@echo ""
 	@echo "Administrator account:"
 	@echo "  Email:"
@@ -89,6 +114,9 @@ endif
 		echo ""; \
 		echo "    - administrator password"; \
 		echo "    - application secrets"; \
+		if [ "$(TARGET)" = "multipass" ]; then \
+			echo "    - PUBLIC_URL set to the Multipass VM IP"; \
+		fi; \
 		echo "    - optional SMTP configuration"; \
 	else \
 		echo "  Existing .env configuration reused."; \
@@ -196,6 +224,7 @@ build:
 # --- CI (native Linux) ---------------------------------------------------------
 
 ci:
+	./scripts/init-config.sh
 	./scripts/platform.sh run ./scripts/bootstrap.sh
 	./scripts/platform.sh run ./scripts/seed-institution.sh
 	./scripts/platform.sh run ./scripts/seed-personas.sh

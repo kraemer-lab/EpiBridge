@@ -43,6 +43,11 @@ _run() {
             VM_DIR="${EPIBRIDGE_VM_DIR:-/opt/epibridge}"
             ssh -q root@epibridge@orb "cd $VM_DIR && $*"
             ;;
+        multipass)
+            VM_DIR="${EPIBRIDGE_VM_DIR:-/opt/epibridge}"
+            EPIBRIDGE_VM="${EPIBRIDGE_VM:-epibridge}"
+            multipass exec "$EPIBRIDGE_VM" -- sudo -u epibridge bash -c "cd $VM_DIR && $*"
+            ;;
         remote)
             local host="${EPIBRIDGE_HOST:?EPIBRIDGE_HOST not set}"
             local user="${EPIBRIDGE_USER:-epibridge}"
@@ -89,6 +94,10 @@ case "${1:-help}" in
             orbstack)
                 exec ssh -q root@epibridge@orb
                 ;;
+            multipass)
+                EPIBRIDGE_VM="${EPIBRIDGE_VM:-epibridge}"
+                exec multipass exec "$EPIBRIDGE_VM" -- sudo -u epibridge -s
+                ;;
             remote)
                 local host="${EPIBRIDGE_HOST:?EPIBRIDGE_HOST not set}"
                 local user="${EPIBRIDGE_USER:-epibridge}"
@@ -106,6 +115,10 @@ case "${1:-help}" in
                 echo "Deleting OrbStack VM (epibridge)..."
                 "$SCRIPT_DIR/orbstack.sh" delete
                 ;;
+            multipass)
+                echo "Deleting Multipass VM (epibridge)..."
+                "$SCRIPT_DIR/multipass.sh" delete
+                ;;
             *)
                 echo "Don't know how to destroy $(EPIBRIDGE_TARGET) environment." >&2
                 exit 1
@@ -120,7 +133,7 @@ case "${1:-help}" in
 
     run)
         shift
-        _run "./$*"
+        _run "bash $*"
         ;;
 
     cp)
@@ -134,6 +147,12 @@ case "${1:-help}" in
                 # so files are already shared. This subcommand is a no-op
                 # for OrbStack; use scp if cross-VM copies are needed.
                 echo "Files are shared via the mounted repo. Use scp for explicit copies." >&2
+                ;;
+            multipass)
+                # The repo is mounted at /opt/epibridge inside the VM,
+                # so files are already shared. This subcommand is a no-op
+                # for Multipass; use multipass transfer for explicit copies.
+                echo "Files are shared via the mounted repo. Use multipass transfer for explicit copies." >&2
                 ;;
             remote)
                 local host="${EPIBRIDGE_HOST:?EPIBRIDGE_HOST not set}"
