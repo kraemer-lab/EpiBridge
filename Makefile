@@ -14,13 +14,14 @@ EPIBRIDGE_TARGET ?= native
 # install is the canonical first-run experience.  Accepts an optional TARGET
 # parameter:
 #
-#   TARGET=orbstack  (default)  — OrbStack VM installation
-#   TARGET=native               — native Docker installation (no VM)
+#   TARGET=multipass (default)   — Multipass VM installation
+#   TARGET=orbstack              — OrbStack VM installation
+#   TARGET=native                — native Docker installation (no VM)
 #
 # Installs the platform, seeds the institution, and writes the execution context.
 # Idempotent — safe to run repeatedly.
 
-TARGET ?= orbstack
+TARGET ?= multipass
 
 # Generate and apply TLS certificates for the hostname derived from PUBLIC_URL.
 # Applies the certificate configuration to the running installation: generates
@@ -50,30 +51,56 @@ certs:
 		fi; \
 	fi
 
-install: certs
+install:
 	$(eval ENV_FRESH := $(shell [ -f .env ] && echo "no" || echo "yes"))
-	@if [ "$(TARGET)" != "orbstack" ] && [ "$(TARGET)" != "native" ]; then \
-		echo "Unsupported installation target: $(TARGET)"; \
-		echo "Supported targets: orbstack, native"; \
-		exit 1; \
-	fi
 ifeq ($(TARGET),orbstack)
-	./scripts/orbstack.sh create || true
+	./scripts/orbstack.sh create
 	./scripts/orbstack.sh mount
 	@echo "EPIBRIDGE_TARGET=$(TARGET)" > .epibridge-context
 	@echo "EPIBRIDGE_VM=epibridge" >> .epibridge-context
+	@echo "EPIBRIDGE_REACHABLE_URL=https://localhost" >> .epibridge-context
+	./scripts/init-config.sh
+	./scripts/setup-certs.sh
 	./scripts/platform.sh run ./scripts/install.sh --dev
 	./scripts/platform.sh run ./scripts/seed-institution.sh
-else
-	./scripts/platform.sh run ./scripts/bootstrap.sh
-	./scripts/platform.sh run ./scripts/seed-institution.sh
+else ifeq ($(TARGET),multipass)
+	./scripts/multipass.sh create
+	./scripts/multipass.sh mount
 	@echo "EPIBRIDGE_TARGET=$(TARGET)" > .epibridge-context
+	@echo "EPIBRIDGE_VM=epibridge" >> .epibridge-context
+	@VM_IP=$$(./scripts/multipass.sh ip 2>/dev/null); \
+	if [ -n "$$VM_IP" ]; then \
+		echo "EPIBRIDGE_REACHABLE_URL=https://$$VM_IP" >> .epibridge-context; \
+		./scripts/init-config.sh; \
+		./scripts/setup-certs.sh; \
+	fi
+	./scripts/platform.sh run ./scripts/install.sh --dev
+	./scripts/platform.sh run ./scripts/seed-institution.sh
+else ifeq ($(TARGET),native)
+	@echo ""
+	@echo "ERROR: Native installation is not yet supported."
+	@echo ""
+	@echo "The required host-level preparation has not been"
+	@echo "implemented.  Please use a VM-backed target:"
+	@echo ""
+	@echo "    make install TARGET=multipass"
+	@echo "    make install TARGET=orbstack"
+	@echo ""
+	@exit 1
+else
+	@echo "Unsupported installation target: $(TARGET)"
+	@echo "Supported targets: orbstack, multipass"
+	@exit 1
 endif
 	@echo ""
 	@echo "=== EpiBridge installed ==="
 	@echo ""
 	@echo "Frontend:"
+ifeq ($(TARGET),multipass)
+	@echo "  $$(sed -n 's/^EPIBRIDGE_REACHABLE_URL=//p' .epibridge-context 2>/dev/null)/"
+else
 	@echo "  https://localhost/"
+endif
 	@echo ""
 	@echo "Administrator account:"
 	@echo "  Email:"
@@ -89,6 +116,9 @@ endif
 		echo ""; \
 		echo "    - administrator password"; \
 		echo "    - application secrets"; \
+		if [ "$(TARGET)" = "multipass" ]; then \
+			echo "    - EPIBRIDGE_REACHABLE_URL set to the VM IP"; \
+		fi; \
 		echo "    - optional SMTP configuration"; \
 	else \
 		echo "  Existing .env configuration reused."; \
@@ -108,13 +138,34 @@ endif
 # Dispatch depends on the execution context (.epibridge-context).
 # The Git working tree and .env are preserved.
 
+# Detect explicit TARGET= override for uninstall recovery.
+# When TARGET is set on the command line (not inherited from the
+# default), it is passed as an environment variable override so
+# that platform.sh can dispatch to the correct backend even when
+# .epibridge-context is missing.
+ifneq ($(origin TARGET),command line)
+_EPIBRIDGE_TARGET_OVERRIDE :=
+else
+_EPIBRIDGE_TARGET_OVERRIDE := EPIBRIDGE_TARGET=$(TARGET)
+endif
+
 uninstall:
-	@echo "=== EpiBridge Uninstall ==="
-	-./scripts/platform.sh compose down 2>/dev/null || true
-	-./scripts/platform.sh destroy || true
-	@rm -f .epibridge-context
-	@rm -rf certs
-	@if [ -f .env ]; then \
+	@if [ ! -f .epibridge-context ] && [ -z "$(_EPIBRIDGE_TARGET_OVERRIDE)" ]; then \
+		echo "No execution context found."; \
+		echo ""; \
+		echo "Specify the execution backend to uninstall:"; \
+		echo ""; \
+		echo "    make uninstall TARGET=multipass"; \
+		echo "    make uninstall TARGET=orbstack"; \
+		echo "    make uninstall TARGET=native"; \
+		exit 1; \
+	fi; \
+	echo "=== EpiBridge Uninstall ==="; \
+	$(_EPIBRIDGE_TARGET_OVERRIDE) ./scripts/platform.sh compose down 2>/dev/null || true; \
+	$(_EPIBRIDGE_TARGET_OVERRIDE) ./scripts/platform.sh destroy || true; \
+	rm -f .epibridge-context; \
+	rm -rf certs; \
+	if [ -f .env ]; then \
 		echo ""; \
 		echo ".env preserved at $$PWD/.env"; \
 	fi
@@ -196,6 +247,7 @@ build:
 # --- CI (native Linux) ---------------------------------------------------------
 
 ci:
+	./scripts/init-config.sh
 	./scripts/platform.sh run ./scripts/bootstrap.sh
 	./scripts/platform.sh run ./scripts/seed-institution.sh
 	./scripts/platform.sh run ./scripts/seed-personas.sh
@@ -211,6 +263,8 @@ ci-clean:
 dev:
 	./scripts/platform.sh compose build backend frontend worker
 	./scripts/platform.sh compose up -d
+	./scripts/platform.sh run ./scripts/seed-developer.sh
+	./scripts/platform.sh run ./scripts/seed-personas.sh
 
 dev-test:
 	./scripts/platform.sh exec backend python3 -m pytest tests/unit tests/integration tests/smoke -v --no-header -q --tb=short
@@ -242,13 +296,18 @@ restore:
 
 # --- Code quality ------------------------------------------------------------
 
+# Run the complete platform test suite.
+#
+# Unit tests execute natively for speed.
+# Integration and smoke tests execute through the current execution
+# backend so they always target the active platform.
 test:
 	@failed=0; \
+	echo "=== Running unit tests ==="; \
 	(cd backend && $(PYTHON) -m pytest tests/unit -v --cov=app --cov-report=term-missing --no-header -q) || failed=1; \
 	echo ""; \
-	(cd backend && $(PYTHON) -m pytest tests/integration -v --no-header -q) || failed=1; \
-	echo ""; \
-	(cd backend && $(PYTHON) -m pytest tests/smoke -v --no-header -q) || failed=1; \
+	echo "=== Running integration and smoke tests ==="; \
+	./scripts/platform.sh exec backend python3 -m pytest tests/integration tests/smoke -v --no-header -q --tb=short || failed=1; \
 	echo ""; \
 	if [ $$failed -eq 0 ]; then echo "=== All tests passed ==="; else echo "=== Some tests failed ==="; exit 1; fi
 
@@ -262,11 +321,18 @@ fix:
 	cd backend && $(PYTHON) -m ruff check --fix
 	cd backend && $(PYTHON) -m ruff format
 
-# --- Testing (requires full stack) -------------------------------------------
+# --- Acceptance testing (requires full stack) --------------------------------
 
+# Acceptance testing (requires full stack).
+# The base URL resolves using the standard hierarchy:
+#   PLAYWRIGHT_BASE_URL env var > EPIBRIDGE_REACHABLE_URL > PUBLIC_URL > https://localhost
 playwright:
+	@BASE=$${PLAYWRIGHT_BASE_URL:-$$(sed -n 's/^EPIBRIDGE_REACHABLE_URL=//p' .epibridge-context 2>/dev/null || true)}; \
+	if [ -z "$$BASE" ] && [ -f .env ]; then \
+		BASE=$$(sed -n 's/^PUBLIC_URL=//p' .env 2>/dev/null || true); \
+	fi; \
 	export ADMIN_PASSWORD=$$(grep ^ADMIN_PASSWORD= .env | cut -d= -f2-); \
-	cd frontend && npx playwright test
+	cd frontend && PLAYWRIGHT_BASE_URL="$${BASE:-https://localhost}" npx playwright test
 
 # --- Maintenance -------------------------------------------------------------
 

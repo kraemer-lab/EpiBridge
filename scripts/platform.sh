@@ -20,8 +20,10 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-# Load execution context
-if [ -f "$REPO_ROOT/.epibridge-context" ]; then
+# Load execution context.  An explicit EPIBRIDGE_TARGET environment
+# variable takes precedence — this supports make uninstall TARGET=...
+# when the execution context is missing or stale.
+if [ -z "${EPIBRIDGE_TARGET:-}" ] && [ -f "$REPO_ROOT/.epibridge-context" ]; then
     . "$REPO_ROOT/.epibridge-context"
 fi
 EPIBRIDGE_TARGET="${EPIBRIDGE_TARGET:-native}"
@@ -43,6 +45,11 @@ _run() {
             VM_DIR="${EPIBRIDGE_VM_DIR:-/opt/epibridge}"
             ssh -q root@epibridge@orb "cd $VM_DIR && $*"
             ;;
+        multipass)
+            VM_DIR="${EPIBRIDGE_VM_DIR:-/opt/epibridge}"
+            EPIBRIDGE_VM="${EPIBRIDGE_VM:-epibridge}"
+            multipass exec "$EPIBRIDGE_VM" -- sudo -u epibridge bash -c "cd $VM_DIR && $*"
+            ;;
         remote)
             local host="${EPIBRIDGE_HOST:?EPIBRIDGE_HOST not set}"
             local user="${EPIBRIDGE_USER:-epibridge}"
@@ -58,8 +65,12 @@ _run() {
 
 # _compose <args...>
 #   Run docker compose on the platform host.
+#   Materialises the runtime environment from execution context
+#   before every invocation so that variables like PUBLIC_URL_HOST
+#   are available regardless of how services were started.
 _compose() {
-    _run "docker compose $(_q "$@")"
+    "$SCRIPT_DIR/prepare-env.sh" 2>/dev/null || true
+    _run "docker compose --env-file ./.env --env-file ./.epibridge-compose.env $(_q "$@")"
 }
 
 # — subcommands -------------------------------------------------------------------
@@ -89,6 +100,10 @@ case "${1:-help}" in
             orbstack)
                 exec ssh -q root@epibridge@orb
                 ;;
+            multipass)
+                EPIBRIDGE_VM="${EPIBRIDGE_VM:-epibridge}"
+                exec multipass exec "$EPIBRIDGE_VM" -- sudo -u epibridge -s
+                ;;
             remote)
                 local host="${EPIBRIDGE_HOST:?EPIBRIDGE_HOST not set}"
                 local user="${EPIBRIDGE_USER:-epibridge}"
@@ -106,6 +121,10 @@ case "${1:-help}" in
                 echo "Deleting OrbStack VM (epibridge)..."
                 "$SCRIPT_DIR/orbstack.sh" delete
                 ;;
+            multipass)
+                echo "Deleting Multipass VM (epibridge)..."
+                "$SCRIPT_DIR/multipass.sh" delete
+                ;;
             *)
                 echo "Don't know how to destroy $(EPIBRIDGE_TARGET) environment." >&2
                 exit 1
@@ -120,7 +139,7 @@ case "${1:-help}" in
 
     run)
         shift
-        _run "./$*"
+        _run "bash $*"
         ;;
 
     cp)
@@ -134,6 +153,12 @@ case "${1:-help}" in
                 # so files are already shared. This subcommand is a no-op
                 # for OrbStack; use scp if cross-VM copies are needed.
                 echo "Files are shared via the mounted repo. Use scp for explicit copies." >&2
+                ;;
+            multipass)
+                # The repo is mounted at /opt/epibridge inside the VM,
+                # so files are already shared. This subcommand is a no-op
+                # for Multipass; use multipass transfer for explicit copies.
+                echo "Files are shared via the mounted repo. Use multipass transfer for explicit copies." >&2
                 ;;
             remote)
                 local host="${EPIBRIDGE_HOST:?EPIBRIDGE_HOST not set}"

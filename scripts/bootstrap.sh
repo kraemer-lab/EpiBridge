@@ -1,44 +1,38 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# bootstrap.sh — platform boot only
+# bootstrap.sh — platform bootstrap
 #
-# bootstrap.sh brings the platform into an operational state.
+# Assumes application configuration has already been initialised
+# (run init-config.sh first).  Brings the platform into an operational
+# state by building images, starting services, and running migrations.
 # It does NOT seed users, terms, or any other application state.
 #
-# Idempotent platform initialisation. Safe to run multiple times.
+# Idempotent.  Safe to run multiple times.
 #
 # Environment contract:
+#   - .env exists with required secrets (run init-config.sh if not).
 #   - Current directory is the repository root.
 #   - Docker and Docker Compose are available.
 #   - Infrastructure provisioning has completed — storage directories
 #     (/var/lib/epibridge/...) exist with correct ownership.
-#   - Any required environment variables are already configured
-#     (otherwise .env will be generated from .env.example).
 
-###############################################################################
-# 1. Generate .env if not present
-###############################################################################
 if [ ! -f .env ]; then
-  echo "Generating .env from .env.example..."
-  cp .env.example .env
-
-  POSTGRES_PASSWORD=$(openssl rand -base64 32 | tr -d '\n')
-  REDIS_PASSWORD=$(openssl rand -base64 32 | tr -d '\n')
-  SECRET_KEY=$(openssl rand -base64 64 | tr -d '\n')
-  ADMIN_PASSWORD=$(openssl rand -base64 32 | tr -d '\n')
-
-  sed -i.bak "s|POSTGRES_PASSWORD=__GENERATED__|POSTGRES_PASSWORD=$POSTGRES_PASSWORD|" .env && rm -f .env.bak
-  sed -i.bak "s|REDIS_PASSWORD=__GENERATED__|REDIS_PASSWORD=$REDIS_PASSWORD|" .env && rm -f .env.bak
-  sed -i.bak "s|SECRET_KEY=__GENERATED__|SECRET_KEY=$SECRET_KEY|" .env && rm -f .env.bak
-  sed -i.bak "s|ADMIN_PASSWORD=__GENERATED__|ADMIN_PASSWORD=$ADMIN_PASSWORD|" .env && rm -f .env.bak
-
-  chmod 600 .env
-  echo ".env created"
+    echo "ERROR: Configuration has not been initialised." >&2
+    echo "" >&2
+    echo "Run the installation lifecycle or initialise configuration with:" >&2
+    echo "" >&2
+    echo "  ./scripts/init-config.sh" >&2
+    exit 1
 fi
 
+# Materialise runtime environment from execution context.
+# Ensures PUBLIC_URL_HOST is available for docker compose --env-file.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+"$SCRIPT_DIR/prepare-env.sh"
+
 ###############################################################################
-# 2. Discover deployment environment
+# 1. Discover deployment environment
 ###############################################################################
 if command -v getent &>/dev/null; then
   DOCKER_GID="$(getent group docker | cut -d: -f3)"
@@ -78,23 +72,30 @@ export HOST_RESOURCE_MANIFEST_DIR="${HOST_RESOURCE_MANIFEST_DIR:-${REPO_ROOT}/re
 #     never stored in .env. The direction of dependency is:
 #       PUBLIC_URL (config) → PUBLIC_URL_HOST (derived) → Caddy
 ###############################################################################
-PUBLIC_URL="$(sed -n 's/^PUBLIC_URL=//p' .env 2>/dev/null || true)"
+if [ -f .epibridge-context ]; then
+    ctx_url="$(sed -n 's/^EPIBRIDGE_REACHABLE_URL=//p' .epibridge-context 2>/dev/null || true)"
+    if [ -n "$ctx_url" ]; then
+        PUBLIC_URL="$ctx_url"
+    fi
+fi
+if [ -z "${PUBLIC_URL:-}" ]; then
+    PUBLIC_URL="$(sed -n 's/^PUBLIC_URL=//p' .env 2>/dev/null || true)"
+fi
 PUBLIC_URL="${PUBLIC_URL:-https://localhost}"
 # Strip scheme and port to extract bare hostname
 PUBLIC_URL_HOST="${PUBLIC_URL#https://}"
 PUBLIC_URL_HOST="${PUBLIC_URL_HOST#http://}"
 PUBLIC_URL_HOST="${PUBLIC_URL_HOST%%:*}"
-export PUBLIC_URL_HOST
 echo "Public URL: $PUBLIC_URL (hostname: $PUBLIC_URL_HOST)"
 
 ###############################################################################
 # 5. Build Docker images
 ###############################################################################
 echo "Building application images..."
-docker compose build
+docker compose --env-file ./.env --env-file ./.epibridge-compose.env build
 
 echo "Building analysis container images..."
-for dir in execution-environments/*/; do
+for dir in "$REPO_ROOT"/execution-environments/*/; do
     tag="epibridge/$(basename "$dir"):latest"
     echo "  Building $tag..."
     docker build -t "$tag" "$dir"
@@ -125,7 +126,7 @@ fi
 # 8. Start services
 ###############################################################################
 echo "Starting services..."
-docker compose up -d
+docker compose --env-file ./.env --env-file ./.epibridge-compose.env up -d
 
 ###############################################################################
 # 9. Wait for PostgreSQL

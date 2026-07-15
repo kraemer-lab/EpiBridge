@@ -1,6 +1,6 @@
 # AGENTS.md
 
-## Project status — Milestone 23 complete (Persona Acceptance, Responsibility-Oriented UX, Notification Architecture)
+## Project status — Milestone 24 (Explicit Lifecycle, Multipass Backend, Platform.sh Abstraction)
 
 ### Exists and functional
 
@@ -40,13 +40,27 @@ examples/        Example analyses, bundle templates, environment definitions,
                  resource publication manifests
 vm/              cloud-init.yaml, Caddyfile (HTTPS, HSTS, compression,
                  security headers, request size limits), runtime spec
-scripts/         bootstrap.sh, install.sh, upgrade.sh, backup.sh, restore.sh, healthcheck.sh
+scripts/
+  init-config.sh    Application configuration (.env, secrets)
+  setup-certs.sh    TLS certificate generation
+  bootstrap.sh      Platform bootstrap (build, start, health)
+  install.sh        Full system installation
+  upgrade.sh        Application upgrade
+  backup.sh         Database backup
+  restore.sh        Restore from backup
+  healthcheck.sh    Service health verification
+  platform.sh       Execution-environment abstraction layer
+  orbstack.sh       OrbStack VM helpers
+  multipass.sh      Multipass VM helpers
+  seed-*.sh         Institutional seeding (admin, terms, personas, developer, demo)
+  setup-ai.sh       AI deployment configuration
+  setup-certs.sh    Certificate generation
 docker-compose.yml  6 services + optional ollama (--profile ai),
                      internal + frontend + external networks,
                      email configuration (SMTP relay support)
 frontend/e2e/
   acceptance/        4 persona acceptance tests (administrator, maintainer,
-                     moderator, researcher)
+                      moderator, researcher)
   institution/       1 institutional acceptance test (canonical workflow)
   execution-environment-acceptance/
                      3 execution environment acceptance tests
@@ -79,6 +93,171 @@ docs/        Architecture, security, API, roadmap, vision
 ```
 
 Single monorepo. Do not add top-level directories without justification.
+
+## Installation lifecycle
+
+The installation lifecycle consists of four explicit phases, each with a single-responsibility script:
+
+```
+init-config.sh
+        ↓
+setup-certs.sh
+        ↓
+bootstrap.sh
+        ↓
+seed-*.sh
+```
+
+| Script | Responsibility | Runs on | Produces |
+|--------|---------------|---------|----------|
+| `init-config.sh` | Application configuration (`.env`, secrets) | Host | `.env` |
+| `setup-certs.sh` | TLS certificates | Host | `certs/` |
+| `bootstrap.sh` | Platform bootstrap (build, start, health) | VM / host | containers, images |
+| `seed-*.sh` | Institutional state | VM / host | database records |
+
+The Makefile orchestrates these phases. It does not implement them.
+
+Each script is independently runnable and idempotent.
+
+## Public Make interface
+
+The Makefile is the supported administration interface. Public targets describe platform operations rather than execution details.
+
+```text
+make install       Full installation (target-specific)
+make uninstall     Stop and remove the environment
+make up            Start all services
+make down          Stop all services
+make logs          Tail container logs
+make shell         Interactive session on the platform host
+make certs         Regenerate TLS certificates
+make ai            Enable AI assistance
+make demo          Seed evaluation personas
+make dev           Rebuild and restart development services
+make test          Run unit, integration, and smoke tests
+```
+
+The Makefile delegates all execution-backend-specific operations to `scripts/platform.sh`. Backend-specific logic is never added to public Make targets.
+
+## Execution abstraction (`scripts/platform.sh`)
+
+`platform.sh` translates platform operations into execution-backend-specific implementations.
+
+It reads `.epibridge-context` to determine the execution target:
+
+```text
+EPIBRIDGE_TARGET    — one of: native, orbstack, multipass, remote
+EPIBRIDGE_VM        — VM name (orbstack, multipass)
+EPIBRIDGE_HOST      — remote hostname (remote)
+EPIBRIDGE_USER      — remote SSH user (remote)
+EPIBRIDGE_DIR       — remote directory (remote)
+```
+
+Supported commands:
+
+| Command | Purpose |
+|---------|---------|
+| `compose <args>` | Run docker compose on the platform host |
+| `exec <svc> <cmd>` | Run a command in a container |
+| `logs [args]` | Tail container logs |
+| `shell` | Interactive session on the platform host |
+| `restart <svc>` | Restart a compose service |
+| `run <script>` | Execute a script on the platform host (via `bash`) |
+| `cp <src> <dst>` | Copy files to/from the platform host |
+| `destroy` | Teardown the execution environment |
+
+New execution backends are implemented by extending `platform.sh`, not by modifying public Make targets.
+
+## Execution identity
+
+Each execution backend selects its own orchestration identity. This is an implementation detail hidden behind `platform.sh`.
+
+| Backend | Orchestration user | Mechanism |
+|---------|-------------------|-----------|
+| native | current host user | direct execution |
+| orbstack | root | SSH as root |
+| multipass | epibridge | `sudo -u epibridge` via `multipass exec` |
+| remote | configured SSH user | SSH as user |
+
+The rest of the platform must never assume a particular orchestration user. Scripts executed via `platform.sh run` run as the backend's orchestration user.
+
+## Configuration ownership (`scripts/init-config.sh`)
+
+`init-config.sh` owns application configuration:
+
+- Creates `.env` from `.env.example` with generated secrets.
+- Accepts initial configuration values through environment variables.
+- Applies overrides only when creating a fresh `.env`.
+- Existing `.env` files are never modified (administrator configuration is authoritative).
+
+Supported overrides (passed as environment variables):
+
+| Variable | Purpose |
+|----------|---------|
+| `PUBLIC_URL` | Canonical external URL for this installation |
+
+Adding a new override is an explicit design decision — add an `_apply_override`
+
+call inside `init-config.sh`.
+
+## PUBLIC_URL
+
+`PUBLIC_URL` is the canonical external address of an installation.
+
+- Established during installation by `init-config.sh`.
+- The default is `https://localhost`, which is correct for OrbStack and native Docker.
+- Execution backends **never** silently mutate `PUBLIC_URL` in `.env`. Administrator configuration is authoritative.
+- Used by the backend for user-facing links (email notifications).
+- Derived at runtime by `bootstrap.sh` into `PUBLIC_URL_HOST` for Caddy configuration.
+
+## URL resolution
+
+Operator-facing components (certificate generation, bootstrap, health checks) resolve addresses through a hierarchy rather than reading `.env` directly:
+
+```
+$PUBLIC_URL env var              explicit override (any caller)
+        ↓
+EPIBRIDGE_REACHABLE_URL         execution context (.epibridge-context)
+        ↓
+PUBLIC_URL (.env)               application configuration
+        ↓
+https://localhost               platform default
+```
+
+`EPIBRIDGE_REACHABLE_URL` is the address through which the current execution environment is externally reachable. It is:
+
+- Backend-owned (set by the Makefile during installation).
+- Stored in `.epibridge-context` — generated, disposable, never application configuration.
+- Used by: `setup-certs.sh`, `bootstrap.sh`, `healthcheck.sh` for operator-facing operations.
+- Distinguished from `PUBLIC_URL`: `PUBLIC_URL` is administrator-owned application configuration; `EPIBRIDGE_REACHABLE_URL` is backend-owned execution metadata.
+
+For backends that produce a context (OrbStack, Multipass), operator components use the reachable URL from context. For backends that do not (native Docker, remote SSH), resolution falls through to `.env`'s `PUBLIC_URL`.
+
+## Runtime materialisation
+
+Docker Compose consumes runtime variables through a materialisation layer rather than reading execution metadata directly.
+
+```
+.epibridge-context (execution metadata)          .env (application configuration)
+        ↓                                                  │
+prepare-env.sh (materialisation)                           │
+        ↓                                                  │
+.epibridge-compose.env (runtime overrides)                 │
+        ↓                                                  │
+        └──────────────────┬───────────────────────────────┘
+                           ▼
+          docker compose --env-file ./.env \
+                         --env-file ./.epibridge-compose.env
+```
+
+`prepare-env.sh` reads `.epibridge-context` and generates `.epibridge-compose.env` with variables such as `PUBLIC_URL_HOST` for Docker Compose substitution. This file is:
+
+- Generated automatically by `platform.sh compose` and `bootstrap.sh`.
+- Never edited manually.
+- Listed in `.gitignore`.
+- Regenerated on every compose invocation.
+
+The `PUBLIC_URL_HOST` variable is derived from `EPIBRIDGE_REACHABLE_URL` at runtime and passed to the Caddy container so that TLS certificates match the address through which the platform is reachable.
 
 ### Security constraints (must preserve in implementation)
 
@@ -575,8 +754,7 @@ All three are created idempotently — re-running bootstrap does not duplicate t
 The standard development workflow:
 
 ```bash
-make dev          # bootstrap the full stack (OrbStack VM)
-# During development
+make dev          # rebuild and restart development services (current backend)
 make format       # auto-format code
 make lint         # static analysis
 make test         # run tests
@@ -594,6 +772,8 @@ make test         # run tests
 - `alembic revision --autogenerate -m "description"` — generate a new migration from model changes
 
 **Infrastructure** (from repo root):
+- `./scripts/init-config.sh` — initialise application configuration (`.env`, secrets)
+- `./scripts/setup-certs.sh` — generate TLS certificates
 - `./scripts/bootstrap.sh` — platform boot only (build, start, wait, health)
 - `./scripts/install.sh` — first-time install (clone repo + bootstrap)
 - `./scripts/upgrade.sh` — application upgrade
@@ -601,9 +781,9 @@ make test         # run tests
 - `./scripts/restore.sh <file>` — restore from backup
 - `./scripts/healthcheck.sh` — verify services
 
-**Makefile targets** (portable, assumes SSH access to an Ubuntu VM):
-- `make deploy` — production install (SSH: install.sh)
-- `make install` — local installation (OrbStack VM)
+**Makefile targets** (portable, delegates execution to `platform.sh`):
+- `make deploy` — production install (SSH)
+- `make install` — local installation (defaults to Multipass VM)
 - `make up` — docker compose up -d
 - `make down` — docker compose down
 - `make upgrade` — run upgrade.sh
@@ -616,9 +796,15 @@ make test         # run tests
 - `make fix` — auto-fix all fixable issues (run this most often)
 
 **Testing** (from repo root):
-- `make dev-test` — run full suite inside the container via SSH (recommended developer workflow; requires OrbStack VM + Docker stack)
-- `make test` — run unit, integration, and smoke test suites natively (requires PostgreSQL + Redis on localhost; the `epibridge_test` database must exist)
-- `make playwright` — run institutional acceptance test (canonical workflow, requires full stack running)
+- `make test` — run the complete platform test suite.  Unit tests execute
+  natively for speed.  Integration and smoke tests execute through the
+  current execution backend so they always target the active platform.
+  Execution-environment transparent (Native, OrbStack, Multipass, Remote).
+- `make dev-test` — run full suite inside the backend container (useful
+  for debugging without native Python setup).
+- `make playwright` — run acceptance tests through Playwright.  The target
+  URL is derived from the standard resolution hierarchy:
+  `PLAYWRIGHT_BASE_URL > EPIBRIDGE_REACHABLE_URL > PUBLIC_URL > https://localhost`
 - `make playwright CMD=e2e/acceptance/researcher.spec.ts` — run researcher persona acceptance test
 - `make playwright CMD=e2e/acceptance/administrator.spec.ts` — run administrator persona acceptance test
 - `make playwright CMD=e2e/acceptance/moderator.spec.ts` — run moderator persona acceptance test
@@ -627,10 +813,8 @@ make test         # run tests
 - `make playwright CMD=e2e/execution-environment-acceptance/python-3.13.spec.ts` — run python-3.13 EE acceptance test
 - `make playwright CMD=e2e/execution-environment-acceptance/conda.spec.ts` — run conda EE acceptance test
 - `python -m pytest backend/tests/unit -v` — unit tests only (no database required)
-- `python -m pytest backend/tests/integration -v` — integration tests (requires PostgreSQL + Redis on localhost + `epibridge_test` database)
+- `python -m pytest backend/tests/integration -v` — integration tests (requires full stack running for non-native targets)
 - `python -m pytest backend/tests/smoke -v` — smoke tests (requires full stack running)
-
-Integration tests use a dedicated `epibridge_test` PostgreSQL database for isolation.
 
 ### Authentication configuration
 
@@ -658,11 +842,11 @@ createdb epibridge_test
 - `make playwright CMD=e2e/validation-workflow.spec.ts` — run validation workflow e2e test
 
 **Shared bootstrap** (from repo root, requires Docker):
-- `make install` — canonical first-run installation (defaults to OrbStack VM).
+- `make install` — canonical first-run installation (defaults to Multipass VM).
   Generates `.env` if missing, builds images, starts services, seeds admin.
   Safe to run multiple times.
 
-**Makefile dev targets** (OrbStack-specific, uses `scripts/orbstack.sh` under the hood):
+**Makefile dev targets** (Multipass/OrbStack-specific, uses `scripts/platform.sh` under the hood):
 - `make install` — first-run: create VM, mount repo, bootstrap, seed
 - `make dev` — incremental: rebuild code containers, restart services (no seeding)
 - `make dev-ai` — start the optional Ollama service on an already-running stack
@@ -676,6 +860,7 @@ createdb epibridge_test
 
 **VM / Dev environment** (see `vm/runtime.md`):
 - `scripts/orbstack.sh` — OrbStack-specific helpers (create, mount, ssh, ip)
+- `scripts/multipass.sh` — Multipass-specific helpers (create, mount, exec, shell, ip, delete)
 
 ### Acceptance Test Architecture
 

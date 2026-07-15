@@ -311,9 +311,43 @@ Provider-specific setup examples:
 ### Multipass
 
 ```bash
-multipass launch --cloud-init vm/cloud-init.yaml 24.04 --name epibridge-dev
-multipass mount . epibridge-dev:/opt/epibridge
-make deploy SSH="ssh ubuntu@epibridge-dev.local"
+make install TARGET=multipass
+```
+
+Creates the Multipass VM (if needed), mounts the repo at `/opt/epibridge`,
+builds Docker images, starts all services, seeds the admin account and
+platform terms, and verifies health.
+
+#### Default VM sizing
+
+The VM is provisioned with resources appropriate for running Docker
+Engine, PostgreSQL, Redis, the backend, frontend, worker, Caddy,
+BuildKit, and optionally Ollama simultaneously:
+
+| Resource | Default | Reason |
+|----------|---------|--------|
+| vCPUs | 2 | BuildKit parallelises layers; pip uses multiple cores |
+| RAM | 4 GB | Comfortable headroom for full stack plus builds |
+| Disk | 20 GB | Docker images and build cache require significant space |
+
+These defaults can be overridden by setting environment variables
+before running `make install`:
+
+```bash
+MULTIPASS_CPUS=4 MULTIPASS_MEMORY=8G make install TARGET=multipass
+```
+
+Individual lifecycle commands work identically to the OrbStack target:
+
+```bash
+make up       # start services
+make down     # stop services
+make logs     # tail container logs
+make shell    # interactive session inside the VM (as epibridge user)
+make certs    # regenerate TLS certificates
+make ai       # enable AI assistance
+make demo     # seed evaluation personas
+make uninstall  # stop services and delete the VM
 ```
 
 ### Manual (VMware, KVM, Proxmox, etc.)
@@ -359,3 +393,4 @@ All produced from this runtime specification:
 | `scripts/restore.sh`    | Restore from backup             |
 | `scripts/healthcheck.sh`| Service health check            |
 | `scripts/orbstack.sh`   | OrbStack dev helpers (optional) |
+| `scripts/multipass.sh`  | Multipass dev helpers (optional) |
