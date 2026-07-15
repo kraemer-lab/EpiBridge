@@ -7,6 +7,7 @@ import {
   AuditEvent,
   getAdminOutputSets,
   getAdminOutputSet,
+  getGovernanceStatus,
   approveOutputSet,
   rejectOutputSet,
   releaseOutputSet,
@@ -48,6 +49,7 @@ function statusBadge(status: string): { background: string; color: string; label
 export default function AdminOutputsPage() {
   const { user } = useAuth();
   const [sets, setSets] = useState<OutputSetListItem[]>([]);
+  const [govStatus, setGovStatus] = useState<{ prevent_self_moderation: boolean } | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [expandedOutputs, setExpandedOutputs] = useState<{ filename: string; size: number }[]>([]);
   const [outputAudit, setOutputAudit] = useState<Record<string, AuditEvent[]>>({});
@@ -59,8 +61,14 @@ export default function AdminOutputsPage() {
   const load = () => {
     setLoading(true);
     setError(null);
-    getAdminOutputSets()
-      .then(setSets)
+    Promise.all([
+      getAdminOutputSets(),
+      getGovernanceStatus().catch(() => null),
+    ])
+      .then(([data, gov]) => {
+        setSets(data);
+        setGovStatus(gov);
+      })
       .catch(() => setError("Failed to load output sets"))
       .finally(() => setLoading(false));
   };
@@ -142,6 +150,7 @@ export default function AdminOutputsPage() {
           <table className="table">
             <thead>
               <tr>
+                <th>Project</th>
                 <th>Analysis</th>
                 <th>Files</th>
                 <th>Status</th>
@@ -154,6 +163,9 @@ export default function AdminOutputsPage() {
                 return (
                   <>
                     <tr key={s.id}>
+                      <td style={{ color: "var(--color-text-secondary)" }}>
+                        {s.project_name || ""}
+                      </td>
                       <td style={{ fontWeight: 500 }}>
                         <button
                           onClick={() => handleExpand(s.id)}
@@ -193,33 +205,57 @@ export default function AdminOutputsPage() {
                         <div style={{ display: "flex", gap: "var(--spacing-xs)" }}>
                           {s.status === "pending_review" && user?.capabilities.includes("output.review") && (
                             <>
-                              <button
-                                className="btn btn-sm"
-                                style={{ background: "var(--color-success, #2e7d32)", color: "#fff", border: "none" }}
-                                onClick={() => handleAction(s.id, approveOutputSet)}
-                                disabled={actionLoading}
-                              >
-                                {actionLoading ? "Processing…" : "Approve"}
-                              </button>
-                              <button
-                                className="btn btn-sm"
-                                style={{ background: "var(--color-danger, #c62828)", color: "#fff", border: "none" }}
-                                onClick={() => handleAction(s.id, rejectOutputSet)}
-                                disabled={actionLoading}
-                              >
-                                {actionLoading ? "Processing…" : "Reject"}
-                              </button>
+                              {govStatus?.prevent_self_moderation === true
+                                && s.requested_by_id === user?.id
+                                && !user?.capabilities.includes("governance.self_regulate") ? (
+                                <span style={{ color: "var(--color-text-secondary)", fontSize: "0.85rem", fontStyle: "italic" }}>
+                                  Independent moderation required. You requested
+                                  this execution. Another authorised moderator
+                                  must review its outputs.
+                                </span>
+                              ) : (
+                                <>
+                                  <button
+                                    className="btn btn-sm"
+                                    style={{ background: "var(--color-success, #2e7d32)", color: "#fff", border: "none" }}
+                                    onClick={() => handleAction(s.id, approveOutputSet)}
+                                    disabled={actionLoading}
+                                  >
+                                    {actionLoading ? "Processing…" : "Approve"}
+                                  </button>
+                                  <button
+                                    className="btn btn-sm"
+                                    style={{ background: "var(--color-danger, #c62828)", color: "#fff", border: "none" }}
+                                    onClick={() => handleAction(s.id, rejectOutputSet)}
+                                    disabled={actionLoading}
+                                  >
+                                    {actionLoading ? "Processing…" : "Reject"}
+                                  </button>
+                                </>
+                              )}
                             </>
                           )}
                           {s.status === "approved" && user?.capabilities.includes("output.release") && (
-                            <button
-                              className="btn btn-sm"
-                              style={{ background: "var(--color-primary, #1976d2)", color: "#fff", border: "none" }}
-                              onClick={() => handleAction(s.id, releaseOutputSet)}
-                              disabled={actionLoading}
-                            >
-                              {actionLoading ? "Processing…" : "Release"}
-                            </button>
+                            <>
+                              {govStatus?.prevent_self_moderation === true
+                                && s.requested_by_id === user?.id
+                                && !user?.capabilities.includes("governance.self_regulate") ? (
+                                <span style={{ color: "var(--color-text-secondary)", fontSize: "0.85rem", fontStyle: "italic" }}>
+                                  Independent release required. You requested
+                                  this execution. Another authorised moderator
+                                  must authorise release of its outputs.
+                                </span>
+                              ) : (
+                                <button
+                                  className="btn btn-sm"
+                                  style={{ background: "var(--color-primary, #1976d2)", color: "#fff", border: "none" }}
+                                  onClick={() => handleAction(s.id, releaseOutputSet)}
+                                  disabled={actionLoading}
+                                >
+                                  {actionLoading ? "Processing…" : "Release"}
+                                </button>
+                              )}
+                            </>
                           )}
                         </div>
                       </td>

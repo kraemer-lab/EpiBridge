@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ExecutionRequest, getAdminExecutionRequests } from "@/lib/api";
-import LogViewer from "@/components/LogViewer";
 
 const STATUS_FILTERS = [
   { value: "pending", label: "Pending" },
@@ -41,7 +40,6 @@ export default function AdminExecutionsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState("pending");
-  const [expandedId, setExpandedId] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const shouldPoll = ACTIVE_STATUSES.has(statusFilter);
@@ -176,16 +174,7 @@ export default function AdminExecutionsPage() {
             <tbody>
               {filteredRequests.map((r) => (
                 <tr key={r.id}>
-                  <td
-                    style={{
-                      fontWeight: 500,
-                      cursor: "pointer",
-                      textDecoration: "underline dotted",
-                    }}
-                    onClick={() =>
-                      setExpandedId(expandedId === r.id ? null : r.id)
-                    }
-                  >
+                  <td style={{ fontWeight: 500 }}>
                     {r.analysis_name}
                   </td>
                   <td>
@@ -213,29 +202,6 @@ export default function AdminExecutionsPage() {
                   </td>
                 </tr>
               ))}
-              {filteredRequests.map((r) =>
-                expandedId === r.id ? (
-                  <tr key={`${r.id}-log`}>
-                    <td
-                      colSpan={5}
-                      style={{
-                        padding: "var(--spacing-md)",
-                        background: "var(--color-surface)",
-                      }}
-                    >
-                      <LogViewer
-                        log={r.log}
-                        title={
-                          r.status === "failed"
-                            ? "Execution Log (failed)"
-                            : "Execution Log"
-                        }
-                        maxHeight="300px"
-                      />
-                    </td>
-                  </tr>
-                ) : null,
-              )}
             </tbody>
           </table>
         </div>

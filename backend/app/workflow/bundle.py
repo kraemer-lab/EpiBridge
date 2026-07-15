@@ -1,4 +1,6 @@
 import logging
+import uuid
+from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
@@ -8,10 +10,16 @@ from app.services.environment_builder_service import ensure_build_request
 logger = logging.getLogger("workflow.bundle")
 
 
-def submit_bundle(db: Session, bundle: AnalysisBundle) -> AnalysisBundle:
+def submit_bundle(
+    db: Session,
+    bundle: AnalysisBundle,
+    submitted_by_id: uuid.UUID | None = None,
+) -> AnalysisBundle:
     if bundle.status != AnalysisBundleStatus.DRAFT.value:
         raise ValueError(f"Cannot submit bundle in state: {bundle.status}")
     bundle.status = AnalysisBundleStatus.SUBMITTED.value
+    bundle.submitted_by_id = submitted_by_id
+    bundle.submitted_at = datetime.now(timezone.utc)
     return bundle
 
 

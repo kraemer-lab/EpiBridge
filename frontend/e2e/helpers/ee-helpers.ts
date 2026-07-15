@@ -68,10 +68,10 @@ export async function provisionExecutionTestProject(
 
   await ctx.dispose();
 
-  // Create a moderator user for bundle approval
+  // Create a moderator user for bundle approval and add to project
   const moderatorEmail = `moderator-ee-${ts}@setup.local`;
   const adminCtx = await createApiContext(ADMIN_EMAIL, ADMIN_PASSWORD);
-  await adminCtx
+  const userResp = await adminCtx
     .post("/api/admin/users", {
       data: {
         email: moderatorEmail,
@@ -79,9 +79,16 @@ export async function provisionExecutionTestProject(
         password: MODERATOR_PASSWORD,
         roles: ["moderator"],
       },
-    })
-    .catch(() => {});
+    });
+  if (!userResp.ok()) throw new Error(`Create moderator failed: ${await userResp.text()}`);
   await adminCtx.dispose();
+
+  const maintCtx2 = await createApiContext(MAINTAINER_EMAIL, MAINTAINER_PASSWORD);
+  const memResp = await maintCtx2.post(`/api/projects/${project.id}/members`, {
+    data: { email: moderatorEmail },
+  });
+  if (!memResp.ok()) throw new Error(`Add moderator to project failed: ${await memResp.text()}`);
+  await maintCtx2.dispose();
 
   return { id: project.id, name, moderatorEmail };
 }
@@ -178,19 +185,28 @@ export async function pollBuild(
 
 export async function approveAndReleaseOutputSetForBundle(
   bundleId: string,
+  projectId: string,
 ): Promise<void> {
   const moderatorEmail = `release-moderator-${Date.now()}@setup.local`;
   const moderatorPassword = "testpass123";
   const adminCtx = await createApiContext(ADMIN_EMAIL, ADMIN_PASSWORD);
-  await adminCtx.post("/api/admin/users", {
+  const userResp = await adminCtx.post("/api/admin/users", {
     data: {
       email: moderatorEmail,
       display_name: "Release Moderator",
       password: moderatorPassword,
       roles: ["moderator"],
     },
-  }).catch(() => {});
+  });
+  if (!userResp.ok()) throw new Error(`Create release moderator failed: ${await userResp.text()}`);
   await adminCtx.dispose();
+
+  const maintCtx2 = await createApiContext(MAINTAINER_EMAIL, MAINTAINER_PASSWORD);
+  const memResp = await maintCtx2.post(`/api/projects/${projectId}/members`, {
+    data: { email: moderatorEmail },
+  });
+  if (!memResp.ok()) throw new Error(`Add release moderator to project failed: ${await memResp.text()}`);
+  await maintCtx2.dispose();
 
   // Step 1: Find the execution request and approve output set (moderator)
   const modCtx = await createApiContext(moderatorEmail, moderatorPassword);
@@ -240,18 +256,15 @@ export async function approveAndReleaseOutputSetForBundle(
   if (!aprResp.ok()) {
     throw new Error(`Approve output set failed: ${await aprResp.text()}`);
   }
-  await modCtx.dispose();
 
-  // Step 3: Release the output set (maintainer)
-  const maintCtx = await createApiContext(MAINTAINER_EMAIL, MAINTAINER_PASSWORD);
-  const relResp = await maintCtx.post(
+  // Step 3: Release the output set (same moderator — now has output.release)
+  const relResp = await modCtx.post(
     `/api/admin/output-sets/${outputSetId}/release`,
   );
+  await modCtx.dispose();
   if (!relResp.ok()) {
-    await maintCtx.dispose();
     throw new Error(`Release output set failed: ${await relResp.text()}`);
   }
-  await maintCtx.dispose();
 }
 
 export async function verifyArchiveContents(

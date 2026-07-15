@@ -28,6 +28,7 @@ import {
   getAIStatus,
   AIStatus,
   checkResourceTerms,
+  getGovernanceStatus,
   BundleValidationStatus,
   createValidationRequest,
   getBundleValidations,
@@ -64,6 +65,7 @@ export default function AnalysisDetailPage() {
   const [selectedResources, setSelectedResources] = useState<string[]>([]);
   const [savingDraft, setSavingDraft] = useState(false);
   const [aiStatus, setAiStatus] = useState<AIStatus | null>(null);
+  const [govStatus, setGovStatus] = useState<{ prevent_self_moderation: boolean } | null>(null);
 
   const initializedRef = useRef(false);
 
@@ -175,6 +177,7 @@ export default function AnalysisDetailPage() {
 
   useEffect(() => {
     getAIStatus().then(setAiStatus).catch(() => setAiStatus(null));
+    getGovernanceStatus().then(setGovStatus).catch(() => setGovStatus(null));
   }, []);
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -521,6 +524,43 @@ export default function AnalysisDetailPage() {
           &larr; Back to Analysis
         </Link>
 
+        {bundle.status === "submitted" && user?.capabilities.includes("bundle.review")
+          && govStatus?.prevent_self_moderation === true
+          && bundle.submitted_by_id === user.id
+          && !user.capabilities.includes("governance.self_regulate") && (
+          <div className="card" style={{
+            background: "#f0f0f0",
+            color: "var(--color-text-secondary)",
+            padding: "var(--spacing-sm) var(--spacing-md)",
+            fontSize: "0.85rem",
+            borderRadius: "4px",
+            marginTop: "var(--spacing-md)",
+            marginBottom: "var(--spacing-md)",
+          }}>
+            <strong>Independent moderation required.</strong>
+            {" "}You submitted this analysis bundle for institutional
+            review. Another authorised moderator must approve or reject it.
+          </div>
+        )}
+
+        {bundle.status === "approved_for_execution" && user?.capabilities.includes("bundle.review")
+          && govStatus?.prevent_self_moderation === true
+          && bundle.submitted_by_id === user.id
+          && !user.capabilities.includes("governance.self_regulate") && (
+          <div className="card" style={{
+            background: "#f0f0f0",
+            color: "var(--color-text-secondary)",
+            padding: "var(--spacing-sm) var(--spacing-md)",
+            fontSize: "0.85rem",
+            borderRadius: "4px",
+            marginTop: "var(--spacing-md)",
+            marginBottom: "var(--spacing-md)",
+          }}>
+            <strong>Independent moderation required.</strong>
+            {" "}Another authorised moderator must supersede this submission.
+          </div>
+        )}
+
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginTop: "var(--spacing-md)", marginBottom: "var(--spacing-lg)" }}>
           <div>
             <h2 style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: "var(--spacing-xs)" }}>
@@ -564,7 +604,10 @@ export default function AnalysisDetailPage() {
           </div>
           <div>
             <div style={{ display: "flex", gap: "var(--spacing-sm)", marginBottom: "var(--spacing-xs)" }}>
-              {bundle.status === "submitted" && user?.capabilities.includes("bundle.review") && (
+              {bundle.status === "submitted" && user?.capabilities.includes("bundle.review")
+                && !(govStatus?.prevent_self_moderation === true
+                  && bundle.submitted_by_id === user.id
+                  && !user.capabilities.includes("governance.self_regulate")) && (
                 <>
                   <button
                     className="btn btn-primary"
@@ -591,7 +634,10 @@ export default function AnalysisDetailPage() {
                   {actionLoading === "Run" ? "Submitting…" : "Run Analysis"}
                 </button>
               )}
-              {bundle.status === "approved_for_execution" && user?.capabilities.includes("bundle.review") && (
+              {bundle.status === "approved_for_execution" && user?.capabilities.includes("bundle.review")
+                && !(govStatus?.prevent_self_moderation === true
+                  && bundle.submitted_by_id === user.id
+                  && !user.capabilities.includes("governance.self_regulate")) && (
                 <button
                   className="btn"
                   onClick={handleSupersede}

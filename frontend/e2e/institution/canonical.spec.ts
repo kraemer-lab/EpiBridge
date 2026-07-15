@@ -178,7 +178,7 @@ test("Canonical Workflow", async ({ page }) => {
   await page.getByRole("button", { name: "Sign out" }).click();
 
   // ===================================================================
-  // 6b. MAINTAINER — release output set via API
+  // 6b. MODERATOR — release output set via API
   // ===================================================================
   await page.request.post("/api/auth/login", { data: { email: moderatorEmail, password: "testpass123" } });
   await page.request.post("/api/terms/platform/accept");
@@ -188,8 +188,6 @@ test("Canonical Workflow", async ({ page }) => {
     (s: any) => s.execution_request_name?.includes(analysisName) && s.status === "approved",
   );
   if (!targetSet) throw new Error("Output set not found for release");
-  await page.request.post("/api/auth/login", { data: { email: MAINTAINER_EMAIL, password: MAINTAINER_PASSWORD } });
-  await page.request.post("/api/terms/platform/accept");
   const releaseResp = await page.request.post(`/api/admin/output-sets/${targetSet.id}/release`);
   if (!releaseResp.ok()) throw new Error(`Release failed: ${await releaseResp.text()}`);
 

@@ -46,6 +46,7 @@ class AnalysisBundleRead(BaseModel):
     id: uuid.UUID
     project_id: uuid.UUID
     created_by_id: uuid.UUID
+    submitted_by_id: uuid.UUID | None = None
     execution_environment_id: uuid.UUID | None = None
     name: str
     source_path: str
@@ -67,6 +68,7 @@ class AnalysisBundleRead(BaseModel):
     parameters: dict = {}
     created_at: datetime
     updated_at: datetime
+    project_name: str = ""
     ai_review: AIBundleReviewRead | None = None
 
     @computed_field

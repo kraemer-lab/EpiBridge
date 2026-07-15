@@ -132,6 +132,7 @@ def _bundle_to_read(bundle: AnalysisBundle, build_log: str = "") -> AnalysisBund
         id=bundle.id,
         project_id=bundle.project_id,
         created_by_id=bundle.created_by_id,
+        submitted_by_id=bundle.submitted_by_id,
         execution_environment_id=bundle.execution_environment_id,
         name=bundle.name,
         source_path=bundle.source_path,
@@ -593,7 +594,7 @@ def post_submit_bundle(
         )
 
     try:
-        submit_bundle(db, bundle)
+        submit_bundle(db, bundle, submitted_by_id=current_user.id)
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -847,6 +848,7 @@ def get_project_members(
     current_user: User = Depends(get_current_user),
 ):
     require_project_membership(db, current_user, project_id)
+    _require_capability(current_user, Capability.PROJECT_MEMBERS_MANAGE)
     return list_members(db, project_id)
 
 

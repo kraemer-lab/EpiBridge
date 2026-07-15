@@ -105,7 +105,6 @@ def request_to_read(request: ExecutionRequest) -> dict:
         "timeout_seconds": request.timeout_seconds,
         "parameter_overrides": request.parameter_overrides,
         "status": request.status,
-        "log": request.log,
         "requested_by_id": request.requested_by_id,
         "analysis_name": bundle.name if bundle else "",
         "runtime": get_environment_runtime(bundle) if bundle else "",

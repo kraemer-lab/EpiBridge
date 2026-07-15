@@ -21,7 +21,6 @@ class ExecutionRequestRead(BaseModel):
     timeout_seconds: int
     parameter_overrides: dict
     status: ExecutionRequestStatus
-    log: str = ""
     requested_by_id: uuid.UUID
     analysis_name: str
     runtime: str

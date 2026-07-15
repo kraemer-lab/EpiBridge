@@ -28,6 +28,7 @@ class Capability(str, enum.Enum):
     USER_READ = "user.read"
     VALIDATION_RUN = "validation.run"
     BUILD_CUSTOMIZE = "build.customize"
+    GOVERNANCE_SELF_REGULATE = "governance.self_regulate"
     TERMS_MANAGE = "terms.manage"
     SETTINGS_MANAGE = "settings.manage"
 

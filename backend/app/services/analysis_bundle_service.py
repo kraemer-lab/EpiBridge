@@ -137,6 +137,21 @@ def validate_execution_environment(
     return env
 
 
+def list_bundles_for_member(db: Session, user_id: uuid.UUID) -> list[AnalysisBundle]:
+    from app.models.project_membership import ProjectMembership
+
+    return (
+        db.query(AnalysisBundle)
+        .join(
+            ProjectMembership,
+            AnalysisBundle.project_id == ProjectMembership.project_id,
+        )
+        .filter(ProjectMembership.user_id == user_id)
+        .order_by(AnalysisBundle.name)
+        .all()
+    )
+
+
 def create_bundle(
     db: Session,
     data: dict,

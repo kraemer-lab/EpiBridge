@@ -8,6 +8,7 @@ from app.db.base import Base
 
 class SettingKey(str, enum.Enum):
     AI_REVIEW_ENABLED = "ai_review_enabled"
+    PREVENT_SELF_MODERATION = "prevent_self_moderation"
 
     @classmethod
     def all_values(cls) -> set[str]:

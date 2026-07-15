@@ -79,10 +79,16 @@ export interface AIBundleReview {
   updated_at: string;
 }
 
+export interface GovernanceStatus {
+  prevent_self_moderation: boolean;
+}
+
 export interface AnalysisBundle {
   id: string;
   project_id: string;
   created_by_id: string;
+  submitted_by_id?: string;
+  project_name?: string;
   execution_environment_id: string | null;
   name: string;
   status: string;
@@ -145,7 +151,6 @@ export interface ExecutionRequest {
   timeout_seconds: number;
   parameter_overrides: Record<string, unknown>;
   status: string;
-  log: string;
   requested_by_id: string;
   analysis_name: string;
   runtime: string;
@@ -189,6 +194,8 @@ export interface OutputSetListItem {
   status: string;
   file_count: number;
   release_package_size: number | null;
+  requested_by_id?: string;
+  project_name?: string;
   created_at: string;
   updated_at: string;
 }
@@ -1049,4 +1056,8 @@ export async function updateAdminSetting(
     method: "PUT",
     body: JSON.stringify({ value }),
   });
+}
+
+export async function getGovernanceStatus(): Promise<GovernanceStatus> {
+  return request<GovernanceStatus>("/api/admin/governance/status");
 }

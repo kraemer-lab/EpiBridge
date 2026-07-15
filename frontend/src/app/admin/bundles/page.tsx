@@ -10,6 +10,7 @@ import {
   getAdminBundleFiles,
   getAdminBundleFileContent,
   getAuditEvents,
+  getGovernanceStatus,
   approveBundle,
   rejectBundle,
   supersedeBundle,
@@ -99,6 +100,7 @@ const detailValue: React.CSSProperties = {
 export default function AdminSubmissionsPage() {
   const { user } = useAuth();
   const [bundles, setBundles] = useState<AnalysisBundle[]>([]);
+  const [govStatus, setGovStatus] = useState<{ prevent_self_moderation: boolean } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -117,8 +119,12 @@ export default function AdminSubmissionsPage() {
     setLoading(true);
     setError(null);
     try {
-      const data = await getAdminBundles();
+      const [data, gov] = await Promise.all([
+        getAdminBundles(),
+        getGovernanceStatus().catch(() => null),
+      ]);
       setBundles(data);
+      setGovStatus(gov);
     } catch {
       setError("Failed to load submissions");
     } finally {
@@ -270,6 +276,7 @@ export default function AdminSubmissionsPage() {
           <table className="table">
             <thead>
               <tr>
+                <th>Project</th>
                 <th>Name</th>
                 <th>Status</th>
                 <th>Runtime</th>
@@ -283,6 +290,9 @@ export default function AdminSubmissionsPage() {
                 const badge = bundleStatusStyle(b.status);
                 return (
                   <tr key={b.id}>
+                    <td style={{ color: "var(--color-text-secondary)" }}>
+                      {b.project_name || b.project_id.slice(0, 8)}
+                    </td>
                     <td style={{ fontWeight: 500 }}>{b.name}</td>
                     <td>
                       <span
@@ -309,55 +319,78 @@ export default function AdminSubmissionsPage() {
                         <div style={{ display: "flex", gap: "var(--spacing-xs)" }}>
                           {b.status === "submitted" && (
                             <>
-                              <button
-                                className="btn btn-sm"
-                                style={{
-                                  background: "var(--color-success, #2e7d32)",
-                                  color: "#fff",
-                                  border: "none",
-                                }}
-                                onClick={() =>
-                                  handleAction("Approve", b.id, approveBundle)
-                                }
-                                disabled={actionLoading}
-                              >
-                                {actionLoading ? "Processing…" : "Approve"}
-                              </button>
-                              <button
-                                className="btn btn-sm"
-                                style={{
-                                  background: "var(--color-danger, #c62828)",
-                                  color: "#fff",
-                                  border: "none",
-                                }}
-                                onClick={() =>
-                                  handleAction("Reject", b.id, rejectBundle)
-                                }
-                                disabled={actionLoading}
-                              >
-                                {actionLoading ? "Processing…" : "Reject"}
-                              </button>
+                              {govStatus?.prevent_self_moderation === true
+                                && b.submitted_by_id === user?.id
+                                && !user?.capabilities.includes("governance.self_regulate") ? (
+                                <span style={{ color: "var(--color-text-secondary)", fontSize: "0.85rem", fontStyle: "italic" }}>
+                                  Independent moderation required. You submitted
+                                  this analysis bundle for institutional review.
+                                  Another authorised moderator must approve or reject it.
+                                </span>
+                              ) : (
+                                <>
+                                  <button
+                                    className="btn btn-sm"
+                                    style={{
+                                      background: "var(--color-success, #2e7d32)",
+                                      color: "#fff",
+                                      border: "none",
+                                    }}
+                                    onClick={() =>
+                                      handleAction("Approve", b.id, approveBundle)
+                                    }
+                                    disabled={actionLoading}
+                                  >
+                                    {actionLoading ? "Processing…" : "Approve"}
+                                  </button>
+                                  <button
+                                    className="btn btn-sm"
+                                    style={{
+                                      background: "var(--color-danger, #c62828)",
+                                      color: "#fff",
+                                      border: "none",
+                                    }}
+                                    onClick={() =>
+                                      handleAction("Reject", b.id, rejectBundle)
+                                    }
+                                    disabled={actionLoading}
+                                  >
+                                    {actionLoading ? "Processing…" : "Reject"}
+                                  </button>
+                                </>
+                              )}
                             </>
                           )}
                           {b.status === "approved_for_execution" && (
-                            <button
-                              className="btn btn-sm"
-                              style={{
-                                background: "#fff3cd",
-                                color: "#856404",
-                                border: "1px solid #856404",
-                              }}
-                              onClick={() =>
-                                handleAction(
-                                  "Supersede",
-                                  b.id,
-                                  supersedeBundle,
-                                )
-                              }
-                              disabled={actionLoading}
-                            >
-                              {actionLoading ? "Processing…" : "Supersede"}
-                            </button>
+                            <>
+                              {govStatus?.prevent_self_moderation === true
+                                && b.submitted_by_id === user?.id
+                                && !user?.capabilities.includes("governance.self_regulate") ? (
+                                <span style={{ color: "var(--color-text-secondary)", fontSize: "0.85rem", fontStyle: "italic" }}>
+                                  Independent moderation required.
+                                  Another authorised moderator must supersede this submission.
+                                </span>
+                              ) : (
+                                <button
+                                  className="btn btn-sm"
+                                  style={{
+                                    background: "#fff3cd",
+                                    color: "#856404",
+                                    border: "1px solid #856404",
+                                  }}
+                                  onClick={() =>
+                                    handleAction(
+                                      "Supersede",
+                                      b.id,
+                                      supersedeBundle,
+                                    )
+                                  }
+                                  disabled={actionLoading}
+                                >
+                                  {actionLoading ? "Processing…" : "Supersede"}
+                                </button>
+                              )}
+                            </>
                           )}
                         </div>
                       </td>

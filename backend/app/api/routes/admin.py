@@ -8,7 +8,7 @@ from fastapi.responses import PlainTextResponse, Response
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_user
-from app.auth.policy import PolicyError, require_capability
+from app.auth.policy import PolicyError, require_capability, require_project_membership
 from app.db.session import get_db
 from app.models.analysis_bundle import AnalysisBundle
 from app.models.audit_event import AuditEventType
@@ -32,6 +32,7 @@ from app.schemas.user import UserCreate, UserRead, UserUpdate
 from app.services.analysis_bundle_service import (
     get_environment_runtime,
     get_resource_identifiers,
+    list_bundles_for_member,
 )
 from app.services.audit_service import create_audit_event, query_audit_events
 from app.services.bundle_store import get_bundle_store
@@ -45,11 +46,12 @@ from app.services.output_service import get_output
 from app.services.output_set_service import (
     get_output_set,
     get_output_set_by_execution,
-    list_output_sets,
+    list_output_sets_for_member,
     list_outputs_by_set,
 )
 from app.services.platform_settings_service import (
     get_all_settings,
+    get_setting_bool,
     set_setting,
 )
 from app.services.terms_service import (
@@ -188,7 +190,7 @@ def list_bundles(
     current_user: User = Depends(get_current_user),
 ):
     _check_admin_view(current_user)
-    bundles = db.query(AnalysisBundle).order_by(AnalysisBundle.name).all()
+    bundles = list_bundles_for_member(db, current_user.id)
     result = []
     for b in bundles:
         ai_review_read = (
@@ -200,6 +202,7 @@ def list_bundles(
             id=b.id,
             project_id=b.project_id,
             created_by_id=b.created_by_id,
+            submitted_by_id=b.submitted_by_id,
             execution_environment_id=b.execution_environment_id,
             name=b.name,
             source_path=b.source_path,
@@ -219,6 +222,7 @@ def list_bundles(
             build_log=_build_log_for_bundle(db, b.id),
             created_at=b.created_at,
             updated_at=b.updated_at,
+            project_name=b.project.name,
             ai_review=ai_review_read,
         )
         result.append(read)
@@ -238,6 +242,7 @@ def get_bundle(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Bundle not found",
         )
+    require_project_membership(db, current_user, bundle.project_id)
     ai_review_read = (
         AIBundleReviewRead.model_validate(bundle.ai_review)
         if bundle.ai_review is not None
@@ -247,6 +252,7 @@ def get_bundle(
         id=bundle.id,
         project_id=bundle.project_id,
         created_by_id=bundle.created_by_id,
+        submitted_by_id=bundle.submitted_by_id,
         execution_environment_id=bundle.execution_environment_id,
         name=bundle.name,
         source_path=bundle.source_path,
@@ -266,6 +272,7 @@ def get_bundle(
         build_log=_build_log_for_bundle(db, bundle.id),
         created_at=bundle.created_at,
         updated_at=bundle.updated_at,
+        project_name=bundle.project.name,
         ai_review=ai_review_read,
     )
 
@@ -278,6 +285,7 @@ def get_admin_bundle_files(
 ):
     _check_admin_view(current_user)
     bundle = _get_admin_bundle(bundle_id, db)
+    require_project_membership(db, current_user, bundle.project_id)
     store = get_bundle_store()
     files = store.list_files(bundle.id)
     return {
@@ -395,7 +403,7 @@ def list_admin_output_sets(
     current_user: User = Depends(get_current_user),
 ):
     _require_capability(current_user, Capability.OUTPUT_REVIEW)
-    sets = list_output_sets(db)
+    sets = list_output_sets_for_member(db, current_user.id)
     result: list[OutputSetListItem] = []
     for s in sets:
         req = s.execution_request
@@ -407,6 +415,8 @@ def list_admin_output_sets(
                 status=s.status,
                 file_count=len(s.outputs) if s.outputs else 0,
                 release_package_size=s.release_package_size,
+                requested_by_id=req.requested_by_id if req else None,
+                project_name=req.project.name if req and req.project else "",
                 created_at=s.created_at,
                 updated_at=s.updated_at,
             )
@@ -449,6 +459,7 @@ def get_admin_output_set(
             for o in outputs
         ],
         file_count=len(outputs),
+        requested_by_id=req.requested_by_id if req else None,
         created_at=output_set.created_at,
         updated_at=output_set.updated_at,
     )
@@ -494,6 +505,7 @@ def list_admin_execution_request_outputs(
             for o in outputs
         ],
         file_count=len(outputs),
+        requested_by_id=request.requested_by_id,
         created_at=output_set.created_at,
         updated_at=output_set.updated_at,
     )
@@ -542,7 +554,19 @@ def post_admin_approve_output_set(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Output set not found",
         )
+    require_project_membership(
+        db, current_user, output_set.execution_request.project_id
+    )
     _require_capability(current_user, Capability.OUTPUT_REVIEW)
+    if (
+        get_setting_bool(db, SettingKey.PREVENT_SELF_MODERATION, default=True)
+        and not current_user.has_capability(Capability.GOVERNANCE_SELF_REGULATE)
+        and current_user.id == output_set.execution_request.requested_by_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You cannot moderate your own work",
+        )
     try:
         approve_output_set(db, output_set)
     except ValueError as e:
@@ -580,6 +604,7 @@ def post_admin_approve_output_set(
             for o in outputs
         ],
         file_count=len(outputs),
+        requested_by_id=req.requested_by_id if req else None,
         created_at=output_set.created_at,
         updated_at=output_set.updated_at,
     )
@@ -600,7 +625,19 @@ def post_admin_reject_output_set(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Output set not found",
         )
+    require_project_membership(
+        db, current_user, output_set.execution_request.project_id
+    )
     _require_capability(current_user, Capability.OUTPUT_REVIEW)
+    if (
+        get_setting_bool(db, SettingKey.PREVENT_SELF_MODERATION, default=True)
+        and not current_user.has_capability(Capability.GOVERNANCE_SELF_REGULATE)
+        and current_user.id == output_set.execution_request.requested_by_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You cannot moderate your own work",
+        )
     try:
         reject_output_set(db, output_set)
     except ValueError as e:
@@ -638,6 +675,7 @@ def post_admin_reject_output_set(
             for o in outputs
         ],
         file_count=len(outputs),
+        requested_by_id=req.requested_by_id if req else None,
         created_at=output_set.created_at,
         updated_at=output_set.updated_at,
     )
@@ -659,7 +697,19 @@ def post_admin_release_output_set(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Output set not found",
         )
+    require_project_membership(
+        db, current_user, output_set.execution_request.project_id
+    )
     _require_capability(current_user, Capability.OUTPUT_RELEASE)
+    if (
+        get_setting_bool(db, SettingKey.PREVENT_SELF_MODERATION, default=True)
+        and not current_user.has_capability(Capability.GOVERNANCE_SELF_REGULATE)
+        and current_user.id == output_set.execution_request.requested_by_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You cannot moderate your own work",
+        )
     try:
         release_output_set(db, output_set)
     except (ValueError, OSError) as e:
@@ -708,6 +758,7 @@ def post_admin_release_output_set(
             for o in outputs
         ],
         file_count=len(outputs),
+        requested_by_id=req.requested_by_id if req else None,
         created_at=output_set.created_at,
         updated_at=output_set.updated_at,
     )
@@ -848,6 +899,7 @@ def _admin_bundle_to_read(
         id=bundle.id,
         project_id=bundle.project_id,
         created_by_id=bundle.created_by_id,
+        submitted_by_id=bundle.submitted_by_id,
         execution_environment_id=bundle.execution_environment_id,
         name=bundle.name,
         source_path=bundle.source_path,
@@ -867,6 +919,7 @@ def _admin_bundle_to_read(
         build_log=build_log,
         created_at=bundle.created_at,
         updated_at=bundle.updated_at,
+        project_name=bundle.project.name,
         ai_review=ai_review_read,
     )
 
@@ -891,7 +944,18 @@ def post_admin_approve_bundle(
     current_user: User = Depends(get_current_user),
 ):
     bundle = _get_admin_bundle(bundle_id, db)
+    require_project_membership(db, current_user, bundle.project_id)
     _require_capability(current_user, Capability.BUNDLE_REVIEW)
+    if (
+        bundle.submitted_by_id is not None
+        and get_setting_bool(db, SettingKey.PREVENT_SELF_MODERATION, default=True)
+        and not current_user.has_capability(Capability.GOVERNANCE_SELF_REGULATE)
+        and current_user.id == bundle.submitted_by_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You cannot moderate your own work",
+        )
     try:
         approve_bundle(db, bundle)
     except ValueError as e:
@@ -923,7 +987,18 @@ def post_admin_reject_bundle(
     current_user: User = Depends(get_current_user),
 ):
     bundle = _get_admin_bundle(bundle_id, db)
+    require_project_membership(db, current_user, bundle.project_id)
     _require_capability(current_user, Capability.BUNDLE_REVIEW)
+    if (
+        bundle.submitted_by_id is not None
+        and get_setting_bool(db, SettingKey.PREVENT_SELF_MODERATION, default=True)
+        and not current_user.has_capability(Capability.GOVERNANCE_SELF_REGULATE)
+        and current_user.id == bundle.submitted_by_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You cannot moderate your own work",
+        )
     try:
         reject_bundle(db, bundle)
     except ValueError as e:
@@ -955,6 +1030,17 @@ def post_admin_supersede_bundle(
     current_user: User = Depends(get_current_user),
 ):
     bundle = _get_admin_bundle(bundle_id, db)
+    require_project_membership(db, current_user, bundle.project_id)
+    if (
+        bundle.submitted_by_id is not None
+        and get_setting_bool(db, SettingKey.PREVENT_SELF_MODERATION, default=True)
+        and not current_user.has_capability(Capability.GOVERNANCE_SELF_REGULATE)
+        and current_user.id == bundle.submitted_by_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You cannot moderate your own work",
+        )
     if current_user.id != bundle.created_by_id:
         _require_capability(current_user, Capability.BUNDLE_REVIEW)
     try:
@@ -996,6 +1082,18 @@ def put_admin_setting(
 ):
     _require_capability(current_user, Capability.SETTINGS_MANAGE)
     return set_setting(db, key, body.value)
+
+
+@router.get("/admin/governance/status")
+def get_governance_status(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return {
+        "prevent_self_moderation": get_setting_bool(
+            db, SettingKey.PREVENT_SELF_MODERATION, default=True
+        )
+    }
 
 
 @router.post(

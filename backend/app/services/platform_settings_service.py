@@ -12,8 +12,10 @@ def get_setting(db: Session, key: SettingKey) -> str | None:
     return row.value if row is not None else None
 
 
-def get_setting_bool(db: Session, key: SettingKey) -> bool:
+def get_setting_bool(db: Session, key: SettingKey, default: bool = False) -> bool:
     value = get_setting(db, key)
+    if value is None:
+        return default
     return value == "true"
 
 

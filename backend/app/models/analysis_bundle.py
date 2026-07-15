@@ -87,6 +87,12 @@ class AnalysisBundle(Base):
     execution_image_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("execution_images.id"), nullable=True
     )
+    submitted_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
+    )
+    submitted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -95,7 +101,11 @@ class AnalysisBundle(Base):
     )
 
     project: Mapped["Project"] = relationship(backref="analysis_bundles")
-    created_by: Mapped["User"] = relationship(backref="created_bundles")
+    created_by: Mapped["User"] = relationship(
+        foreign_keys=[created_by_id],
+        backref="created_bundles",
+    )
+    submitted_by: Mapped["User | None"] = relationship(foreign_keys=[submitted_by_id])
     execution_environment: Mapped["ExecutionEnvironment | None"] = relationship()
     execution_image: Mapped["ExecutionImage | None"] = relationship()
 

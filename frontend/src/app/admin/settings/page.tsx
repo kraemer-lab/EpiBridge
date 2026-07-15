@@ -51,8 +51,12 @@ export default function AdminSettingsPage() {
     try {
       const updated = await updateAdminSetting(key, newValue);
       setSettings((prev) => ({ ...prev, [key]: updated.value }));
+      const labels: Record<string, string> = {
+        ai_review_enabled: "AI-assisted bundle review",
+        prevent_self_moderation: "Governance independence",
+      };
       setSuccess(
-        `AI-assisted bundle review ${newValue === "true" ? "enabled" : "disabled"}`,
+        `${labels[key] || key} ${newValue === "true" ? "enabled" : "disabled"}`,
       );
     } catch {
       setError("Failed to update setting");
@@ -66,6 +70,7 @@ export default function AdminSettingsPage() {
   }
 
   const aiEnabled = settings?.["ai_review_enabled"] === "true";
+  const moderationEnabled = settings?.["prevent_self_moderation"] !== "false";
   const aiUnavailable = aiStatus !== null && !aiStatus.ready;
   const toggleDisabled = saving === "ai_review_enabled" || (aiUnavailable && !aiEnabled);
 
@@ -184,6 +189,52 @@ export default function AdminSettingsPage() {
             {saving === "ai_review_enabled"
               ? "..."
               : aiEnabled
+                ? "Enabled"
+                : "Disabled"}
+          </button>
+        </div>
+      </div>
+
+      <div className="card" style={{ maxWidth: "600px", marginTop: "var(--spacing-lg)" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
+          <div>
+            <h3 style={{ fontSize: "1rem", fontWeight: 600, margin: 0 }}>
+              Prevent self-moderation
+            </h3>
+            <p
+              style={{
+                fontSize: "0.85rem",
+                color: "var(--color-text-secondary)",
+                marginTop: "var(--spacing-xs)",
+                marginBottom: 0,
+              }}
+            >
+              When enabled, the actor who submits a bundle or requests execution
+              cannot review, approve, reject, or release that same item.
+            </p>
+          </div>
+          <button
+            className="btn"
+            onClick={() => handleToggle("prevent_self_moderation", moderationEnabled ? "true" : "false")}
+            disabled={saving === "prevent_self_moderation"}
+            style={{
+              minWidth: "80px",
+              background: moderationEnabled ? "#d4edda" : "#f0f0f0",
+              color: moderationEnabled ? "#155724" : "#666",
+              border: moderationEnabled ? "1px solid #c3e6cb" : "1px solid #ddd",
+              opacity: saving === "prevent_self_moderation" ? 0.5 : 1,
+              cursor: saving === "prevent_self_moderation" ? "not-allowed" : "pointer",
+            }}
+          >
+            {saving === "prevent_self_moderation"
+              ? "..."
+              : moderationEnabled
                 ? "Enabled"
                 : "Disabled"}
           </button>

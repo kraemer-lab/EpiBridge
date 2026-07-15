@@ -56,6 +56,23 @@ def list_output_sets(db: Session) -> list[OutputSet]:
     return db.query(OutputSet).order_by(OutputSet.created_at.desc()).all()
 
 
+def list_output_sets_for_member(db: Session, user_id: uuid.UUID) -> list[OutputSet]:
+    from app.models.execution_request import ExecutionRequest
+    from app.models.project_membership import ProjectMembership
+
+    return (
+        db.query(OutputSet)
+        .join(ExecutionRequest, OutputSet.execution_request_id == ExecutionRequest.id)
+        .join(
+            ProjectMembership,
+            ExecutionRequest.project_id == ProjectMembership.project_id,
+        )
+        .filter(ProjectMembership.user_id == user_id)
+        .order_by(OutputSet.created_at.desc())
+        .all()
+    )
+
+
 def get_output_set(db: Session, output_set_id: uuid.UUID) -> OutputSet | None:
     return db.query(OutputSet).filter(OutputSet.id == output_set_id).first()
 

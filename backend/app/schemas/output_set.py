@@ -16,6 +16,8 @@ class OutputSetRead(BaseModel):
     release_package_size: int | None
     outputs: List[OutputRead]
     file_count: int
+    requested_by_id: uuid.UUID | None = None
+    project_name: str = ""
     created_at: datetime
     updated_at: datetime
 
@@ -29,6 +31,8 @@ class OutputSetListItem(BaseModel):
     status: OutputSetStatus
     file_count: int
     release_package_size: int | None
+    requested_by_id: uuid.UUID | None = None
+    project_name: str = ""
     created_at: datetime
     updated_at: datetime
 
