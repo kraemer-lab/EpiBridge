@@ -1,5 +1,7 @@
 # EpiBridge
-[![EpiBridge](https://github.com/kraemer-lab/EpiBridge/actions/workflows/EpiBridge.yml/badge.svg)](https://github.com/kraemer-lab/EpiBridge/actions/workflows/EpiBridge.yml)
+[![EpiBridge](https://github.com/kraemer-lab/EpiBridge/actions/workflows/EpiBridge.yml/badge.svg)](https://github.com/kraemer-lab/EpiBridge/actions/workflows/EpiBridge.yml) [![Documentation Status](https://readthedocs.org/projects/epibridge/badge/?version=latest)](https://epibridge.readthedocs.io/en/latest/?badge=latest)
+
+Documentation: [ReadTheDocs](https://epibridge.readthedocs.io/en/latest)
 
 Secure remote analysis for sensitive epidemiological data.
 
