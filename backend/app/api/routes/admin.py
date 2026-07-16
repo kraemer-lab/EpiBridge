@@ -442,7 +442,7 @@ def list_admin_execution_requests(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _check_admin_view(current_user)
+    _require_capability(current_user, Capability.EXECUTION_READ)
     requests = list_execution_requests(db)
     return [request_to_read(r) for r in requests]
 
@@ -456,7 +456,7 @@ def get_admin_execution_request(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _check_admin_view(current_user)
+    _require_capability(current_user, Capability.EXECUTION_READ)
     request = get_execution_request(db, request_id)
     if request is None:
         raise HTTPException(
@@ -1264,7 +1264,7 @@ def get_admin_audit_events(
     offset: int = Query(0, ge=0),
     order: str = Query("desc", pattern="^(asc|desc)$"),
 ):
-    _check_admin_view(current_user)
+    _require_capability(current_user, Capability.AUDIT_READ)
 
     items, total = query_audit_events(
         db,

@@ -39,6 +39,10 @@ _ROLE_CAPABILITY_MAP: dict[UserRole, set[str]] = {
         Capability.TERMS_MANAGE,
         Capability.SETTINGS_MANAGE,
         Capability.EXECUTION_CANCEL,
+        Capability.EXECUTION_READ,
+        Capability.AUDIT_READ,
+        Capability.ENVIRONMENT_MANAGE,
+        Capability.DATA_MANAGE,
     },
 }
 

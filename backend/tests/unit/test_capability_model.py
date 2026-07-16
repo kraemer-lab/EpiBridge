@@ -21,6 +21,8 @@ def test_capability_enum_values():
     assert Capability.VALIDATION_RUN.value == "validation.run"
     assert Capability.SETTINGS_MANAGE.value == "settings.manage"
     assert Capability.EXECUTION_CANCEL.value == "execution.cancel"
+    assert Capability.EXECUTION_READ.value == "execution.read"
+    assert Capability.AUDIT_READ.value == "audit.read"
 
 
 def test_all_values_contains_all():
@@ -29,4 +31,4 @@ def test_all_values_contains_all():
 
 
 def test_all_values_count():
-    assert len(ALL_CAPABILITIES) == 19
+    assert len(ALL_CAPABILITIES) == 21

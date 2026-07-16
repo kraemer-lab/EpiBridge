@@ -6,12 +6,13 @@ import { useAuth } from "@/lib/AuthContext";
 import styles from "./Sidebar.module.css";
 
 const adminCapabilities = [
-  "bundle.review",
-  "output.review",
-  "output.release",
   "user.manage",
   "data.manage",
   "environment.manage",
+  "terms.manage",
+  "settings.manage",
+  "execution.read",
+  "audit.read",
 ];
 
 const reviewCapabilities = [
