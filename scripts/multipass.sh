@@ -15,9 +15,11 @@ CLOUD_INIT="vm/cloud-init.yaml"
 # frontend, worker, Caddy, BuildKit, and optionally Ollama
 # simultaneously.  These defaults provide comfortable headroom
 # for the full stack plus Docker image builds.
+# 60G disk accommodates the Docker image cache plus the Ollama
+# model (~4GB) with room to spare.
 MULTIPASS_CPUS="${MULTIPASS_CPUS:-2}"
 MULTIPASS_MEMORY="${MULTIPASS_MEMORY:-4G}"
-MULTIPASS_DISK="${MULTIPASS_DISK:-20G}"
+MULTIPASS_DISK="${MULTIPASS_DISK:-60G}"
 
 # Validate that the required runtime is available before any operation.
 if ! command -v multipass &>/dev/null; then

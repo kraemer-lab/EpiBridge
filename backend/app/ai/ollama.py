@@ -195,6 +195,7 @@ class OllamaProvider(AIProvider):
                 "prompt": prompt,
                 "stream": False,
                 "format": REVIEW_RESPONSE_SCHEMA,
+                "keep_alive": 0,
             }
         ).encode("utf-8")
 
