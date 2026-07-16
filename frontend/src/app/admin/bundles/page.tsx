@@ -7,6 +7,7 @@ import {
   AuditEvent,
   BundleFile,
   getAdminBundles,
+  getAdminBundle,
   getAdminBundleFiles,
   getAdminBundleFileContent,
   getAuditEvents,
@@ -14,11 +15,17 @@ import {
   approveBundle,
   rejectBundle,
   supersedeBundle,
+  triggerAdminBundleAiReview,
+  downloadAdminBundleFile,
+  downloadAdminBundleZip,
 } from "@/lib/api";
 import { formatBundleStatus, bundleStatusStyle } from "@/lib/status";
 import LogViewer from "@/components/LogViewer";
 import { CodeBlock } from "@/components/CodeBlock";
 import { RejectDialog } from "@/components/RejectDialog";
+import { ConfirmationDialog } from "@/components/ConfirmationDialog";
+import AIReviewCard from "@/components/AIReviewCard";
+import type { AIReview } from "@/components/AIReviewCard";
 
 const STATUS_FILTERS = [
   { value: "submitted", label: "Awaiting Review" },
@@ -66,13 +73,6 @@ function buildStatusBadge(status: string): { background: string; color: string; 
   }
 }
 
-function assessmentBadge(assessment: string): { background: string; color: string; label: string } {
-  if (assessment === "no behaviours requiring manual review") {
-    return { background: "#d4edda", color: "#155724", label: "Routine" };
-  }
-  return { background: "#fff3cd", color: "#856404", label: "Review recommended" };
-}
-
 const sectionHeader: React.CSSProperties = {
   fontSize: "0.85rem",
   fontWeight: 600,
@@ -98,7 +98,7 @@ const detailValue: React.CSSProperties = {
   color: "var(--color-text)",
 };
 
-export default function AdminSubmissionsPage() {
+export default function AdminAnalysesPage() {
   const { user } = useAuth();
   const [bundles, setBundles] = useState<AnalysisBundle[]>([]);
   const [govStatus, setGovStatus] = useState<{ prevent_self_moderation: boolean } | null>(null);
@@ -107,6 +107,7 @@ export default function AdminSubmissionsPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [rejectTarget, setRejectTarget] = useState<string | null>(null);
+  const [approveTarget, setApproveTarget] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState("submitted");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [bundleAudit, setBundleAudit] = useState<Record<string, AuditEvent[]>>({});
@@ -116,6 +117,8 @@ export default function AdminSubmissionsPage() {
   const [viewedFile, setViewedFile] = useState<Record<string, string | null>>({});
   const [fileContent, setFileContent] = useState<Record<string, string>>({});
   const [fileContentLoading, setFileContentLoading] = useState<Record<string, boolean>>({});
+  const [aiReviewTriggerId, setAiReviewTriggerId] = useState<string | null>(null);
+  const [aiStatus, setAiStatus] = useState<Record<string, AIReview | null>>({});
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -128,7 +131,7 @@ export default function AdminSubmissionsPage() {
       setBundles(data);
       setGovStatus(gov);
     } catch {
-      setError("Failed to load submissions");
+      setError("Failed to load analyses");
     } finally {
       setLoading(false);
     }
@@ -188,6 +191,21 @@ export default function AdminSubmissionsPage() {
         setFilesLoading((prev) => ({ ...prev, [bundleId]: false }));
       }
     }
+    try {
+      const freshBundle = await getAdminBundle(bundleId);
+      setAiStatus((prev) => ({
+        ...prev,
+        [bundleId]: freshBundle.ai_review ?? null,
+      }));
+    } catch {
+      const existing = bundles.find((b) => b.id === bundleId);
+      if (existing) {
+        setAiStatus((prev) => ({
+          ...prev,
+          [bundleId]: existing.ai_review ?? null,
+        }));
+      }
+    }
   };
 
   const handleViewFile = async (bundleId: string, path: string) => {
@@ -209,12 +227,87 @@ export default function AdminSubmissionsPage() {
     }
   };
 
+  const handleTriggerAiReview = async (bundleId: string) => {
+    setAiReviewTriggerId(bundleId);
+    setAiStatus((prev) => ({
+      ...prev,
+      [bundleId]: {
+        id: "",
+        status: "pending",
+        summary: null,
+        assessment: null,
+        assessment_confidence: null,
+        reviewer_notes: null,
+      },
+    }));
+    try {
+      const updated = await triggerAdminBundleAiReview(bundleId);
+      setAiStatus((prev) => ({
+        ...prev,
+        [bundleId]: updated.ai_review ?? null,
+      }));
+    } catch {
+      // Polling below will recover from any transient errors
+    }
+    const poll = setInterval(async () => {
+      try {
+        const refreshed = await getAdminBundle(bundleId);
+        const review = refreshed.ai_review;
+        if (review && review.status !== "pending") {
+          setAiStatus((prev) => ({ ...prev, [bundleId]: review }));
+          clearInterval(poll);
+          setAiReviewTriggerId(null);
+        }
+      } catch {
+        clearInterval(poll);
+        setAiReviewTriggerId(null);
+      }
+    }, 5000);
+  };
+
+  const pendingReviewId = expandedId && aiStatus[expandedId]?.status === "pending" ? expandedId : null;
+
+  useEffect(() => {
+    if (!pendingReviewId) return;
+
+    const poll = setInterval(async () => {
+      try {
+        const refreshed = await getAdminBundle(pendingReviewId);
+        const r = refreshed.ai_review;
+        if (r && r.status !== "pending") {
+          setAiStatus((prev) => ({ ...prev, [pendingReviewId]: r }));
+          clearInterval(poll);
+        }
+      } catch {
+        clearInterval(poll);
+      }
+    }, 5000);
+
+    return () => clearInterval(poll);
+  }, [pendingReviewId]);
+
+  const handleDownloadFile = async (bundleId: string, path: string) => {
+    try {
+      await downloadAdminBundleFile(bundleId, path);
+    } catch {
+      // silent
+    }
+  };
+
+  const handleDownloadAll = async (bundleId: string) => {
+    try {
+      await downloadAdminBundleZip(bundleId);
+    } catch {
+      // silent
+    }
+  };
+
   const canReview = user?.capabilities.includes("bundle.review");
 
   return (
     <>
       <h2 style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: "var(--spacing-sm)" }}>
-        Submission Operations
+        Analysis Operations
       </h2>
 
       <div style={{ display: "flex", gap: "var(--spacing-xs)", marginBottom: "var(--spacing-md)", flexWrap: "wrap" }}>
@@ -268,6 +361,25 @@ export default function AdminSubmissionsPage() {
         />
       )}
 
+      {approveTarget && (
+        <ConfirmationDialog
+          title="Approve Analysis?"
+          message={
+            "This Analysis Bundle will be approved for execution.\n\n" +
+            "Confirm that you are satisfied the submitted analysis " +
+            "is appropriate to proceed to execution.\n\n" +
+            "*You are making an institutional governance decision.*"
+          }
+          confirmLabel="Approve Analysis"
+          onConfirm={() => {
+            const id = approveTarget;
+            setApproveTarget(null);
+            handleAction("Approve", id, approveBundle);
+          }}
+          onCancel={() => setApproveTarget(null)}
+        />
+      )}
+
       {actionError && (
         <div
           style={{
@@ -290,10 +402,11 @@ export default function AdminSubmissionsPage() {
       ) : filteredBundles.length === 0 ? (
         <div className="card empty-state">
           {statusFilter === "submitted"
-            ? "No submissions awaiting review."
+            ? "No analyses awaiting review."
             : `No bundles with status "${formatBundleStatus(statusFilter)}".`}
         </div>
       ) : (
+        <>
         <div className="card" style={{ padding: 0, overflow: "hidden" }}>
           <table className="table">
             <thead>
@@ -303,7 +416,6 @@ export default function AdminSubmissionsPage() {
                 <th>Status</th>
                 <th>Runtime</th>
                 <th>Version</th>
-                {canReview && <th>Actions</th>}
                 <th>Inspect</th>
               </tr>
             </thead>
@@ -336,85 +448,6 @@ export default function AdminSubmissionsPage() {
                     <td style={{ color: "var(--color-text-secondary)" }}>
                       {b.version}
                     </td>
-                    {canReview && (
-                      <td>
-                        <div style={{ display: "flex", gap: "var(--spacing-xs)" }}>
-                          {b.status === "submitted" && (
-                            <>
-                              {govStatus?.prevent_self_moderation === true
-                                && b.submitted_by_id === user?.id
-                                && !user?.capabilities.includes("governance.self_regulate") ? (
-                                <span style={{ color: "var(--color-text-secondary)", fontSize: "0.85rem", fontStyle: "italic" }}>
-                                  Independent moderation required. You submitted
-                                  this analysis bundle for institutional review.
-                                  Another authorised moderator must approve or reject it.
-                                </span>
-                              ) : (
-                                <>
-                                  <button
-                                    className="btn btn-sm"
-                                    style={{
-                                      background: "var(--color-success, #2e7d32)",
-                                      color: "#fff",
-                                      border: "none",
-                                    }}
-                                    onClick={() =>
-                                      handleAction("Approve", b.id, approveBundle)
-                                    }
-                                    disabled={actionLoading}
-                                  >
-                                    {actionLoading ? "Processing…" : "Approve"}
-                                  </button>
-                                  <button
-                                    className="btn btn-sm"
-                                    style={{
-                                      background: "var(--color-danger, #c62828)",
-                                      color: "#fff",
-                                      border: "none",
-                                    }}
-                                    onClick={() => setRejectTarget(b.id)}
-                                    disabled={actionLoading}
-                                  >
-                                    {actionLoading ? "Processing…" : "Reject"}
-                                  </button>
-                                </>
-                              )}
-                            </>
-                          )}
-                          {b.status === "approved_for_execution" && (
-                            <>
-                              {govStatus?.prevent_self_moderation === true
-                                && b.submitted_by_id === user?.id
-                                && !user?.capabilities.includes("governance.self_regulate") ? (
-                                <span style={{ color: "var(--color-text-secondary)", fontSize: "0.85rem", fontStyle: "italic" }}>
-                                  Independent moderation required.
-                                  Another authorised moderator must supersede this submission.
-                                </span>
-                              ) : (
-                                <button
-                                  className="btn btn-sm"
-                                  style={{
-                                    background: "#fff3cd",
-                                    color: "#856404",
-                                    border: "1px solid #856404",
-                                  }}
-                                  onClick={() =>
-                                    handleAction(
-                                      "Supersede",
-                                      b.id,
-                                      supersedeBundle,
-                                    )
-                                  }
-                                  disabled={actionLoading}
-                                >
-                                  {actionLoading ? "Processing…" : "Supersede"}
-                                </button>
-                              )}
-                            </>
-                          )}
-                        </div>
-                      </td>
-                    )}
                     <td>
                       <button
                         onClick={() => handleExpand(b.id)}
@@ -437,21 +470,24 @@ export default function AdminSubmissionsPage() {
               })}
             </tbody>
           </table>
+        </div>
 
-          {expandedId && (() => {
-            const b = filteredBundles.find((x) => x.id === expandedId);
-            if (!b) return null;
-            const buildBadge = buildStatusBadge(b.build_status);
-            return (
-              <div
-                style={{
-                  borderTop: "1px solid var(--color-border, #eee)",
-                  padding: "var(--spacing-md)",
-                  fontSize: "0.85rem",
-                }}
-              >
+        {expandedId && (() => {
+          const b = filteredBundles.find((x) => x.id === expandedId);
+          if (!b) return null;
+          const buildBadge = buildStatusBadge(b.build_status);
+          return (
+            <div
+              className="card"
+              style={{
+                marginTop: "var(--spacing-md)",
+                padding: "var(--spacing-lg)",
+                borderTop: "3px solid var(--color-primary, #1976d2)",
+                fontSize: "0.85rem",
+              }}
+            >
                 {/* Overview */}
-                <section aria-label="Submission Overview">
+                <section aria-label="Analysis Overview">
                   <h3 style={sectionHeader}>Overview</h3>
                   {b.rejection_reason && (
                     <div style={{ ...detailRow, flexDirection: "column", gap: "2px", marginBottom: "var(--spacing-sm)", padding: "8px 12px", background: "#f8d7da", borderRadius: "4px" }}>
@@ -547,69 +583,38 @@ export default function AdminSubmissionsPage() {
                 </section>
 
                 {/* AI Review */}
-                {b.ai_review && (
-                  <section aria-label="AI Review">
-                    <h3 style={sectionHeader}>
-                      AI Review{" "}
-                      <span style={{ fontWeight: 400, color: "var(--color-text-secondary)", fontSize: "0.8rem" }}>
-                        (Advisory)
-                      </span>
-                    </h3>
-                    {b.ai_review.status !== "completed" ? (
-                      <div style={{ color: "var(--color-text-secondary)", fontSize: "0.85rem" }}>
-                        AI review in progress...
-                      </div>
-                    ) : (
-                      <>
-                        {b.ai_review.assessment && (() => {
-                          const ab = assessmentBadge(b.ai_review.assessment);
-                          return (
-                            <div style={detailRow}>
-                              <span style={detailLabel}>Assessment</span>
-                              <span
-                                style={{
-                                  display: "inline-block",
-                                  padding: "2px 8px",
-                                  borderRadius: "4px",
-                                  fontSize: "0.8rem",
-                                  fontWeight: 600,
-                                  background: ab.background,
-                                  color: ab.color,
-                                }}
-                              >
-                                {ab.label}
-                              </span>
-                            </div>
-                          );
-                        })()}
-                        {b.ai_review.assessment_confidence && (
-                          <div style={detailRow}>
-                            <span style={detailLabel}>Confidence</span>
-                            <span style={detailValue}>{b.ai_review.assessment_confidence}</span>
-                          </div>
-                        )}
-                        {b.ai_review.summary && (
-                          <div style={{ ...detailRow, flexDirection: "column", gap: "2px" }}>
-                            <span style={detailLabel}>Summary</span>
-                            <span style={detailValue}>{b.ai_review.summary}</span>
-                          </div>
-                        )}
-                        {b.ai_review.reviewer_notes && (
-                          <div style={{ ...detailRow, flexDirection: "column", gap: "2px" }}>
-                            <span style={detailLabel}>Reviewer notes</span>
-                            <span style={{ ...detailValue, whiteSpace: "pre-wrap" }}>
-                              {b.ai_review.reviewer_notes}
-                            </span>
-                          </div>
-                        )}
-                      </>
-                    )}
+                <section aria-label="AI Review">
+                  <AIReviewCard
+                    review={aiStatus[b.id] ?? null}
+                    title="AI Analysis Summary"
+                    onRefresh={
+                      aiStatus[b.id]?.status !== "pending"
+                        ? () => handleTriggerAiReview(b.id)
+                        : undefined
+                    }
+                    refreshing={aiReviewTriggerId === b.id}
+                  />
                 </section>
-                )}
 
                 {/* Bundle Files */}
                 <section aria-label="Bundle Files">
-                  <h3 style={sectionHeader}>Bundle Files</h3>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                    }}
+                  >
+                    <h3 style={sectionHeader}>Bundle Files</h3>
+                    {bundleFiles[b.id] && bundleFiles[b.id].length > 0 && (
+                      <button
+                        className="btn btn-sm"
+                        onClick={() => handleDownloadAll(b.id)}
+                      >
+                        Download All
+                      </button>
+                    )}
+                  </div>
                 {filesLoading[b.id] ? (
                   <div style={{ color: "var(--color-text-secondary)", fontSize: "0.85rem" }}>
                     Loading files...
@@ -630,6 +635,7 @@ export default function AdminSubmissionsPage() {
                         <tr>
                           <th>File</th>
                           <th>Size</th>
+                          <th></th>
                           <th></th>
                         </tr>
                       </thead>
@@ -658,6 +664,18 @@ export default function AdminSubmissionsPage() {
                                 onClick={() => handleViewFile(b.id, f.path)}
                               >
                                 {viewedFile[b.id] === f.path ? "Close" : "View"}
+                              </button>
+                            </td>
+                            <td>
+                              <button
+                                className="btn"
+                                style={{
+                                  fontSize: "0.75rem",
+                                  padding: "1px 6px",
+                                }}
+                                onClick={() => handleDownloadFile(b.id, f.path)}
+                              >
+                                Download
                               </button>
                             </td>
                           </tr>
@@ -699,7 +717,7 @@ export default function AdminSubmissionsPage() {
                   </div>
                 ) : bundleAudit[b.id].length === 0 ? (
                   <div style={{ color: "var(--color-text-secondary)", fontSize: "0.85rem" }}>
-                    No audit events for this submission.
+                    No audit events for this analysis.
                   </div>
                 ) : (
                   <div style={{ fontSize: "0.85rem" }}>
@@ -725,10 +743,89 @@ export default function AdminSubmissionsPage() {
                   </div>
                 )}
                 </section>
+
+                {/* Governance Actions */}
+                {canReview && (() => {
+                  const isSubmitted = b.status === "submitted";
+                  const isApprovedForExec = b.status === "approved_for_execution";
+                  if (!isSubmitted && !isApprovedForExec) return null;
+
+                  const blockedBySelfModeration =
+                    govStatus?.prevent_self_moderation === true
+                    && b.submitted_by_id === user?.id
+                    && !user?.capabilities.includes("governance.self_regulate");
+
+                  return (
+                    <section
+                      aria-label="Governance Actions"
+                      style={{
+                        paddingTop: "var(--spacing-md)",
+                      }}
+                    >
+                      {isSubmitted && blockedBySelfModeration && (
+                        <span style={{ color: "var(--color-text-secondary)", fontSize: "0.85rem", fontStyle: "italic" }}>
+                          Independent moderation required. You submitted
+                          this analysis bundle for institutional review.
+                          Another authorised moderator must approve or reject it.
+                        </span>
+                      )}
+                      {isApprovedForExec && blockedBySelfModeration && (
+                        <span style={{ color: "var(--color-text-secondary)", fontSize: "0.85rem", fontStyle: "italic" }}>
+                          Independent moderation required.
+                           Another authorised moderator must supersede this analysis.
+                        </span>
+                      )}
+                      {isSubmitted && !blockedBySelfModeration && (
+                        <div style={{ display: "flex", gap: "var(--spacing-sm)" }}>
+                          <button
+                            className="btn btn-sm"
+                            style={{
+                              background: "var(--color-success, #2e7d32)",
+                              color: "#fff",
+                              border: "none",
+                            }}
+                            onClick={() => setApproveTarget(b.id)}
+                            disabled={actionLoading}
+                          >
+                            {actionLoading ? "Processing…" : "Approve"}
+                          </button>
+                          <button
+                            className="btn btn-sm"
+                            style={{
+                              background: "var(--color-danger, #c62828)",
+                              color: "#fff",
+                              border: "none",
+                            }}
+                            onClick={() => setRejectTarget(b.id)}
+                            disabled={actionLoading}
+                          >
+                            {actionLoading ? "Processing…" : "Reject"}
+                          </button>
+                        </div>
+                      )}
+                      {isApprovedForExec && !blockedBySelfModeration && (
+                        <button
+                          className="btn btn-sm"
+                          style={{
+                            background: "#fff3cd",
+                            color: "#856404",
+                            border: "1px solid #856404",
+                          }}
+                          onClick={() =>
+                            handleAction("Supersede", b.id, supersedeBundle)
+                          }
+                          disabled={actionLoading}
+                        >
+                          {actionLoading ? "Processing…" : "Supersede"}
+                        </button>
+                      )}
+                    </section>
+                  );
+                })()}
               </div>
             );
           })()}
-        </div>
+        </>
       )}
     </>
   );

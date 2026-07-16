@@ -129,13 +129,15 @@ test("Canonical Workflow", async ({ page }) => {
   // 4. MODERATOR — review and approve bundle
   // ===================================================================
   await login(page, moderatorEmail, "testpass123");
-  await page.getByRole("link", { name: "Admin" }).click();
-  await page.getByRole("navigation", { name: "Admin tabs" }).getByRole("link", { name: "Submissions" }).click();
-  await expect(page.getByText("Submission Operations")).toBeVisible();
+  await page.getByRole("link", { name: "Review", exact: true }).click();
+  await page.getByRole("navigation", { name: "Review tabs" }).getByRole("link", { name: "Analyses" }).click();
+  await expect(page.getByText("Analysis Operations")).toBeVisible();
 
   const bundleRow = page.locator("tr").filter({ hasText: analysisName }).first();
   await expect(bundleRow).toBeVisible({ timeout: 15_000 });
-  await bundleRow.getByRole("button", { name: "Approve" }).click();
+  await bundleRow.getByRole("button", { name: "Inspect" }).click();
+  await page.getByRole("button", { name: "Approve", exact: true }).click();
+  await page.getByRole("button", { name: "Approve Analysis", exact: true }).click();
 
   await page.getByRole("button", { name: "Approved", exact: true }).click();
   await expect(page.locator("tr").filter({ hasText: analysisName }).first().getByText("Approved for Execution")).toBeVisible({ timeout: 10_000 });
@@ -151,22 +153,25 @@ test("Canonical Workflow", async ({ page }) => {
   await page.getByText(analysisName).click();
   await page.waitForURL(/\/projects\/[^/]+\/analysis\/[^/]+$/);
   await page.getByRole("button", { name: "Run Analysis" }).click();
-  await expect(page.locator("tr").filter({ hasText: analysisName }).getByText("completed")).toBeVisible({ timeout: 180_000 });
+  await expect(page.locator("tr").filter({ hasText: analysisName }).first().getByText("completed")).toBeVisible({ timeout: 180_000 });
   await page.getByRole("button", { name: "Sign out" }).click();
 
   // ===================================================================
   // 6. MODERATOR — approve output, verify audit
   // ===================================================================
   await login(page, moderatorEmail, "testpass123");
-  await page.getByRole("link", { name: "Admin" }).click();
-  await page.getByRole("navigation", { name: "Admin tabs" }).getByRole("link", { name: "Outputs" }).click();
+  await page.getByRole("link", { name: "Review" }).click();
+  await page.getByRole("navigation", { name: "Review tabs" }).getByRole("link", { name: "Outputs" }).click();
 
   const setRow = page.locator("tr").filter({ hasText: analysisName }).first();
   await expect(setRow).toBeVisible({ timeout: 30_000 });
-  await setRow.getByRole("button", { name: "Approve" }).click();
+  await setRow.getByRole("button", { name: "Inspect" }).click();
+  await page.getByRole("button", { name: "Approve", exact: true }).click();
+  await page.getByRole("button", { name: "Approve Output Set", exact: true }).click();
   await expect(setRow.getByText("Approved")).toBeVisible();
 
   // Verify audit events while still moderator
+  await page.getByRole("link", { name: "Admin" }).click();
   await page.getByRole("navigation", { name: "Admin tabs" }).getByRole("link", { name: "Audit Log" }).click();
   await expect(page.getByText("Audit Log")).toBeVisible();
   await expect(page.getByText("project.created").first()).toBeVisible({ timeout: 10_000 });

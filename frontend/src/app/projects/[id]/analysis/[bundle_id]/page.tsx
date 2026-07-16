@@ -19,16 +19,9 @@ import {
   deleteBundleFile,
   clearBundleFiles,
   submitBundle,
-  approveBundle,
-  rejectBundle,
-  supersedeBundle,
   createExecutionRequest,
   updateProjectBundle,
-  triggerAiReview,
-  getAIStatus,
-  AIStatus,
   checkResourceTerms,
-  getGovernanceStatus,
   BundleValidationStatus,
   createValidationRequest,
   getBundleValidations,
@@ -38,9 +31,6 @@ import {
 import { formatBundleStatus, bundleStatusStyle } from "@/lib/status";
 import LogViewer from "@/components/LogViewer";
 import { TermsDialog } from "@/components/TermsDialog";
-import { RejectDialog } from "@/components/RejectDialog";
-
-const TERMINAL_STATUSES = ["completed", "failed", "unavailable"];
 
 export default function AnalysisDetailPage() {
   const params = useParams();
@@ -53,8 +43,6 @@ export default function AnalysisDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [reviewing, setReviewing] = useState(false);
-  const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [termsResourceId, setTermsResourceId] = useState<string | null>(null);
   const [termsResourceName, setTermsResourceName] = useState<string>("");
   const [bundleFiles, setBundleFiles] = useState<BundleFile[]>([]);
@@ -66,8 +54,6 @@ export default function AnalysisDetailPage() {
   const [projectResources, setProjectResources] = useState<DataResource[]>([]);
   const [selectedResources, setSelectedResources] = useState<string[]>([]);
   const [savingDraft, setSavingDraft] = useState(false);
-  const [aiStatus, setAiStatus] = useState<AIStatus | null>(null);
-  const [govStatus, setGovStatus] = useState<{ prevent_self_moderation: boolean } | null>(null);
 
   const initializedRef = useRef(false);
 
@@ -80,6 +66,11 @@ export default function AnalysisDetailPage() {
   const [editBuildStrategy, setEditBuildStrategy] = useState("institutional");
   const [editVersion, setEditVersion] = useState("");
   const [editDescription, setEditDescription] = useState("");
+
+  // Forces a fresh <input type="file"> element after each upload attempt.
+  // Without this, browsers may suppress the change event when the same
+  // file is selected repeatedly, preventing re-upload.
+  const [uploadInputKey, setUploadInputKey] = useState(0);
 
   // Validation state
   const [validations, setValidations] = useState<ValidationRequest[]>([]);
@@ -176,51 +167,6 @@ export default function AnalysisDetailPage() {
       .catch(() => setError("Failed to load analysis bundle"))
       .finally(() => setLoading(false));
   }, [fetchBundle]);
-
-  useEffect(() => {
-    getAIStatus().then(setAiStatus).catch(() => setAiStatus(null));
-    getGovernanceStatus().then(setGovStatus).catch(() => setGovStatus(null));
-  }, []);
-
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  useEffect(() => {
-    const review = bundle?.ai_review;
-    if (!review || review.status !== "pending") {
-      if (pollRef.current) {
-        clearInterval(pollRef.current);
-        pollRef.current = null;
-      }
-      return;
-    }
-
-    pollRef.current = setInterval(async () => {
-      try {
-        const updated = await getProjectBundle(projectId, bundleId);
-        setBundle(updated);
-        if (
-          updated.ai_review &&
-          TERMINAL_STATUSES.includes(updated.ai_review.status) &&
-          pollRef.current
-        ) {
-          clearInterval(pollRef.current);
-          pollRef.current = null;
-        }
-      } catch {
-        if (pollRef.current) {
-          clearInterval(pollRef.current);
-          pollRef.current = null;
-        }
-      }
-    }, 5000);
-
-    return () => {
-      if (pollRef.current) {
-        clearInterval(pollRef.current);
-        pollRef.current = null;
-      }
-    };
-  }, [bundle?.ai_review?.status, fetchBundle]);
 
   const buildPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const BUILD_TERMINAL = ["environment_ready", "environment_build_failed"];
@@ -327,15 +273,6 @@ export default function AnalysisDetailPage() {
     setTermsResourceName("");
   };
 
-  const handleApprove = () =>
-    performAction("Approve", () => approveBundle(bundleId));
-
-  const handleReject = () =>
-    setShowRejectDialog(true);
-
-  const handleSupersede = () =>
-    performAction("Supersede", () => supersedeBundle(bundleId));
-
   const handleRun = async () => {
     setActionLoading("Run");
     try {
@@ -383,6 +320,7 @@ export default function AnalysisDetailPage() {
       setUploading(false);
       setUploadMode(null);
       e.target.value = "";
+      setUploadInputKey((k) => k + 1);
     }
   };
 
@@ -401,6 +339,7 @@ export default function AnalysisDetailPage() {
       setUploading(false);
       setUploadMode(null);
       e.target.value = "";
+      setUploadInputKey((k) => k + 1);
     }
   };
 
@@ -485,22 +424,6 @@ export default function AnalysisDetailPage() {
     }
   };
 
-  const handleTriggerReview = async () => {
-    setReviewing(true);
-    try {
-      const updated = await triggerAiReview(projectId, bundleId);
-      setBundle(updated);
-    } catch {
-      setError("Failed to trigger AI review");
-    }
-    setReviewing(false);
-  };
-
-  const reviewActionLabel = () => {
-    if (!bundle?.ai_review) return "Generate AI Summary";
-    return "Refresh AI Summary";
-  };
-
   if (loading) return <div className="card empty-state">Loading...</div>;
   if (error) return <div className="card empty-state">{error}</div>;
   if (!bundle) return <div className="card empty-state">Not found</div>;
@@ -519,60 +442,12 @@ export default function AnalysisDetailPage() {
           />
         )}
 
-        {showRejectDialog && (
-          <RejectDialog
-            title="Analysis Bundle"
-            onConfirm={async (reason) => {
-              await performAction("Reject", () => rejectBundle(bundleId, reason));
-              setShowRejectDialog(false);
-            }}
-            onCancel={() => setShowRejectDialog(false)}
-          />
-        )}
-
         <Link
           href={`/projects/${projectId}/analysis`}
           style={{ color: "var(--color-text-secondary)", fontSize: "0.85rem", textDecoration: "none" }}
         >
           &larr; Back to Analysis
         </Link>
-
-        {bundle.status === "submitted" && user?.capabilities.includes("bundle.review")
-          && govStatus?.prevent_self_moderation === true
-          && bundle.submitted_by_id === user.id
-          && !user.capabilities.includes("governance.self_regulate") && (
-          <div className="card" style={{
-            background: "#f0f0f0",
-            color: "var(--color-text-secondary)",
-            padding: "var(--spacing-sm) var(--spacing-md)",
-            fontSize: "0.85rem",
-            borderRadius: "4px",
-            marginTop: "var(--spacing-md)",
-            marginBottom: "var(--spacing-md)",
-          }}>
-            <strong>Independent moderation required.</strong>
-            {" "}You submitted this analysis bundle for institutional
-            review. Another authorised moderator must approve or reject it.
-          </div>
-        )}
-
-        {bundle.status === "approved_for_execution" && user?.capabilities.includes("bundle.review")
-          && govStatus?.prevent_self_moderation === true
-          && bundle.submitted_by_id === user.id
-          && !user.capabilities.includes("governance.self_regulate") && (
-          <div className="card" style={{
-            background: "#f0f0f0",
-            color: "var(--color-text-secondary)",
-            padding: "var(--spacing-sm) var(--spacing-md)",
-            fontSize: "0.85rem",
-            borderRadius: "4px",
-            marginTop: "var(--spacing-md)",
-            marginBottom: "var(--spacing-md)",
-          }}>
-            <strong>Independent moderation required.</strong>
-            {" "}Another authorised moderator must supersede this submission.
-          </div>
-        )}
 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginTop: "var(--spacing-md)", marginBottom: "var(--spacing-lg)" }}>
           <div>
@@ -622,27 +497,6 @@ export default function AnalysisDetailPage() {
           </div>
           <div>
             <div style={{ display: "flex", gap: "var(--spacing-sm)", marginBottom: "var(--spacing-xs)" }}>
-              {bundle.status === "submitted" && user?.capabilities.includes("bundle.review")
-                && !(govStatus?.prevent_self_moderation === true
-                  && bundle.submitted_by_id === user.id
-                  && !user.capabilities.includes("governance.self_regulate")) && (
-                <>
-                  <button
-                    className="btn btn-primary"
-                    onClick={handleApprove}
-                    disabled={actionLoading !== null}
-                  >
-                    {actionLoading === "Approve" ? "Approving…" : "Approve"}
-                  </button>
-                  <button
-                    className="btn"
-                    onClick={handleReject}
-                    disabled={actionLoading !== null}
-                  >
-                    {actionLoading === "Reject" ? "Rejecting…" : "Reject"}
-                  </button>
-                </>
-              )}
               {bundle.status === "approved_for_execution" && user?.capabilities.includes("execution.run") && (
                 <button
                   className="btn btn-primary"
@@ -650,18 +504,6 @@ export default function AnalysisDetailPage() {
                   disabled={actionLoading !== null}
                 >
                   {actionLoading === "Run" ? "Submitting…" : "Run Analysis"}
-                </button>
-              )}
-              {bundle.status === "approved_for_execution" && user?.capabilities.includes("bundle.review")
-                && !(govStatus?.prevent_self_moderation === true
-                  && bundle.submitted_by_id === user.id
-                  && !user.capabilities.includes("governance.self_regulate")) && (
-                <button
-                  className="btn"
-                  onClick={handleSupersede}
-                  disabled={actionLoading !== null}
-                >
-                  {actionLoading === "Supersede" ? "Superseding…" : "Supersede"}
                 </button>
               )}
             </div>
@@ -750,89 +592,6 @@ export default function AnalysisDetailPage() {
             </div>
           </div>
         </div>
-
-        {aiStatus?.review_enabled && (
-        <div className="card" style={{ maxWidth: "640px", marginTop: "var(--spacing-lg)" }}>
-          <h3 style={{ fontSize: "1rem", fontWeight: 600, marginBottom: "var(--spacing-md)" }}>
-            AI Analysis Summary
-          </h3>
-
-          {aiStatus === null && (
-            <div style={{ marginBottom: "var(--spacing-md)" }}>
-              <div style={{ color: "var(--color-text-secondary)" }}>Checking AI availability...</div>
-            </div>
-          )}
-
-          {aiStatus !== null && !aiStatus.ready && (
-            <div style={{ marginBottom: "var(--spacing-md)" }}>
-              <div style={{ color: "var(--color-text-secondary)" }}>
-                AI assistance is not available
-                {aiStatus.reason === "provider_unreachable" && " (AI service unreachable)"}
-                {aiStatus.reason === "model_missing" && " (AI model not found)"}
-                {aiStatus.reason === "provider_error" && " (AI service error)"}
-                {aiStatus.reason === null && ""}
-              </div>
-            </div>
-          )}
-
-          {aiStatus !== null && aiStatus.ready && bundle.ai_review?.status === "pending" && (
-            <div style={{ marginBottom: "var(--spacing-md)" }}>
-              <div>Status: Pending</div>
-            </div>
-          )}
-
-          {aiStatus !== null && aiStatus.ready && bundle.ai_review?.status === "completed" && (
-            <>
-              <div style={{ marginBottom: "var(--spacing-md)" }}>
-                <div style={{ fontSize: "0.8rem", color: "var(--color-text-secondary)", marginBottom: "var(--spacing-xs)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                  Status
-                </div>
-                <div>Completed</div>
-              </div>
-              <div style={{ marginBottom: "var(--spacing-md)" }}>
-                <div style={{ fontSize: "0.8rem", color: "var(--color-text-secondary)", marginBottom: "var(--spacing-xs)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                  Summary
-                </div>
-                <div style={{ lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{bundle.ai_review.summary}</div>
-              </div>
-              <div style={{ marginBottom: "var(--spacing-md)" }}>
-                <div style={{ fontSize: "0.8rem", color: "var(--color-text-secondary)", marginBottom: "var(--spacing-xs)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                  Assessment
-                </div>
-                <div style={{ lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{bundle.ai_review.assessment}</div>
-              </div>
-              <div style={{ marginBottom: "var(--spacing-md)" }}>
-                <div style={{ fontSize: "0.8rem", color: "var(--color-text-secondary)", marginBottom: "var(--spacing-xs)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                  Assessment Confidence
-                </div>
-                <div>{bundle.ai_review.assessment_confidence}</div>
-              </div>
-              <div style={{ marginBottom: "var(--spacing-md)" }}>
-                <div style={{ fontSize: "0.8rem", color: "var(--color-text-secondary)", marginBottom: "var(--spacing-xs)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                  Reviewer Notes
-                </div>
-                <div style={{ lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{bundle.ai_review.reviewer_notes}</div>
-              </div>
-            </>
-          )}
-
-          {aiStatus !== null && aiStatus.ready && (bundle.ai_review?.status === "unavailable" || bundle.ai_review?.status === "failed") && (
-            <div style={{ marginBottom: "var(--spacing-md)" }}>
-              <div>Status: Unavailable</div>
-            </div>
-          )}
-
-          {aiStatus !== null && aiStatus.ready && bundle.ai_review?.status !== "pending" && (
-            <button
-              className="btn"
-              onClick={handleTriggerReview}
-              disabled={reviewing}
-            >
-              {reviewing ? "Processing..." : reviewActionLabel()}
-            </button>
-          )}
-        </div>
-        )}
       </div>
     );
   }
@@ -1062,6 +821,7 @@ export default function AnalysisDetailPage() {
                 >
                   {bundleFiles.length > 0 ? "Replace from ZIP" : "Upload ZIP"}
                   <input
+                    key={uploadInputKey}
                     type="file"
                     accept=".zip"
                     style={{ display: "none" }}
@@ -1102,6 +862,7 @@ export default function AnalysisDetailPage() {
                 >
                   Import ZIP
                   <input
+                    key={uploadInputKey}
                     type="file"
                     accept=".zip"
                     style={{ display: "none" }}
@@ -1132,6 +893,7 @@ export default function AnalysisDetailPage() {
                 >
                   Choose File
                   <input
+                    key={uploadInputKey}
                     type="file"
                     style={{ display: "none" }}
                     onChange={handleFileUploadSingle}
@@ -1528,7 +1290,12 @@ export default function AnalysisDetailPage() {
             <button
               className="btn btn-primary"
               onClick={handleRunValidation}
-              disabled={validationLoading || !editEnvId || bundleFiles.length === 0}
+              disabled={
+                validationLoading ||
+                !editEnvId ||
+                bundleFiles.length === 0 ||
+                (entrypointCandidates.length > 0 && !editEntrypoint)
+              }
               title={
                 validationLoading
                   ? "Validation in progress"
@@ -1538,7 +1305,9 @@ export default function AnalysisDetailPage() {
                       ? "Select an execution environment"
                       : bundleFiles.length === 0
                         ? "Upload analysis files first"
-                        : "Run validation"
+                        : entrypointCandidates.length > 0 && !editEntrypoint
+                          ? "Select an entrypoint"
+                          : "Run validation"
               }
             >
               {validationLoading ? "Running..." : "Run Validation"}
@@ -1561,6 +1330,11 @@ export default function AnalysisDetailPage() {
             {editEnvId && bundleFiles.length === 0 && (
               <div style={{ color: "var(--color-text-secondary)", fontSize: "0.8rem", marginTop: "var(--spacing-xs)" }}>
                 Upload analysis files to enable validation.
+              </div>
+            )}
+            {editEnvId && bundleFiles.length > 0 && entrypointCandidates.length > 0 && !editEntrypoint && (
+              <div style={{ color: "var(--color-text-secondary)", fontSize: "0.8rem", marginTop: "var(--spacing-xs)" }}>
+                Select an entrypoint to enable validation.
               </div>
             )}
           </div>

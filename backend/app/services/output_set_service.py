@@ -33,6 +33,11 @@ def ensure_output_set(db: Session, execution_request_id: uuid.UUID) -> OutputSet
     )
     db.add(output_set)
     db.flush()
+
+    if not hasattr(db, "_epibridge_governance_events"):
+        db._epibridge_governance_events = []
+    db._epibridge_governance_events.append(output_set.id)
+
     return output_set
 
 
@@ -109,22 +114,17 @@ def list_outputs_by_set(db: Session, output_set_id: uuid.UUID) -> list[Output]:
     )
 
 
-def create_release_package(output_set: OutputSet) -> Path:
+def build_output_zip(output_set: OutputSet, zip_path: Path) -> None:
     execution_request: ExecutionRequest = output_set.execution_request
     output_dir = OUTPUT_ROOT / str(execution_request.id)
 
-    ensure_release_root()
-    zip_path = RELEASE_ROOT / f"{output_set.id}.zip"
-
-    total_size = 0
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
         if output_dir.is_dir():
-            for root, dirs, files in os.walk(output_dir):
+            for root, _dirs, files in os.walk(output_dir):
                 for fname in files:
                     fpath = Path(root) / fname
                     relative = fpath.relative_to(output_dir)
                     zf.write(str(fpath), str(relative))
-                    total_size += fpath.stat().st_size
 
         metadata = {
             "execution_request_id": str(execution_request.id),
@@ -135,6 +135,11 @@ def create_release_package(output_set: OutputSet) -> Path:
         }
         zf.writestr("execution_metadata.json", json.dumps(metadata, indent=2))
 
+
+def create_release_package(output_set: OutputSet) -> Path:
+    ensure_release_root()
+    zip_path = RELEASE_ROOT / f"{output_set.id}.zip"
+    build_output_zip(output_set, zip_path)
     output_set.release_package_path = str(zip_path)
     output_set.release_package_size = zip_path.stat().st_size
     return zip_path

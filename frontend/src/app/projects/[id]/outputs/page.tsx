@@ -85,7 +85,7 @@ export default function ProjectOutputsPage() {
           >
             {requests.map((r) => (
               <option key={r.id} value={r.id}>
-                {r.analysis_name} — {r.status}
+                {r.name} — {r.status}
               </option>
             ))}
           </select>

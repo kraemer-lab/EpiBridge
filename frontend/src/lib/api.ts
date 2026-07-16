@@ -79,6 +79,18 @@ export interface AIBundleReview {
   updated_at: string;
 }
 
+export interface AIOutputSetReview {
+  id: string;
+  output_set_id: string;
+  status: string;
+  summary: string | null;
+  assessment: string | null;
+  assessment_confidence: string | null;
+  reviewer_notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface GovernanceStatus {
   prevent_self_moderation: boolean;
 }
@@ -161,6 +173,10 @@ export interface ExecutionRequest {
   updated_at: string;
 }
 
+export interface ExecutionRequestDetail extends ExecutionRequest {
+  log: string;
+}
+
 export interface ExecutionRequestCreate {
   analysis_bundle_id: string;
   name?: string;
@@ -185,6 +201,9 @@ export interface OutputSet {
   rejection_reason?: string | null;
   outputs: Output[];
   file_count: number;
+  requested_by_id?: string;
+  project_name?: string;
+  ai_review?: AIOutputSetReview | null;
   created_at: string;
   updated_at: string;
 }
@@ -199,6 +218,7 @@ export interface OutputSetListItem {
   rejection_reason?: string | null;
   requested_by_id?: string;
   project_name?: string;
+  ai_review?: AIOutputSetReview | null;
   created_at: string;
   updated_at: string;
 }
@@ -367,6 +387,10 @@ export async function getAdminExecutionRequests(): Promise<ExecutionRequest[]> {
   return request<ExecutionRequest[]>("/api/admin/execution-requests");
 }
 
+export async function getAdminExecutionRequest(id: string): Promise<ExecutionRequestDetail> {
+  return request<ExecutionRequestDetail>(`/api/admin/execution-requests/${id}`);
+}
+
 export async function getAdminOutput(outputId: string): Promise<Output> {
   return request<Output>(`/api/admin/outputs/${outputId}`);
 }
@@ -405,6 +429,92 @@ export async function rejectOutputSet(outputSetId: string, reason: string): Prom
 
 export async function releaseOutputSet(outputSetId: string): Promise<OutputSet> {
   return request<OutputSet>(`/api/admin/output-sets/${outputSetId}/release`, { method: "POST" });
+}
+
+export async function triggerOutputSetAiReview(outputSetId: string): Promise<OutputSet> {
+  return request<OutputSet>(
+    `/api/admin/output-sets/${outputSetId}/ai-review`,
+    { method: "POST" },
+  );
+}
+
+export async function triggerAdminBundleAiReview(bundleId: string): Promise<AnalysisBundle> {
+  return request<AnalysisBundle>(
+    `/api/admin/bundles/${bundleId}/ai-review`,
+    { method: "POST" },
+  );
+}
+
+export async function getAdminOutputSetFiles(
+  outputSetId: string,
+): Promise<{ files: { path: string; size: number }[]; total_size: number }> {
+  return request(`/api/admin/output-sets/${outputSetId}/files`);
+}
+
+export async function getAdminOutputSetFileContent(
+  outputSetId: string,
+  path: string,
+): Promise<string> {
+  const res = await fetch(
+    `/api/admin/output-sets/${outputSetId}/files/${encodeURIComponent(path)}`,
+    { credentials: "include" },
+  );
+  if (!res.ok) {
+    const detail = await res.text().catch(() => res.statusText);
+    throw new Error(detail || "Failed to load output file");
+  }
+  return res.text();
+}
+
+export async function downloadAdminOutputSetZip(outputSetId: string): Promise<void> {
+  const response = await fetch(
+    `/api/admin/output-sets/${outputSetId}/download`,
+    { credentials: "include" },
+  );
+  if (!response.ok) throw new Error("Download failed");
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `output-set-${outputSetId}.zip`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+export async function downloadAdminBundleFile(bundleId: string, path: string): Promise<void> {
+  const response = await fetch(
+    `/api/admin/bundles/${bundleId}/files/${encodeURIComponent(path)}?download=true`,
+    { credentials: "include" },
+  );
+  if (!response.ok) throw new Error("Download failed");
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = path.split("/").pop() || path;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+export async function downloadAdminBundleZip(bundleId: string): Promise<void> {
+  const response = await fetch(
+    `/api/admin/bundles/${bundleId}/download`,
+    { credentials: "include" },
+  );
+  if (!response.ok) throw new Error("Download failed");
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `bundle-${bundleId}.zip`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 export async function getAdminBundle(id: string): Promise<AnalysisBundle> {

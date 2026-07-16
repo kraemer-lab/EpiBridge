@@ -95,9 +95,9 @@ def get_execution_request(
     return db.query(ExecutionRequest).filter(ExecutionRequest.id == request_id).first()
 
 
-def request_to_read(request: ExecutionRequest) -> dict:
+def request_to_read(request: ExecutionRequest, include_log: bool = False) -> dict:
     bundle = request.analysis_bundle
-    return {
+    result = {
         "id": request.id,
         "project_id": request.project_id,
         "analysis_bundle_id": request.analysis_bundle_id,
@@ -113,3 +113,6 @@ def request_to_read(request: ExecutionRequest) -> dict:
         "created_at": request.created_at,
         "updated_at": request.updated_at,
     }
+    if include_log:
+        result["log"] = request.log
+    return result

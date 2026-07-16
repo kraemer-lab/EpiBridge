@@ -23,7 +23,6 @@ from app.auth.policy import (
     require_project_membership,
 )
 from app.db.session import get_db
-from app.models.ai_bundle_review import AIBundleReview, AIBundleReviewStatus
 from app.models.analysis_bundle import (
     AnalysisBundle,
     AnalysisBundleStatus,
@@ -57,7 +56,7 @@ from app.schemas.project import (
     ProjectMemberRead,
     ProjectRead,
 )
-from app.services.ai_review_service import perform_review
+from app.services.ai_review_service import perform_review, request_review
 from app.services.analysis_bundle_service import (
     create_bundle,
     get_environment_runtime,
@@ -523,26 +522,6 @@ async def post_project_bundle_upload(
 
     update_bundle(db, bundle.id, {"source_path": store_path})
 
-    if get_setting_bool(db, SettingKey.AI_REVIEW_ENABLED):
-        review = (
-            db.query(AIBundleReview)
-            .filter(AIBundleReview.bundle_id == bundle.id)
-            .first()
-        )
-        if review is None:
-            review = AIBundleReview(
-                bundle_id=bundle.id, status=AIBundleReviewStatus.PENDING
-            )
-            db.add(review)
-        else:
-            review.status = AIBundleReviewStatus.PENDING
-            review.summary = None
-            review.assessment = None
-            review.assessment_confidence = None
-            review.reviewer_notes = None
-        db.commit()
-        background_tasks.add_task(perform_review, bundle.id)
-
     db.refresh(bundle)
     return _bundle_to_read(bundle)
 
@@ -615,6 +594,10 @@ def post_submit_bundle(
     db.commit()
     db.refresh(bundle)
 
+    if get_setting_bool(db, SettingKey.AI_REVIEW_ENABLED):
+        request_review(bundle.id)
+        background_tasks.add_task(perform_review, bundle.id)
+
     trigger_bundle_submitted_notifications(
         db,
         bundle=bundle,
@@ -654,21 +637,7 @@ def post_bundle_ai_review(
             detail="Analysis bundle not found",
         )
 
-    review = (
-        db.query(AIBundleReview).filter(AIBundleReview.bundle_id == bundle.id).first()
-    )
-    if review is None:
-        review = AIBundleReview(
-            bundle_id=bundle.id, status=AIBundleReviewStatus.PENDING
-        )
-        db.add(review)
-    else:
-        review.status = AIBundleReviewStatus.PENDING
-        review.summary = None
-        review.assessment = None
-        review.assessment_confidence = None
-        review.reviewer_notes = None
-    db.commit()
+    request_review(bundle.id)
     background_tasks.add_task(perform_review, bundle.id)
 
     db.refresh(bundle)

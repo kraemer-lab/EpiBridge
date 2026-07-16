@@ -265,6 +265,7 @@ ci-clean:
 # --- Development ----------------------------------------------------------------
 
 dev: restart
+	./scripts/platform.sh run ./scripts/seed-institution.sh
 	./scripts/platform.sh run ./scripts/seed-developer.sh
 	./scripts/platform.sh run ./scripts/seed-personas.sh
 

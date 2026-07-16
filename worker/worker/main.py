@@ -8,6 +8,7 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session
 
+
 from app.builders.registry import registry as builder_registry
 from app.core.config import settings
 from app.core.logging import configure_logging
@@ -16,6 +17,7 @@ from app.execution.docker import DockerExecutor
 from app.models.analysis_bundle import (
     AnalysisBundle,
     AnalysisBundleBuildStatus,
+    AnalysisBundleStatus,
     BuildStrategy,
 )
 from app.models.audit_event import WORKER_USER_ID, AuditEventType
@@ -186,26 +188,52 @@ def resolve_mounts(
     return mounts
 
 
-def _auto_create_execution_request(
-    db: Session, build: BuildRequest, bundle: AnalysisBundle
-) -> None:
-    """Create an initial ExecutionRequest after a successful build when
-    auto-execution is enabled.
+def _auto_create_execution_request(db: Session, bundle: AnalysisBundle) -> None:
+    """Create an initial ExecutionRequest when an approved bundle's
+    execution environment is ready and auto-execution is enabled.
 
-    Automatic execution is not a separate execution model. It is simply an
-    automatic creation of the initial ExecutionRequest after a successful
-    build. Subsequent execution requests continue to use the existing manual
-    workflow unchanged.
+    This is triggered by the "environment ready" lifecycle event regardless
+    of whether that came from a new build or a cached image.
+
+    Subsequent (manual) execution requests use the existing workflow and
+    are not affected by this function — they use the requester's own user
+    ID rather than WORKER_USER_ID.
     """
-    if not get_setting_bool(
-        db, SettingKey.AUTO_EXECUTE_APPROVED_BUNDLES, default=True
-    ):
+    if not get_setting_bool(db, SettingKey.AUTO_EXECUTE_APPROVED_BUNDLES, default=True):
         return
     create_execution_request(
         db,
         data={"analysis_bundle_id": bundle.id},
         project_id=bundle.project_id,
         requested_by_id=WORKER_USER_ID,
+    )
+
+
+def get_bundles_ready_for_execution(db: Session) -> list[AnalysisBundle]:
+    """Return approved bundles whose execution environment is ready but
+    that have not yet had an automatic execution request created by the
+    worker.
+
+    The check uses ``requested_by_id == WORKER_USER_ID`` so that only the
+    automatic initial execution is tracked.  Researchers can still create
+    additional manual executions using their own user ID.
+    """
+    worker_executed_subq = (
+        db.query(ExecutionRequest.analysis_bundle_id)
+        .filter(ExecutionRequest.requested_by_id == WORKER_USER_ID)
+        .distinct()
+        .subquery()
+    )
+    return (
+        db.query(AnalysisBundle)
+        .filter(
+            AnalysisBundle.status == AnalysisBundleStatus.APPROVED_FOR_EXECUTION.value,
+            AnalysisBundle.build_status
+            == AnalysisBundleBuildStatus.ENVIRONMENT_READY.value,
+            AnalysisBundle.execution_image_id.isnot(None),
+            ~AnalysisBundle.id.in_(worker_executed_subq),
+        )
+        .all()
     )
 
 
@@ -277,7 +305,7 @@ def process_build(db: Session, build: BuildRequest) -> None:
         bundle.build_status = AnalysisBundleBuildStatus.ENVIRONMENT_READY
         build.execution_image_id = existing.id
         try:
-            _auto_create_execution_request(db, build, bundle)
+            _auto_create_execution_request(db, bundle)
         except ValueError:
             logger.warning(
                 "Auto-execution: bundle %s no longer eligible for execution", bundle.id
@@ -366,7 +394,7 @@ def process_build(db: Session, build: BuildRequest) -> None:
     bundle.build_status = AnalysisBundleBuildStatus.ENVIRONMENT_READY
     build.execution_image_id = cached.id
     try:
-        _auto_create_execution_request(db, build, bundle)
+        _auto_create_execution_request(db, bundle)
     except ValueError:
         logger.warning(
             "Auto-execution: bundle %s no longer eligible for execution", bundle.id
@@ -803,7 +831,8 @@ def process_validation(db: Session, request: ValidationRequest) -> None:
         cmd_str = " ".join(shlex.quote(str(c)) for c in base_command)
         setup = " ".join(env.validation_setup_command.splitlines()).strip()
         command = [
-            "sh", "-c",
+            "sh",
+            "-c",
             f"{setup} && exec {cmd_str}",
         ]
     else:
@@ -977,6 +1006,22 @@ def main():
                     break
                 logger.info("Processing build %s", build.id)
                 process_build(db, build)
+
+            if _shutdown_requested:
+                continue
+
+            for bundle in get_bundles_ready_for_execution(db):
+                if _shutdown_requested:
+                    break
+                logger.info(
+                    "Auto-executing ready bundle %s: %s", bundle.id, bundle.name
+                )
+                try:
+                    _auto_create_execution_request(db, bundle)
+                except ValueError as e:
+                    logger.warning(
+                        "Auto-execution: bundle %s not eligible: %s", bundle.id, e
+                    )
 
             if _shutdown_requested:
                 continue

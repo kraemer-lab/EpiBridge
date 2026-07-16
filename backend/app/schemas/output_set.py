@@ -5,6 +5,7 @@ from typing import List
 from pydantic import BaseModel, Field, field_validator
 
 from app.models.output_set import OutputSetStatus
+from app.schemas.ai_output_set_review import AIOutputSetReviewRead
 from app.schemas.output import OutputRead
 
 
@@ -28,6 +29,7 @@ class OutputSetRead(BaseModel):
     file_count: int
     requested_by_id: uuid.UUID | None = None
     project_name: str = ""
+    ai_review: AIOutputSetReviewRead | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -44,6 +46,7 @@ class OutputSetListItem(BaseModel):
     release_package_size: int | None
     requested_by_id: uuid.UUID | None = None
     project_name: str = ""
+    ai_review: AIOutputSetReviewRead | None = None
     created_at: datetime
     updated_at: datetime
 

@@ -1,14 +1,20 @@
+import mimetypes
+import os
+import tempfile
 import uuid
+import zipfile
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
-from fastapi.responses import PlainTextResponse, Response
+from fastapi.responses import FileResponse, PlainTextResponse, Response
 from sqlalchemy.orm import Session
+from starlette.background import BackgroundTask
 
 from app.auth.dependencies import get_current_user
 from app.auth.policy import PolicyError, require_capability, require_project_membership
+from app.core.config import settings
 from app.db.session import get_db
 from app.models.analysis_bundle import AnalysisBundle
 from app.models.audit_event import AuditEventType
@@ -19,11 +25,15 @@ from app.models.execution_environment import ExecutionEnvironment
 from app.models.platform_setting import SettingKey
 from app.models.user import User
 from app.schemas.ai_bundle_review import AIBundleReviewRead
+from app.schemas.ai_output_set_review import AIOutputSetReviewRead
 from app.schemas.analysis_bundle import AnalysisBundleRead, RejectBundleRequest
 from app.schemas.audit_event import AuditEventList
 from app.schemas.data_resource import DataResourceRead
 from app.schemas.execution_environment import ExecutionEnvironmentAdminRead
-from app.schemas.execution_request import ExecutionRequestRead
+from app.schemas.execution_request import (
+    ExecutionRequestAdminDetail,
+    ExecutionRequestRead,
+)
 from app.schemas.output import OutputRead
 from app.schemas.output_set import (
     OutputSetListItem,
@@ -33,6 +43,13 @@ from app.schemas.output_set import (
 from app.schemas.platform_setting import PlatformSettingRead, PlatformSettingUpdate
 from app.schemas.terms import TermsOfServicePublish, TermsOfServiceRead
 from app.schemas.user import UserCreate, UserRead, UserUpdate
+from app.services.ai_review_service import (
+    get_output_set_review,
+    perform_output_set_review,
+    perform_review,
+    request_output_set_review,
+    request_review,
+)
 from app.services.analysis_bundle_service import (
     get_environment_runtime,
     get_resource_identifiers,
@@ -48,10 +65,12 @@ from app.services.execution_request_service import (
 from app.services.notification_triggers import trigger_output_released_notifications
 from app.services.output_service import get_output
 from app.services.output_set_service import (
+    build_output_zip,
     get_output_set,
     get_output_set_by_execution,
     list_output_sets_for_member,
     list_outputs_by_set,
+    stream_release_package,
 )
 from app.services.platform_settings_service import (
     get_all_settings,
@@ -336,6 +355,7 @@ _TEXT_EXTENSIONS = frozenset(
 def get_admin_bundle_file(
     bundle_id: str,
     path: str,
+    download: bool = Query(False),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -349,6 +369,15 @@ def get_admin_bundle_file(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e),
         )
+
+    if download:
+        filename = Path(path).name
+        return Response(
+            content=content,
+            media_type="application/octet-stream",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
     if len(content) > MAX_PREVIEW_SIZE:
         msg = (
             f"File too large to preview ({len(content)} bytes, "
@@ -371,6 +400,41 @@ def get_admin_bundle_file(
     )
 
 
+@router.get("/admin/bundles/{bundle_id}/download")
+def download_admin_bundle(
+    bundle_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _check_admin_view(current_user)
+    bundle = _get_admin_bundle(bundle_id, db)
+    require_project_membership(db, current_user, bundle.project_id)
+    store = get_bundle_store()
+    bundle_dir = store.get_path(bundle.id)
+
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".zip")
+    zip_path = Path(tmp.name)
+    tmp.close()
+    try:
+        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+            if bundle_dir.is_dir():
+                for root, _dirs, files in os.walk(bundle_dir):
+                    for fname in files:
+                        fpath = Path(root) / fname
+                        relative = fpath.relative_to(bundle_dir)
+                        zf.write(str(fpath), str(relative))
+    except Exception:
+        os.unlink(str(zip_path))
+        raise
+
+    return FileResponse(
+        str(zip_path),
+        filename=f"bundle-{bundle_id}.zip",
+        media_type="application/zip",
+        background=BackgroundTask(os.unlink, str(zip_path)),
+    )
+
+
 @router.get("/admin/execution-requests", response_model=List[ExecutionRequestRead])
 def list_admin_execution_requests(
     db: Session = Depends(get_db),
@@ -383,7 +447,7 @@ def list_admin_execution_requests(
 
 @router.get(
     "/admin/execution-requests/{request_id}",
-    response_model=ExecutionRequestRead,
+    response_model=ExecutionRequestAdminDetail,
 )
 def get_admin_execution_request(
     request_id: str,
@@ -397,7 +461,7 @@ def get_admin_execution_request(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Execution request not found",
         )
-    return request_to_read(request)
+    return request_to_read(request, include_log=True)
 
 
 @router.get(
@@ -413,6 +477,7 @@ def list_admin_output_sets(
     result: list[OutputSetListItem] = []
     for s in sets:
         req = s.execution_request
+        ai_review = get_output_set_review(db, s.id)
         result.append(
             OutputSetListItem(
                 id=s.id,
@@ -426,6 +491,11 @@ def list_admin_output_sets(
                 project_name=req.project.name if req and req.project else "",
                 created_at=s.created_at,
                 updated_at=s.updated_at,
+                ai_review=(
+                    AIOutputSetReviewRead.model_validate(ai_review)
+                    if ai_review
+                    else None
+                ),
             )
         )
     return result
@@ -449,6 +519,7 @@ def get_admin_output_set(
         )
     outputs = list_outputs_by_set(db, output_set.id)
     req = output_set.execution_request
+    ai_review = get_output_set_review(db, output_set.id)
     return OutputSetRead(
         id=output_set.id,
         execution_request_id=output_set.execution_request_id,
@@ -470,6 +541,9 @@ def get_admin_output_set(
         requested_by_id=req.requested_by_id if req else None,
         created_at=output_set.created_at,
         updated_at=output_set.updated_at,
+        ai_review=(
+            AIOutputSetReviewRead.model_validate(ai_review) if ai_review else None
+        ),
     )
 
 
@@ -496,6 +570,7 @@ def list_admin_execution_request_outputs(
             detail="Output set not found",
         )
     outputs = list_outputs_by_set(db, output_set.id)
+    ai_review = get_output_set_review(db, output_set.id)
     return OutputSetRead(
         id=output_set.id,
         execution_request_id=output_set.execution_request_id,
@@ -517,6 +592,9 @@ def list_admin_execution_request_outputs(
         requested_by_id=request.requested_by_id,
         created_at=output_set.created_at,
         updated_at=output_set.updated_at,
+        ai_review=(
+            AIOutputSetReviewRead.model_validate(ai_review) if ai_review else None
+        ),
     )
 
 
@@ -761,6 +839,7 @@ def post_admin_release_output_set(
 
     req = output_set.execution_request
     outputs = list_outputs_by_set(db, output_set.id)
+    ai_review = get_output_set_review(db, output_set.id)
     return OutputSetRead(
         id=output_set.id,
         execution_request_id=output_set.execution_request_id,
@@ -782,6 +861,275 @@ def post_admin_release_output_set(
         requested_by_id=req.requested_by_id if req else None,
         created_at=output_set.created_at,
         updated_at=output_set.updated_at,
+        ai_review=(
+            AIOutputSetReviewRead.model_validate(ai_review) if ai_review else None
+        ),
+    )
+
+
+# --- Output Set AI Review ---
+
+
+@router.post(
+    "/admin/output-sets/{output_set_id}/ai-review",
+    response_model=OutputSetRead,
+    status_code=201,
+)
+def post_output_set_ai_review(
+    output_set_id: str,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _require_capability(current_user, Capability.OUTPUT_REVIEW)
+    output_set = get_output_set(db, output_set_id)
+    if output_set is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Output set not found",
+        )
+    request_output_set_review(output_set.id)
+    background_tasks.add_task(perform_output_set_review, output_set.id)
+    db.refresh(output_set)
+    outputs = list_outputs_by_set(db, output_set.id)
+    req = output_set.execution_request
+    ai_review = get_output_set_review(db, output_set.id)
+    return OutputSetRead(
+        id=output_set.id,
+        execution_request_id=output_set.execution_request_id,
+        execution_request_name=req.name if req else "",
+        status=output_set.status,
+        release_package_size=output_set.release_package_size,
+        rejection_reason=output_set.rejection_reason,
+        outputs=[
+            OutputRead(
+                id=o.id,
+                output_set_id=o.output_set_id,
+                filename=o.filename,
+                size=o.size,
+                created_at=o.created_at,
+            )
+            for o in outputs
+        ],
+        file_count=len(outputs),
+        requested_by_id=req.requested_by_id if req else None,
+        created_at=output_set.created_at,
+        updated_at=output_set.updated_at,
+        ai_review=(
+            AIOutputSetReviewRead.model_validate(ai_review) if ai_review else None
+        ),
+    )
+
+
+# --- Analysis Bundle AI Review ---
+
+
+@router.post(
+    "/admin/bundles/{bundle_id}/ai-review",
+    response_model=AnalysisBundleRead,
+    status_code=201,
+)
+def post_bundle_ai_review(
+    bundle_id: str,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _require_capability(current_user, Capability.BUNDLE_REVIEW)
+    bundle = db.query(AnalysisBundle).filter(AnalysisBundle.id == bundle_id).first()
+    if bundle is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Bundle not found",
+        )
+    request_review(bundle.id)
+    background_tasks.add_task(perform_review, bundle.id)
+    db.refresh(bundle)
+    return AnalysisBundleRead(
+        id=bundle.id,
+        project_id=bundle.project_id,
+        created_by_id=bundle.created_by_id,
+        submitted_by_id=bundle.submitted_by_id,
+        rejection_reason=bundle.rejection_reason,
+        execution_environment_id=bundle.execution_environment_id,
+        name=bundle.name,
+        source_path=bundle.source_path,
+        status=bundle.status,
+        runtime=get_environment_runtime(bundle),
+        version=bundle.version,
+        entrypoint=bundle.entrypoint,
+        interpreter=bundle.interpreter,
+        arguments=bundle.arguments,
+        description=bundle.description,
+        resource_identifiers=get_resource_identifiers(bundle),
+        outputs=bundle.outputs,
+        parameters=bundle.parameters,
+        build_strategy=bundle.build_strategy,
+        build_status=bundle.build_status,
+        build_error=bundle.build_error,
+        build_log=_build_log_for_bundle(db, bundle.id),
+        created_at=bundle.created_at,
+        updated_at=bundle.updated_at,
+        project_name=bundle.project.name,
+        ai_review=(
+            AIBundleReviewRead.model_validate(bundle.ai_review)
+            if bundle.ai_review is not None
+            else None
+        ),
+    )
+
+
+@router.get("/admin/output-sets/{output_set_id}/files")
+def list_admin_output_set_files(
+    output_set_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _require_capability(current_user, Capability.OUTPUT_REVIEW)
+    output_set = get_output_set(db, output_set_id)
+    if output_set is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Output set not found",
+        )
+    req = output_set.execution_request
+    output_dir = Path(settings.output_dir) / str(req.id)
+    files = []
+    if output_dir.is_dir():
+        for root, _dirs, fnames in os.walk(output_dir):
+            for fname in sorted(fnames):
+                fpath = Path(root) / fname
+                relative = fpath.relative_to(output_dir)
+                files.append(
+                    {
+                        "path": str(relative),
+                        "size": fpath.stat().st_size,
+                    }
+                )
+    return {"files": files, "total_size": sum(f["size"] for f in files)}
+
+
+@router.get(
+    "/admin/output-sets/{output_set_id}/files/{path:path}",
+)
+def get_admin_output_set_file(
+    output_set_id: str,
+    path: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _require_capability(current_user, Capability.OUTPUT_REVIEW)
+    output_set = get_output_set(db, output_set_id)
+    if output_set is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Output set not found",
+        )
+    req = output_set.execution_request
+    output_root = (Path(settings.output_dir) / str(req.id)).resolve()
+    requested = (output_root / path).resolve()
+    try:
+        requested.relative_to(output_root)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Path traversal blocked",
+        )
+    if not requested.is_file():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="File not found",
+        )
+    size = requested.stat().st_size
+    max_preview_size = 1024 * 1024
+    text_extensions = frozenset(
+        {
+            ".py",
+            ".r",
+            ".R",
+            ".sh",
+            ".js",
+            ".ipynb",
+            ".txt",
+            ".md",
+            ".json",
+            ".yaml",
+            ".yml",
+            ".toml",
+            ".cfg",
+            ".ini",
+            ".conf",
+            ".xml",
+            ".html",
+            ".css",
+            ".ts",
+            ".tsx",
+            ".jsx",
+            ".sql",
+            ".csv",
+            ".tsv",
+            ".log",
+            ".env",
+            ".rst",
+        }
+    )
+    ext = requested.suffix
+    if ext in text_extensions:
+        if size > max_preview_size:
+            return Response(
+                content=f"File too large to preview ({size} bytes).",
+                media_type="text/plain",
+                status_code=413,
+            )
+        try:
+            content = requested.read_bytes()
+            text = content.decode("utf-8")
+            return PlainTextResponse(text)
+        except UnicodeDecodeError:
+            return Response(
+                content=f"Binary file — {size} bytes — preview unavailable.",
+                media_type="text/plain",
+            )
+    media_type, _ = mimetypes.guess_type(str(requested))
+    if media_type is None:
+        media_type = "application/octet-stream"
+    return FileResponse(str(requested), media_type=media_type)
+
+
+# --- Output Set Download ---
+
+
+@router.get("/admin/output-sets/{output_set_id}/download")
+def download_admin_output_set(
+    output_set_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _require_capability(current_user, Capability.OUTPUT_REVIEW)
+    output_set = get_output_set(db, output_set_id)
+    if output_set is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Output set not found",
+        )
+
+    if output_set.release_package_path:
+        return stream_release_package(output_set)
+
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".zip")
+    zip_path = Path(tmp.name)
+    tmp.close()
+    try:
+        build_output_zip(output_set, zip_path)
+    except Exception:
+        os.unlink(str(zip_path))
+        raise
+
+    return FileResponse(
+        str(zip_path),
+        filename=f"output-set-{output_set_id}.zip",
+        media_type="application/zip",
+        background=BackgroundTask(os.unlink, str(zip_path)),
     )
 
 

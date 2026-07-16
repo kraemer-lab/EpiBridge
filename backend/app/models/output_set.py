@@ -10,6 +10,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base
 
 if TYPE_CHECKING:
+    from app.models.ai_output_set_review import AIOutputSetReview
     from app.models.execution_request import ExecutionRequest
     from app.models.output import Output
     from app.models.user import User
@@ -59,4 +60,7 @@ class OutputSet(Base):
     rejected_by: Mapped["User | None"] = relationship(foreign_keys=[rejected_by_id])
     outputs: Mapped[list["Output"]] = relationship(
         back_populates="output_set", cascade="all, delete-orphan"
+    )
+    ai_review: Mapped["AIOutputSetReview | None"] = relationship(
+        back_populates="output_set", uselist=False
     )

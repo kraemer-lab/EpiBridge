@@ -65,7 +65,7 @@ export default function ProjectJobsPage() {
           {requests.map((r) => (
             <tr key={r.id}>
               <td style={{ fontWeight: 500 }}>
-                {r.analysis_name}
+                {r.name}
               </td>
               <td>
                 <span

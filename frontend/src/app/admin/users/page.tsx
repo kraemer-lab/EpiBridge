@@ -20,7 +20,7 @@ const ROLE_OPTIONS = [
   {
     value: "moderator",
     label: "Moderator",
-    description: "Review submissions and outputs.",
+    description: "Review analyses and outputs.",
   },
   {
     value: "maintainer",
