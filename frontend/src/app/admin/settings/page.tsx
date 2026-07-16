@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getAdminSettings, getAIStatus, AIStatus, updateAdminSetting } from "@/lib/api";
 
 function aiStatusWarning(reason: string | null): string {
@@ -14,6 +14,81 @@ function aiStatusWarning(reason: string | null): string {
     default:
       return "The AI subsystem is not ready. Run make ai on the server to prepare it.";
   }
+}
+
+function MaxDurationInput({
+  settings,
+  updateAdminSetting,
+  setSettings,
+  setSuccess,
+  setError,
+}: {
+  settings: Record<string, string> | null;
+  updateAdminSetting: (key: string, value: string) => Promise<{ key: string; value: string }>;
+  setSettings: (updater: (prev: Record<string, string> | null) => Record<string, string> | null) => void;
+  setSuccess: (msg: string | null) => void;
+  setError: (msg: string | null) => void;
+}) {
+  const storedMinutes = settings?.["max_task_duration_seconds"]
+    ? Math.round(Number(settings["max_task_duration_seconds"]) / 60)
+    : 60;
+  const [draft, setDraft] = useState(storedMinutes);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => { setDraft(storedMinutes); }, [storedMinutes]);
+
+  const changed = draft !== storedMinutes;
+
+  const handleUpdate = async () => {
+    if (isNaN(draft) || draft < 1 || draft > 1440) return;
+    setSaving(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const seconds = String(draft * 60);
+      const updated = await updateAdminSetting("max_task_duration_seconds", seconds);
+      setSettings((prev) => ({ ...prev, "max_task_duration_seconds": updated.value }));
+      setSuccess("Maximum job duration updated");
+    } catch {
+      setError("Failed to update maximum job duration");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: "var(--spacing-sm)" }}>
+      <input
+        type="number"
+        min={1}
+        max={1440}
+        value={draft}
+        onChange={(e) => setDraft(parseInt(e.target.value, 10) || 0)}
+        style={{
+          width: "80px",
+          padding: "var(--spacing-sm)",
+          border: "1px solid var(--color-border)",
+          borderRadius: "var(--radius-md)",
+          fontSize: "0.9rem",
+          textAlign: "center",
+        }}
+      />
+      <span style={{ fontSize: "0.9rem", color: "var(--color-text-secondary)" }}>
+        minutes
+      </span>
+      <button
+        className="btn btn-primary"
+        onClick={handleUpdate}
+        disabled={!changed || saving || isNaN(draft) || draft < 1 || draft > 1440}
+        style={{
+          opacity: !changed || saving ? 0.5 : 1,
+          cursor: !changed || saving ? "not-allowed" : "pointer",
+        }}
+      >
+        {saving ? "Saving..." : "Update"}
+      </button>
+    </div>
+  );
 }
 
 export default function AdminSettingsPage() {
@@ -286,6 +361,32 @@ export default function AdminSettingsPage() {
                 ? "Enabled"
                 : "Disabled"}
           </button>
+        </div>
+      </div>
+
+      <div className="card" style={{ maxWidth: "600px", marginTop: "var(--spacing-lg)" }}>
+        <div>
+          <h3 style={{ fontSize: "1rem", fontWeight: 600, margin: 0 }}>
+            Maximum Job Duration
+          </h3>
+          <p
+            style={{
+              fontSize: "0.85rem",
+              color: "var(--color-text-secondary)",
+              marginTop: "var(--spacing-xs)",
+              marginBottom: "var(--spacing-md)",
+            }}
+          >
+            The maximum time a validation, build or execution task may run before
+            it is automatically terminated.
+          </p>
+          <MaxDurationInput
+            settings={settings}
+            updateAdminSetting={updateAdminSetting}
+            setSettings={setSettings}
+            setSuccess={setSuccess}
+            setError={setError}
+          />
         </div>
       </div>
     </div>

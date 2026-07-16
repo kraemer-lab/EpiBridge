@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, String, Text, func
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -36,6 +36,7 @@ class BuildRequest(Base):
     )
     dependency_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     builder_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    timeout_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=3600)
     status: Mapped[BuildRequestStatus] = mapped_column(
         String(64), nullable=False, default=BuildRequestStatus.PENDING
     )

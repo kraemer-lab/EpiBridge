@@ -151,6 +151,7 @@ class TestDockerExecutor:
 
         mock_client.images.get.return_value = MagicMock()
         mock_client.containers.create.return_value = mock_container
+        mock_container.status = "exited"
         mock_container.wait.return_value = 0
         mock_container.logs.side_effect = [
             b"stdout output",
@@ -190,6 +191,7 @@ class TestDockerExecutor:
 
         mock_client.images.get.return_value = MagicMock()
         mock_client.containers.create.return_value = mock_container
+        mock_container.status = "running"
         mock_docker.errors.TimeoutError = TimeoutError
         mock_container.wait.side_effect = TimeoutError("timed out")
 
@@ -221,6 +223,7 @@ class TestDockerExecutor:
 
         mock_client.images.get.return_value = MagicMock()
         mock_client.containers.create.return_value = mock_container
+        mock_container.status = "exited"
         mock_container.wait.return_value = 1
         mock_container.logs.side_effect = [
             b"",

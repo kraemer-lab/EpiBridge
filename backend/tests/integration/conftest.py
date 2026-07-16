@@ -22,6 +22,13 @@ from app.services.session_service import create_session
 @pytest.fixture(scope="session", autouse=True)
 def _setup_database():
     ensure_migrated()
+    session = SessionLocal()
+    try:
+        for table in reversed(Base.metadata.sorted_tables):
+            session.execute(table.delete())
+        session.commit()
+    finally:
+        session.close()
     yield
     Base.metadata.drop_all(bind=engine)
     with engine.begin() as conn:

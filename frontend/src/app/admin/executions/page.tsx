@@ -1,8 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ExecutionRequest, ExecutionRequestDetail, getAdminExecutionRequests, getAdminExecutionRequest } from "@/lib/api";
+import {
+  ExecutionRequest,
+  ExecutionRequestDetail,
+  getAdminExecutionRequests,
+  getAdminExecutionRequest,
+  cancelAdminExecutionRequest,
+} from "@/lib/api";
 import LogViewer from "@/components/LogViewer";
+import { ConfirmationDialog } from "@/components/ConfirmationDialog";
 
 const STATUS_FILTERS = [
   { value: "pending", label: "Pending" },
@@ -13,7 +20,8 @@ const STATUS_FILTERS = [
   { value: "all", label: "All" },
 ];
 
-const ACTIVE_STATUSES = new Set(["pending", "running"]);
+const ACTIVE_STATUSES = new Set(["pending", "running", "cancelling"]);
+const NON_TERMINAL_STATUSES = new Set(["pending", "running", "cancelling"]);
 
 function statusStyle(status: string): React.CSSProperties {
   switch (status) {
@@ -26,6 +34,7 @@ function statusStyle(status: string): React.CSSProperties {
     case "failed":
       return { background: "#f8d7da", color: "#721c24" };
     case "cancelled":
+    case "cancelling":
       return { background: "#fff3cd", color: "#856404" };
     default:
       return { background: "#f0f0f0", color: "#666" };
@@ -68,6 +77,8 @@ export default function AdminExecutionsPage() {
   const [statusFilter, setStatusFilter] = useState("pending");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [expandedData, setExpandedData] = useState<Record<string, ExecutionRequestDetail>>({});
+  const [cancelTarget, setCancelTarget] = useState<string | null>(null);
+  const [cancelError, setCancelError] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const shouldPoll = ACTIVE_STATUSES.has(statusFilter);
@@ -108,13 +119,40 @@ export default function AdminExecutionsPage() {
       return;
     }
     setExpandedId(id);
-    if (!expandedData[id]) {
+    try {
+      const detail = await getAdminExecutionRequest(id);
+      setExpandedData((prev) => ({ ...prev, [id]: detail }));
+    } catch {
+      setExpandedData((prev) => ({ ...prev, [id]: null as unknown as ExecutionRequestDetail }));
+    }
+  };
+
+  // Auto-refresh the expanded detail while in a non-terminal status
+  const expandedDetail = expandedId ? expandedData[expandedId] : null;
+  const shouldPollDetail = expandedDetail && NON_TERMINAL_STATUSES.has(expandedDetail.status);
+
+  useEffect(() => {
+    if (!shouldPollDetail || !expandedId) return;
+    const interval = setInterval(async () => {
       try {
-        const detail = await getAdminExecutionRequest(id);
-        setExpandedData((prev) => ({ ...prev, [id]: detail }));
+        const fresh = await getAdminExecutionRequest(expandedId);
+        setExpandedData((prev) => ({ ...prev, [expandedId]: fresh }));
       } catch {
-        setExpandedData((prev) => ({ ...prev, [id]: null as unknown as ExecutionRequestDetail }));
+        // Silently ignore polling errors for detail
       }
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [shouldPollDetail, expandedId]);
+
+  const handleCancelConfirm = async (reason?: string) => {
+    if (!cancelTarget) return;
+    setCancelError(null);
+    try {
+      await cancelAdminExecutionRequest(cancelTarget, reason || "");
+      setCancelTarget(null);
+      await load();
+    } catch (e: unknown) {
+      setCancelError(e instanceof Error ? e.message : "Cancellation failed");
     }
   };
 
@@ -320,6 +358,55 @@ export default function AdminExecutionsPage() {
                 </div>
               </section>
 
+              {/* Cancellation provenance */}
+              {(detail.status === "cancelled" || detail.status === "cancelling") && (
+                <section aria-label="Cancellation Details">
+                  <h3 style={sectionHeader}>Cancellation</h3>
+                  {detail.cancelled_by_id && (
+                    <div style={detailRow}>
+                      <span style={detailLabel}>Cancelled by</span>
+                      <span style={detailValue}>
+                        {detail.cancelled_by_display_name || detail.cancelled_by_id}
+                        {detail.cancelled_by_email ? ` (${detail.cancelled_by_email})` : ""}
+                      </span>
+                    </div>
+                  )}
+                  {detail.cancelled_at && (
+                    <div style={detailRow}>
+                      <span style={detailLabel}>Cancelled at</span>
+                      <span style={detailValue}>{formatTime(detail.cancelled_at)}</span>
+                    </div>
+                  )}
+                  {detail.cancellation_reason && (
+                    <div style={detailRow}>
+                      <span style={detailLabel}>Reason</span>
+                      <span style={detailValue}>{detail.cancellation_reason}</span>
+                    </div>
+                  )}
+                </section>
+              )}
+
+              {/* Cancel action */}
+              {(detail.status === "pending" || detail.status === "running") && (
+                <section aria-label="Cancel Action" style={{ marginTop: "var(--spacing-md)" }}>
+                  <button
+                    onClick={() => setCancelTarget(detail.id)}
+                    style={{
+                      padding: "6px 16px",
+                      fontSize: "0.85rem",
+                      background: "#c62828",
+                      color: "#fff",
+                      border: "none",
+                      borderRadius: "4px",
+                      cursor: "pointer",
+                      fontWeight: 600,
+                    }}
+                  >
+                    Cancel Execution
+                  </button>
+                </section>
+              )}
+
               {/* Error */}
               {detail.status === "failed" && (
                 <section aria-label="Execution Error">
@@ -348,6 +435,40 @@ export default function AdminExecutionsPage() {
           );
         })()}
         </>
+      )}
+
+      {cancelTarget && (
+        <ConfirmationDialog
+          title="Cancel Execution?"
+          message={
+            "This execution will be terminated and marked as cancelled.\n\n" +
+            "This action should only be used when operational intervention is required."
+          }
+          confirmLabel="Cancel Execution"
+          requireReason
+          reasonLabel="Reason for cancellation"
+          onConfirm={handleCancelConfirm}
+          onCancel={() => { setCancelTarget(null); setCancelError(null); }}
+        />
+      )}
+
+      {cancelError && (
+        <div
+          style={{
+            position: "fixed",
+            bottom: "16px",
+            right: "16px",
+            padding: "8px 16px",
+            background: "#f8d7da",
+            color: "#721c24",
+            borderRadius: "4px",
+            fontSize: "0.85rem",
+            zIndex: 1001,
+            boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+          }}
+        >
+          {cancelError}
+        </div>
       )}
     </>
   );

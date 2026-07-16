@@ -33,4 +33,5 @@ class EnvironmentBuilder(ABC):
         dockerfile: Path,
         base_image: str,
         image_tag: str,
+        timeout: int = 3600,
     ) -> BuildResult: ...

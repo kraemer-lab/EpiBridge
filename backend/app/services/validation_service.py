@@ -69,9 +69,6 @@ def create_validation_request(
     if bundle.project_id != project_id:
         raise ValueError("Analysis bundle does not belong to this project")
 
-    timeout = data.get("timeout_seconds", 3600)
-    validate_timeout(timeout)
-
     name = data.get("name")
     if not name or not name.strip():
         name = generate_validation_name(bundle)
@@ -82,7 +79,6 @@ def create_validation_request(
         project_id=project_id,
         analysis_bundle_id=bundle.id,
         name=name,
-        timeout_seconds=timeout,
         parameter_overrides=data.get("parameter_overrides", {}),
         bundle_content_hash=fingerprint,
         requested_by_id=requested_by_id,
@@ -163,7 +159,7 @@ def get_bundle_validation_status(db: Session, bundle_id: uuid.UUID) -> dict:
         "last_validation_hash": last.bundle_content_hash,
         "current_bundle_hash": current_fingerprint,
         "is_validated": (
-            last.status.value == "completed"
+            last.status == "completed"
             and last.bundle_content_hash == current_fingerprint
         ),
         "has_changed": (last.bundle_content_hash != current_fingerprint),

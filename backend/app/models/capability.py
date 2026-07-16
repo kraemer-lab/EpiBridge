@@ -31,6 +31,7 @@ class Capability(str, enum.Enum):
     GOVERNANCE_SELF_REGULATE = "governance.self_regulate"
     TERMS_MANAGE = "terms.manage"
     SETTINGS_MANAGE = "settings.manage"
+    EXECUTION_CANCEL = "execution.cancel"
 
     @classmethod
     def all_values(cls) -> set[str]:

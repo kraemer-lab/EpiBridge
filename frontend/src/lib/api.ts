@@ -165,6 +165,11 @@ export interface ExecutionRequest {
   parameter_overrides: Record<string, unknown>;
   status: string;
   requested_by_id: string;
+  cancelled_by_id?: string | null;
+  cancelled_by_display_name?: string | null;
+  cancelled_by_email?: string | null;
+  cancelled_at?: string | null;
+  cancellation_reason?: string | null;
   analysis_name: string;
   runtime: string;
   resource_identifiers: string[];
@@ -182,6 +187,10 @@ export interface ExecutionRequestCreate {
   name?: string;
   timeout_seconds?: number;
   parameter_overrides?: Record<string, unknown>;
+}
+
+export interface CancelExecutionRequest {
+  reason: string;
 }
 
 export interface Output {
@@ -389,6 +398,13 @@ export async function getAdminExecutionRequests(): Promise<ExecutionRequest[]> {
 
 export async function getAdminExecutionRequest(id: string): Promise<ExecutionRequestDetail> {
   return request<ExecutionRequestDetail>(`/api/admin/execution-requests/${id}`);
+}
+
+export async function cancelAdminExecutionRequest(id: string, reason: string): Promise<ExecutionRequest> {
+  return request<ExecutionRequest>(`/api/admin/execution-requests/${id}/cancel`, {
+    method: "POST",
+    body: JSON.stringify({ reason }),
+  });
 }
 
 export async function getAdminOutput(outputId: string): Promise<Output> {

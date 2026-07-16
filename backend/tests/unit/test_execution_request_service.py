@@ -14,7 +14,6 @@ from app.services.execution_request_service import (
 VALID_DATA = {
     "analysis_bundle_id": uuid.uuid4(),
     "name": "Test Run",
-    "timeout_seconds": 3600,
     "parameter_overrides": {},
 }
 
@@ -68,7 +67,6 @@ class TestCreateExecutionRequest:
         assert result.project_id == project_id
         assert result.analysis_bundle_id == bundle.id
         assert result.name == "Test Run"
-        assert result.timeout_seconds == 3600
         assert result.parameter_overrides == {}
         assert result.requested_by_id == user_id
         assert db.add.call_count >= 1

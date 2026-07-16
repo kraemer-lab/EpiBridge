@@ -13,6 +13,7 @@ from app.builders.registry import registry as builder_registry
 from app.core.config import settings
 from app.core.logging import configure_logging
 from app.db.session import SessionLocal
+from app.execution.base import CancelledError
 from app.execution.docker import DockerExecutor
 from app.models.analysis_bundle import (
     AnalysisBundle,
@@ -39,7 +40,7 @@ from app.models.platform_setting import SettingKey
 from app.services.audit_service import create_audit_event
 from app.services.bundle_store import get_bundle_store
 from app.services.execution_request_service import create_execution_request
-from app.services.platform_settings_service import get_setting_bool
+from app.services.platform_settings_service import get_setting_bool, get_setting_int
 from app.services.output_set_service import (
     ensure_output_set,
     register_output as register_set_output,
@@ -337,6 +338,7 @@ def process_build(db: Session, build: BuildRequest) -> None:
             dockerfile=dockerfile,
             base_image=env.image_reference,
             image_tag=tag,
+            timeout=get_setting_int(db, SettingKey.MAX_TASK_DURATION_SECONDS, default=3600),
         )
     except Exception as e:
         build_end = _timestamp()
@@ -548,7 +550,7 @@ def execute_request(db: Session, request: ExecutionRequest) -> None:
     command = [interpreter.executable, f"/analysis/{entrypoint}"] + extra
     output_dir = OUTPUT_ROOT / str(request.id)
     data_mounts = resolve_mounts(bundle, db)
-    timeout = request.timeout_seconds
+    timeout = get_setting_int(db, SettingKey.MAX_TASK_DURATION_SECONDS, default=3600)
 
     exec_start = _timestamp()
     preamble = (
@@ -573,6 +575,17 @@ def execute_request(db: Session, request: ExecutionRequest) -> None:
         )
     executor = DockerExecutor(mount_remap=mount_remap)
 
+    def cancel_check() -> bool:
+        try:
+            current = (
+                db.query(ExecutionRequest.status)
+                .filter(ExecutionRequest.id == request.id)
+                .scalar()
+            )
+            return current == ExecutionRequestStatus.CANCELLING.value
+        except Exception:
+            return False
+
     try:
         result = executor.run(
             image=image,
@@ -583,6 +596,7 @@ def execute_request(db: Session, request: ExecutionRequest) -> None:
             timeout=timeout,
             env={},
             network_enabled=False,
+            cancel_check=cancel_check,
         )
     except TimeoutError:
         exec_end = _timestamp()
@@ -596,6 +610,31 @@ def execute_request(db: Session, request: ExecutionRequest) -> None:
             db, AuditEventType.EXECUTION_FAILED, request, {"failure_reason": "timeout"}
         )
         transition_to(db, request, ExecutionRequestStatus.FAILED, "timeout")
+        return
+    except CancelledError:
+        exec_end = _timestamp()
+        db.refresh(request)
+        cancelled_by = request.cancelled_by_id or WORKER_USER_ID
+        request.status = ExecutionRequestStatus.CANCELLED
+        request.cancelled_at = datetime.now(timezone.utc)
+        request.log = (
+            f"{preamble}\n"
+            f"[{exec_end}] EXECUTION CANCELLED\n"
+            f"[exec] Cancelled by: {cancelled_by}\n"
+            f"[exec] Reason: {request.cancellation_reason or 'Not specified'}\n"
+            f"[exec] Container was terminated administratively"
+        )
+        create_audit_event(
+            db,
+            event_type=AuditEventType.EXECUTION_CANCELLED,
+            actor_id=cancelled_by,
+            project_id=request.project_id,
+            resource_type="execution_request",
+            resource_id=request.id,
+            metadata={"reason": request.cancellation_reason or ""},
+        )
+        db.commit()
+        logger.info("Request %s \u2192 cancelled (by %s)", request.id, cancelled_by)
         return
     except Exception as e:
         exec_end = _timestamp()
@@ -638,6 +677,12 @@ def execute_request(db: Session, request: ExecutionRequest) -> None:
             f"exit code {exit_code}",
         )
         return
+
+    db.refresh(request)
+    if request.status == ExecutionRequestStatus.CANCELLING:
+        request.cancelled_by_id = None
+        request.cancellation_reason = None
+        db.commit()
 
     output_set = ensure_output_set(db, request.id)
     output_count = 0
@@ -840,7 +885,7 @@ def process_validation(db: Session, request: ValidationRequest) -> None:
 
     output_dir = OUTPUT_ROOT / "validation" / str(request.id)
     data_mounts = resolve_mounts(bundle, db, representative=True)
-    timeout = request.timeout_seconds
+    timeout = get_setting_int(db, SettingKey.MAX_TASK_DURATION_SECONDS, default=3600)
 
     exec_start = _timestamp()
     preamble = (

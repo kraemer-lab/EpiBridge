@@ -22,6 +22,7 @@ class ExecutionRequestStatus(str, enum.Enum):
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
+    CANCELLING = "cancelling"
     CANCELLED = "cancelled"
 
 
@@ -49,6 +50,13 @@ class ExecutionRequest(Base):
     requested_by_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
     )
+    cancelled_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
+    )
+    cancelled_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    cancellation_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -58,7 +66,10 @@ class ExecutionRequest(Base):
 
     project: Mapped["Project"] = relationship()
     analysis_bundle: Mapped["AnalysisBundle"] = relationship()
-    requested_by: Mapped["User"] = relationship()
+    requested_by: Mapped["User"] = relationship(foreign_keys=[requested_by_id])
+    cancelled_by: Mapped[Optional["User"]] = relationship(
+        foreign_keys=[cancelled_by_id]
+    )
     output_set: Mapped[Optional["OutputSet"]] = relationship(
         back_populates="execution_request", uselist=False
     )

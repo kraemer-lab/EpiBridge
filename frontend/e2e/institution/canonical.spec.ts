@@ -62,13 +62,18 @@ test("Canonical Workflow", async ({ page }) => {
 
   // Add members via the search UI
   await page.getByRole("link", { name: "Members" }).click();
+  // Wait for member/user data to finish loading — the page renders either
+  // the member list table or "No members yet." when both API calls complete.
+  await expect(
+    page.getByText("No members yet.").or(page.locator("table"))
+  ).toBeVisible({ timeout: 15000 });
   await page.getByPlaceholder("Search by name or email...").fill(researcherEmail);
-  await page.locator("div").filter({ hasText: researcherEmail }).first().click();
+  await page.getByText(researcherEmail).click();
   await page.getByRole("button", { name: "Add Member" }).click();
   await expect(page.getByText(researcherEmail)).toBeVisible();
 
   await page.getByPlaceholder("Search by name or email...").fill(moderatorEmail);
-  await page.locator("div").filter({ hasText: moderatorEmail }).first().click();
+  await page.getByText(moderatorEmail).click();
   await page.getByRole("button", { name: "Add Member" }).click();
   await expect(page.getByText(moderatorEmail)).toBeVisible();
 
@@ -160,7 +165,7 @@ test("Canonical Workflow", async ({ page }) => {
   // 6. MODERATOR — approve output, verify audit
   // ===================================================================
   await login(page, moderatorEmail, "testpass123");
-  await page.getByRole("link", { name: "Review" }).click();
+  await page.getByRole("link", { name: "Review", exact: true }).click();
   await page.getByRole("navigation", { name: "Review tabs" }).getByRole("link", { name: "Outputs" }).click();
 
   const setRow = page.locator("tr").filter({ hasText: analysisName }).first();

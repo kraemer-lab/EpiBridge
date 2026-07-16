@@ -46,6 +46,7 @@ class TestExecutionRequestModel:
         assert ExecutionRequestStatus.RUNNING.value == "running"
         assert ExecutionRequestStatus.COMPLETED.value == "completed"
         assert ExecutionRequestStatus.FAILED.value == "failed"
+        assert ExecutionRequestStatus.CANCELLING.value == "cancelling"
         assert ExecutionRequestStatus.CANCELLED.value == "cancelled"
 
     def test_default_parameter_overrides(self):

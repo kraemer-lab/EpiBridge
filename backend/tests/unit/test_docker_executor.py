@@ -41,6 +41,7 @@ class TestDockerExecutorHardening:
         mock_docker.from_env.return_value = mock_client
         mock_client.images.get.return_value = MagicMock()
         mock_container = MagicMock()
+        mock_container.status = "exited"
         mock_client.containers.create.return_value = mock_container
         mock_container.wait.return_value = 0
         mock_container.logs.return_value = b""
@@ -77,6 +78,7 @@ class TestDockerExecutorHardening:
         mock_docker.from_env.return_value = mock_client
         mock_client.images.get.return_value = MagicMock()
         mock_container = MagicMock()
+        mock_container.status = "exited"
         mock_client.containers.create.return_value = mock_container
         mock_container.wait.return_value = 0
         mock_container.logs.return_value = b""
@@ -107,6 +109,7 @@ class TestDockerExecutorHardening:
         mock_docker.from_env.return_value = mock_client
         mock_client.images.get.return_value = MagicMock()
         mock_container = MagicMock()
+        mock_container.status = "exited"
         mock_client.containers.create.return_value = mock_container
         mock_container.wait.return_value = 0
         mock_container.logs.return_value = b""
@@ -136,6 +139,7 @@ class TestDockerExecutorHardening:
         mock_docker.from_env.return_value = mock_client
         mock_client.images.get.return_value = MagicMock()
         mock_container = MagicMock()
+        mock_container.status = "exited"
         mock_client.containers.create.return_value = mock_container
         mock_container.wait.return_value = 0
         mock_container.logs.return_value = b""

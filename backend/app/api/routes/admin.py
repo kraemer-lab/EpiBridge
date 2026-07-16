@@ -31,6 +31,7 @@ from app.schemas.audit_event import AuditEventList
 from app.schemas.data_resource import DataResourceRead
 from app.schemas.execution_environment import ExecutionEnvironmentAdminRead
 from app.schemas.execution_request import (
+    CancelExecutionRequest,
     ExecutionRequestAdminDetail,
     ExecutionRequestRead,
 )
@@ -58,6 +59,7 @@ from app.services.analysis_bundle_service import (
 from app.services.audit_service import create_audit_event, query_audit_events
 from app.services.bundle_store import get_bundle_store
 from app.services.execution_request_service import (
+    cancel_execution_request,
     get_execution_request,
     list_execution_requests,
     request_to_read,
@@ -462,6 +464,33 @@ def get_admin_execution_request(
             detail="Execution request not found",
         )
     return request_to_read(request, include_log=True)
+
+
+@router.post(
+    "/admin/execution-requests/{request_id}/cancel",
+    response_model=ExecutionRequestRead,
+)
+def post_admin_cancel_execution_request(
+    request_id: str,
+    body: CancelExecutionRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _require_capability(current_user, Capability.EXECUTION_CANCEL)
+    try:
+        req_id = uuid.UUID(request_id) if isinstance(request_id, str) else request_id
+        request = cancel_execution_request(
+            db,
+            request_id=req_id,
+            cancelled_by_id=current_user.id,
+            reason=body.reason,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e),
+        )
+    return request_to_read(request)
 
 
 @router.get(
@@ -1452,6 +1481,19 @@ def put_admin_setting(
     current_user: User = Depends(get_current_user),
 ):
     _require_capability(current_user, Capability.SETTINGS_MANAGE)
+    if key == SettingKey.MAX_TASK_DURATION_SECONDS:
+        try:
+            val = int(body.value)
+        except (ValueError, TypeError):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Value must be an integer",
+            )
+        if val < 60 or val > 86400:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Value must be between 60 and 86400 seconds",
+            )
     return set_setting(db, key, body.value)
 
 
