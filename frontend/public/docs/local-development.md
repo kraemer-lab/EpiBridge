@@ -1,16 +1,22 @@
 ## Local Development
 
-You can develop and test Analysis Bundles locally using the published execution environment images.
+You can develop and test Analysis Bundles locally using the execution environment image.
 
 ### Prerequisites
 
 - Docker installed on your machine
 
-### Pull the Environment Image
+### Build the Environment Image
+
+The execution environment image is defined in the repository under
+`execution-environments/`. Build it locally from the Dockerfile:
 
 ```sh
-docker pull epibridge/python-3.14:latest
+docker build -t epibridge/python-3.14:latest execution-environments/python-3.14/
 ```
+
+The tag is a local convention. In production, this image would be built and
+published to a registry chosen by the institution.
 
 ### Prepare Your Workspace
 

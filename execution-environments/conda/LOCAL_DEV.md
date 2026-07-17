@@ -1,35 +1,43 @@
 ## Local Development
 
-Develop locally using the published execution environment.
+The execution environment image is defined by the Dockerfile in this directory.
+It is an institution-specified runtime image — during development it may be
+built locally; in production it will refer to an image published to a registry
+chosen by the institution.
 
-### Pull the image
+### Build the image
+
+The Dockerfile is available from the **Technical Reference** tab on this page,
+or directly at `execution-environments/conda/Dockerfile` in the repository.
 
 ```sh
-docker pull epibridge/conda:latest
+docker build -t epibridge/conda:latest .
 ```
 
-### Run a container
+### Run with your dependencies
 
-Mount your analysis code and data:
+Mount your analysis code and install dependencies before running the entrypoint:
 
 ```sh
-docker run --rm \
+docker run --rm -it \
   -v $(pwd):/analysis \
   -v $(pwd)/data:/data:ro \
-  epibridge/conda:latest
+  -v $(pwd)/output:/output \
+  epibridge/conda:latest \
+  sh -c "micromamba install -y -n base -f /analysis/environment.yml && micromamba clean --all --yes && python /analysis/run.py"
 ```
 
-### Run your entrypoint
+### Run interactive shell
+
+Explore the runtime interactively:
 
 ```sh
 docker run --rm -it \
   -v $(pwd):/analysis \
   -v $(pwd)/data:/data:ro \
   epibridge/conda:latest \
-  python /analysis/run.py
+  /bin/bash
 ```
-
-The entrypoint and interpreter selected in the bundle determine how the script is executed. For conda environments, the entrypoint runs inside the created conda environment.
 
 ### Test with representative data
 

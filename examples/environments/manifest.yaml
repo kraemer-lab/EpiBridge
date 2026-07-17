@@ -12,6 +12,9 @@ environments:
     runtime: python-3.13
     description: "Python 3.13 (slim) with NumPy and Pandas"
     status: active
+    # Institution-specified runtime image. During development, build locally
+    # from the Dockerfile in this directory. In production, build and publish
+    # to a registry chosen by the institution.
     image_reference: "epibridge/python-3.13:latest"
 
   - identifier: python-3.14
@@ -19,6 +22,9 @@ environments:
     runtime: python-3.14
     description: "Python 3.14 (slim) with NumPy and Pandas"
     status: active
+    # Institution-specified runtime image. During development, build locally
+    # from the Dockerfile in this directory. In production, build and publish
+    # to a registry chosen by the institution.
     image_reference: "epibridge/python-3.14:latest"
 
   - identifier: conda
@@ -26,4 +32,7 @@ environments:
     runtime: conda
     description: "Conda environment builder via Micromamba 2.8.1 — language and packages defined by researcher's environment.yml"
     status: active
+    # Institution-specified runtime image. During development, build locally
+    # from the Dockerfile in this directory. In production, build and publish
+    # to a registry chosen by the institution.
     image_reference: "epibridge/conda:latest"

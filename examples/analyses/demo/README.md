@@ -19,8 +19,15 @@ A minimal example analysis that reads the demonstration surveillance dataset and
 
 ### Local Development
 
+Build the runtime image locally (defined in `execution-environments/python-3.14/`):
+
 ```sh
-docker pull epibridge/python-3.14:latest
+docker build -t epibridge/python-3.14:latest execution-environments/python-3.14/
+```
+
+Run the analysis:
+
+```sh
 docker run --rm -it \
   -v $(pwd):/analysis \
   -v $(pwd)/../../resources/demo-surveillance/data:/data/demo-surveillance:ro \

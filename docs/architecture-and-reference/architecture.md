@@ -589,12 +589,12 @@ Researchers can discover available execution environments through the applicatio
 - **Detail page** — full environment details including the curated Dockerfile, local development commands, and published artefact downloads
 - **During bundle creation** — environment selector with display names and linked detail pages
 
-This enables researchers to prepare their analysis locally against the institutional runtime before uploading a bundle. The environment detail page provides concrete guidance:
+This enables researchers to prepare their analysis locally against the institutional runtime before uploading a bundle. The environment detail page shows the configured runtime image and how to build it locally from the Dockerfile.
 
-```
-docker pull {image_reference}
-docker run --rm -it {image_reference} /bin/bash
-```
+The `image_reference` is an institution-specified runtime image. During
+development it may be built locally from the execution environment's Dockerfile;
+in production it refers to an image published to a registry chosen by the
+institution.
 
 ### Currently Supported Environments
 
