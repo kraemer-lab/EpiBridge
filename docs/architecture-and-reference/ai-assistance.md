@@ -19,9 +19,7 @@ what an uploaded analysis appears to do before executing it.
 
 ## Status
 
-AI assistance is disabled by default (`AI_ASSIST_ENABLED=false`). The platform
-behaves identically without it. No AI services are started, no models are
-downloaded, and no background tasks are created.
+AI assistance is disabled by default. The platform behaves identically without it. No AI services are started, no models are downloaded, and no background tasks are created.
 
 ## How to enable
 
@@ -36,33 +34,22 @@ docker compose --profile ai up -d
 
 This is additive — no existing containers are rebuilt or reprovisioned.
 
-For development environments using the OrbStack VM:
+For automated setup:
 
 ```bash
-make dev-ai
+make enable-ai
 ```
 
-### 2. Enable AI in configuration
+### 2. Enable AI in the admin interface
 
-Set the following in `.env`:
+AI-assisted review is controlled through the admin settings page, not an environment variable:
 
-```
-AI_ASSIST_ENABLED=true
-```
+1. Navigate to **Admin → Settings** in the UI.
+2. Click **Enable AI-assisted bundle review**.
 
-Then recreate the backend container to load the new configuration (environment variables are read at container creation time):
+The setting takes effect immediately — no container restart is required.
 
-```bash
-docker compose up -d backend
-```
-
-For OrbStack deployments:
-
-```bash
-./scripts/orbstack.sh ssh 'cd /opt/epibridge && docker compose up -d backend'
-```
-
-A browser page refresh may also be needed — the frontend caches the AI availability status from when the page was first loaded.
+A browser page refresh may be needed — the frontend caches the AI availability status from when the page was first loaded.
 
 ### 3. Install a model
 
@@ -87,11 +74,10 @@ Supported models include any model available in the
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `AI_ASSIST_ENABLED` | `false` | Enable AI-assisted analysis summaries |
 | `OLLAMA_BASE_URL` | `http://ollama:11434` | URL of the Ollama API endpoint |
 | `OLLAMA_MODEL` | `llama3.2` | AI model to use for analysis summaries |
 
-Set these in `.env` and recreate the backend container (`docker compose up -d backend`).
+The Ollama URL and model are configured via environment variables. AI-assisted review itself is enabled through the admin settings page (Admin → Settings), not by an environment variable.
 
 ## Behaviour when AI is unavailable
 
@@ -99,7 +85,7 @@ The platform continues to function normally in all scenarios:
 
 | Scenario | Frontend display | Effect on execution |
 |---|---|---|
-| AI not enabled (`AI_ASSIST_ENABLED=false`) | "Not available for this deployment" | None |
+| AI not enabled | "Not available for this deployment" | None |
 | Ollama service not running | Review status shows "Unavailable" | None |
 | Model not installed | Review status shows "Unavailable" | None |
 | Review in progress | Review status shows "Pending" | None |

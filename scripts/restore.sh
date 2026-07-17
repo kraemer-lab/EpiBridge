@@ -5,8 +5,31 @@ EPIBRIDGE_HOME="${EPIBRIDGE_HOME:-/opt/epibridge}"
 BACKUP_DIR="${BACKUP_DIR:-/var/backups/epibridge}"
 COMPOSE_FILE="${EPIBRIDGE_HOME}/docker-compose.yml"
 
+# Parse --yes / -y flag
+CONFIRMED=false
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --yes|-y)
+      CONFIRMED=true
+      shift
+      ;;
+    --)
+      shift
+      break
+      ;;
+    -*)
+      echo "Usage: $0 [--yes|-y] <backup-file>"
+      echo "Example: $0 /var/backups/epibridge/epibridge_20250101_120000.tar.gz"
+      exit 1
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
+
 if [ $# -ne 1 ]; then
-  echo "Usage: $0 <backup-file>"
+  echo "Usage: $0 [--yes|-y] <backup-file>"
   echo "Example: $0 /var/backups/epibridge/epibridge_20250101_120000.tar.gz"
   exit 1
 fi
@@ -20,6 +43,23 @@ fi
 
 echo "=== EpiBridge Restore ==="
 echo "Backup: $BACKUP_FILE"
+
+# Require explicit confirmation before destructive operations
+if [ "$CONFIRMED" = false ]; then
+  echo ""
+  echo "WARNING: This will DESTROY all current data and replace it"
+  echo "with the state from the backup archive."
+  echo ""
+  echo "  - All services will be stopped"
+  echo "  - The database will be overwritten"
+  echo "  - All current platform state will be lost"
+  echo ""
+  read -p "Continue? [y/N] " confirm
+  if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
+    echo "Restore cancelled."
+    exit 1
+  fi
+fi
 
 # Extract backup
 RESTORE_DIR="/tmp/epibridge_restore_$(date +%s)"

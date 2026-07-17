@@ -1,34 +1,42 @@
 ## Local Development
 
-Develop locally using the published execution environment.
+The execution environment image is defined by the Dockerfile in this directory.
+It is an institution-specified runtime image — during development it may be
+built locally; in production it will refer to an image published to a registry
+chosen by the institution.
 
-### Pull the image
+### Build the image
+
+The Dockerfile is available from the **Technical Reference** tab on this page,
+or directly at `execution-environments/python-3.13/Dockerfile` in the repository.
 
 ```sh
-docker pull epibridge/python-3.13:latest
+docker build -t epibridge/python-3.13:latest .
 ```
 
-### Run a container
+### Run with your dependencies
 
-Mount your analysis code and data:
+Mount your analysis code and install dependencies before running the entrypoint:
 
 ```sh
-docker run --rm \
+docker run --rm -it \
   -v $(pwd):/analysis \
   -v $(pwd)/data:/data:ro \
-  epibridge/python-3.13:latest
+  -v $(pwd)/output:/output \
+  epibridge/python-3.13:latest \
+  sh -c "pip install --no-cache-dir -r /analysis/requirements.txt && python /analysis/run.py"
 ```
 
-### Run your entrypoint
+### Run interactive shell
 
-The container does not automatically execute your script. Run it interactively:
+Explore the runtime interactively:
 
 ```sh
 docker run --rm -it \
   -v $(pwd):/analysis \
   -v $(pwd)/data:/data:ro \
   epibridge/python-3.13:latest \
-  python /analysis/run.py
+  /bin/bash
 ```
 
 ### Test with representative data

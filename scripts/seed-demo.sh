@@ -4,7 +4,7 @@
 #
 # Prerequisite: seed-personas.sh must have completed (accounts exist).
 # This script does not manipulate platform state. It prints guidance only.
-# It is owned by the evaluation layer (make demo), not the installation layer.
+# It is owned by the evaluation layer (make seed-demo), not the installation layer.
 
 echo ""
 echo "=== EpiBridge Demo ==="

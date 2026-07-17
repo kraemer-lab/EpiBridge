@@ -6,6 +6,7 @@ import time
 from pathlib import Path
 
 import docker
+import requests
 from docker.errors import DockerException, ImageNotFound
 
 from app.builders.base import BuildResult, EnvironmentBuilder
@@ -43,6 +44,7 @@ class PythonBuilder(EnvironmentBuilder):
         dockerfile: Path,
         base_image: str,
         image_tag: str,
+        timeout: int = 3600,
     ) -> BuildResult:
         if not dockerfile.exists():
             raise RuntimeError(f"Dockerfile not found: {dockerfile}")
@@ -79,6 +81,7 @@ class PythonBuilder(EnvironmentBuilder):
                     buildargs={"BASE_IMAGE": base_image},
                     rm=True,
                     forcerm=True,
+                    timeout=timeout,
                 )
                 for chunk in log_gen:
                     if isinstance(chunk, dict):
@@ -95,6 +98,13 @@ class PythonBuilder(EnvironmentBuilder):
                 return BuildResult(
                     success=False,
                     build_log=build_log,
+                    duration_seconds=duration,
+                )
+            except requests.exceptions.Timeout:
+                duration = time.time() - start
+                return BuildResult(
+                    success=False,
+                    build_log=f"Build timed out after {timeout} seconds",
                     duration_seconds=duration,
                 )
 

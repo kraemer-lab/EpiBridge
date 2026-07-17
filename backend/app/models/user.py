@@ -80,7 +80,7 @@ class User(Base):
     @property
     def capability_names(self) -> list[str]:
         role_caps = self._role_derived_capabilities()
-        advanced = {c.capability_name for c in self.advanced_capabilities}
+        advanced = {c.capability_name.value for c in self.advanced_capabilities}
         return list(role_caps | advanced)
 
     def has_capability(self, capability_name: str) -> bool:

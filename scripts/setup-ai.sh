@@ -23,7 +23,7 @@ _set_env() {
     return
   fi
   if grep -q "^# ${key}=" .env 2>/dev/null; then
-    sed -i.bak "s/^# ${key}=.*/${key}=${value}/" .env
+    sed -i.bak "s|^# ${key}=.*|${key}=${value}|" .env
   else
     echo "${key}=${value}" >> .env
   fi

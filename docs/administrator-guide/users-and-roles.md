@@ -38,14 +38,20 @@ The platform defines the following capabilities:
 | `bundle.submit` | Submit bundles for review | Researcher, Moderator, Maintainer, Admin |
 | `bundle.review` | Approve/reject/supersede bundles | Moderator, Maintainer, Admin |
 | `execution.run` | Request execution of approved bundles | Researcher, Moderator, Maintainer, Admin |
+| `execution.read` | View execution requests and their status (admin) | Admin |
+| `execution.cancel` | Cancel pending or running executions | Maintainer, Admin |
 | `output.review` | Approve/reject output sets | Moderator, Maintainer, Admin |
 | `output.release` | Release output sets to researchers | Maintainer, Admin |
 | `environment.manage` | Manage execution environments | Maintainer, Admin |
 | `data.manage` | Manage data resources | Maintainer, Admin |
-| `user.manage` | Manage user accounts | Admin |
+| `user.manage` | Manage user accounts (create, update, delete) | Admin |
+| `user.read` | List and view user accounts (read-only) | Maintainer, Admin |
 | `terms.manage` | Publish and manage terms of service | Admin |
+| `settings.manage` | View and update platform settings | Admin |
+| `audit.read` | Query the audit ledger | Admin |
 | `validation.run` | Run validation against representative datasets | Researcher, Moderator, Maintainer, Admin |
 | `build.customize` | Use Custom Build strategy | Maintainer, Admin |
+| `governance.self_regulate` | Bypass self-moderation prevention | (grantable via advanced capabilities) |
 
 ## Creating users
 

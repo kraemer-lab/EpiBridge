@@ -55,6 +55,17 @@ case "${1:-help}" in
     ssh root@"$MACHINE"@orb "rm -rf /opt/epibridge && ln -sfn $(pwd) /opt/epibridge"
     echo "Mounted $(pwd) at /opt/epibridge"
     ;;
+  start)
+    shift
+    echo "Verifying OrbStack VM $MACHINE is running..."
+    orbctl info "$MACHINE" >/dev/null 2>&1
+    echo "VM $MACHINE is running."
+    echo "Verifying Docker is available..."
+    ssh root@"$MACHINE"@orb "docker info >/dev/null 2>&1"
+    echo "Docker Engine is running."
+    echo "VM $MACHINE ready."
+    ;;
+
   ssh)
     shift
     ssh root@"$MACHINE"@orb "$@"
@@ -71,7 +82,8 @@ case "${1:-help}" in
     echo ""
     echo "Commands:"
     echo "  create           Create the installation VM"
-    echo "  delete           Delete the installation VM"
+    echo "  delete           Delete the installation VM
+  start            Verify the installation VM is running"
     echo "  mount            Symlink repo into /opt/epibridge"
     echo "  ssh [cmd]        Run command in the VM (or start a shell)"
     echo "  ip               Show VM IP address"

@@ -8,14 +8,17 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session
 
+
 from app.builders.registry import registry as builder_registry
 from app.core.config import settings
 from app.core.logging import configure_logging
 from app.db.session import SessionLocal
+from app.execution.base import CancelledError
 from app.execution.docker import DockerExecutor
 from app.models.analysis_bundle import (
     AnalysisBundle,
     AnalysisBundleBuildStatus,
+    AnalysisBundleStatus,
     BuildStrategy,
 )
 from app.models.audit_event import WORKER_USER_ID, AuditEventType
@@ -33,8 +36,11 @@ from app.models.validation_request import (
 )
 from app.providers.registry import registry
 from app.providers.types import ProviderType
+from app.models.platform_setting import SettingKey
 from app.services.audit_service import create_audit_event
 from app.services.bundle_store import get_bundle_store
+from app.services.execution_request_service import create_execution_request
+from app.services.platform_settings_service import get_setting_bool, get_setting_int
 from app.services.output_set_service import (
     ensure_output_set,
     register_output as register_set_output,
@@ -183,13 +189,62 @@ def resolve_mounts(
     return mounts
 
 
+def _auto_create_execution_request(db: Session, bundle: AnalysisBundle) -> None:
+    """Create an initial ExecutionRequest when an approved bundle's
+    execution environment is ready and auto-execution is enabled.
+
+    This is triggered by the "environment ready" lifecycle event regardless
+    of whether that came from a new build or a cached image.
+
+    Subsequent (manual) execution requests use the existing workflow and
+    are not affected by this function — they use the requester's own user
+    ID rather than WORKER_USER_ID.
+    """
+    if not get_setting_bool(db, SettingKey.AUTO_EXECUTE_APPROVED_BUNDLES, default=True):
+        return
+    create_execution_request(
+        db,
+        data={"analysis_bundle_id": bundle.id},
+        project_id=bundle.project_id,
+        requested_by_id=WORKER_USER_ID,
+    )
+
+
+def get_bundles_ready_for_execution(db: Session) -> list[AnalysisBundle]:
+    """Return approved bundles whose execution environment is ready but
+    that have not yet had an automatic execution request created by the
+    worker.
+
+    The check uses ``requested_by_id == WORKER_USER_ID`` so that only the
+    automatic initial execution is tracked.  Researchers can still create
+    additional manual executions using their own user ID.
+    """
+    worker_executed_subq = (
+        db.query(ExecutionRequest.analysis_bundle_id)
+        .filter(ExecutionRequest.requested_by_id == WORKER_USER_ID)
+        .distinct()
+        .subquery()
+    )
+    return (
+        db.query(AnalysisBundle)
+        .filter(
+            AnalysisBundle.status == AnalysisBundleStatus.APPROVED_FOR_EXECUTION,
+            AnalysisBundle.build_status
+            == AnalysisBundleBuildStatus.ENVIRONMENT_READY,
+            AnalysisBundle.execution_image_id.isnot(None),
+            ~AnalysisBundle.id.in_(worker_executed_subq),
+        )
+        .all()
+    )
+
+
 def process_build(db: Session, build: BuildRequest) -> None:
     # NOTE: bundle.build_status mirrors the BuildRequest lifecycle.
     # Environment preparation is owned by BuildRequest, not AnalysisBundle.
     # The build_status field is retained for backwards compatibility and
     # is expected to be removed in a future governance refactor.
     ts = _timestamp()
-    bundle = db.query(AnalysisBundle).get(build.analysis_bundle_id)
+    bundle = db.get(AnalysisBundle, build.analysis_bundle_id)
     if bundle is None:
         build.log = (
             f"[{ts}] BUILD FAILED: bundle not found (id={build.analysis_bundle_id})"
@@ -197,7 +252,7 @@ def process_build(db: Session, build: BuildRequest) -> None:
         build_transition_to(db, build, BuildRequestStatus.FAILED, "bundle not found")
         return
 
-    env = db.query(ExecutionEnvironment).get(build.execution_environment_id)
+    env = db.get(ExecutionEnvironment, build.execution_environment_id)
     if env is None:
         build.log = (
             f"[{ts}] BUILD FAILED: execution environment not found "
@@ -250,6 +305,12 @@ def process_build(db: Session, build: BuildRequest) -> None:
         bundle.execution_image_id = existing.id
         bundle.build_status = AnalysisBundleBuildStatus.ENVIRONMENT_READY
         build.execution_image_id = existing.id
+        try:
+            _auto_create_execution_request(db, bundle)
+        except ValueError:
+            logger.warning(
+                "Auto-execution: bundle %s no longer eligible for execution", bundle.id
+            )
         build_transition_to(db, build, BuildRequestStatus.COMPLETED, "cache hit (race)")
         return
 
@@ -266,7 +327,7 @@ def process_build(db: Session, build: BuildRequest) -> None:
     bundle.build_status = AnalysisBundleBuildStatus.ENVIRONMENT_BUILDING
     build_transition_to(db, build, BuildRequestStatus.BUILDING)
 
-    if bundle.build_strategy == BuildStrategy.CUSTOM.value:
+    if bundle.build_strategy == BuildStrategy.CUSTOM:
         dockerfile = bundle_path / "Dockerfile"
     else:
         dockerfile = builder.get_template_dockerfile()
@@ -277,6 +338,7 @@ def process_build(db: Session, build: BuildRequest) -> None:
             dockerfile=dockerfile,
             base_image=env.image_reference,
             image_tag=tag,
+            timeout=get_setting_int(db, SettingKey.MAX_TASK_DURATION_SECONDS, default=3600),
         )
     except Exception as e:
         build_end = _timestamp()
@@ -333,6 +395,12 @@ def process_build(db: Session, build: BuildRequest) -> None:
     bundle.execution_image_id = cached.id
     bundle.build_status = AnalysisBundleBuildStatus.ENVIRONMENT_READY
     build.execution_image_id = cached.id
+    try:
+        _auto_create_execution_request(db, bundle)
+    except ValueError:
+        logger.warning(
+            "Auto-execution: bundle %s no longer eligible for execution", bundle.id
+        )
     build_transition_to(db, build, BuildRequestStatus.COMPLETED)
 
 
@@ -360,7 +428,7 @@ def _emit_execution_event(
 
 def execute_request(db: Session, request: ExecutionRequest) -> None:
     ts = _timestamp()
-    bundle = db.query(AnalysisBundle).get(request.analysis_bundle_id)
+    bundle = db.get(AnalysisBundle, request.analysis_bundle_id)
     if bundle is None:
         request.log = f"[{ts}] EXECUTION FAILED: bundle not found (id={request.analysis_bundle_id})"
         db.commit()
@@ -390,7 +458,7 @@ def execute_request(db: Session, request: ExecutionRequest) -> None:
         )
         return
 
-    env = db.query(ExecutionEnvironment).get(bundle.execution_environment_id)
+    env = db.get(ExecutionEnvironment, bundle.execution_environment_id)
     if env is None:
         request.log = f"[{ts}] EXECUTION FAILED: environment not found"
         db.commit()
@@ -482,7 +550,7 @@ def execute_request(db: Session, request: ExecutionRequest) -> None:
     command = [interpreter.executable, f"/analysis/{entrypoint}"] + extra
     output_dir = OUTPUT_ROOT / str(request.id)
     data_mounts = resolve_mounts(bundle, db)
-    timeout = request.timeout_seconds
+    timeout = get_setting_int(db, SettingKey.MAX_TASK_DURATION_SECONDS, default=3600)
 
     exec_start = _timestamp()
     preamble = (
@@ -507,6 +575,17 @@ def execute_request(db: Session, request: ExecutionRequest) -> None:
         )
     executor = DockerExecutor(mount_remap=mount_remap)
 
+    def cancel_check() -> bool:
+        try:
+            current = (
+                db.query(ExecutionRequest.status)
+                .filter(ExecutionRequest.id == request.id)
+                .scalar()
+            )
+            return current == ExecutionRequestStatus.CANCELLING
+        except Exception:
+            return False
+
     try:
         result = executor.run(
             image=image,
@@ -517,6 +596,7 @@ def execute_request(db: Session, request: ExecutionRequest) -> None:
             timeout=timeout,
             env={},
             network_enabled=False,
+            cancel_check=cancel_check,
         )
     except TimeoutError:
         exec_end = _timestamp()
@@ -530,6 +610,31 @@ def execute_request(db: Session, request: ExecutionRequest) -> None:
             db, AuditEventType.EXECUTION_FAILED, request, {"failure_reason": "timeout"}
         )
         transition_to(db, request, ExecutionRequestStatus.FAILED, "timeout")
+        return
+    except CancelledError:
+        exec_end = _timestamp()
+        db.refresh(request)
+        cancelled_by = request.cancelled_by_id or WORKER_USER_ID
+        request.status = ExecutionRequestStatus.CANCELLED
+        request.cancelled_at = datetime.now(timezone.utc)
+        request.log = (
+            f"{preamble}\n"
+            f"[{exec_end}] EXECUTION CANCELLED\n"
+            f"[exec] Cancelled by: {cancelled_by}\n"
+            f"[exec] Reason: {request.cancellation_reason or 'Not specified'}\n"
+            f"[exec] Container was terminated administratively"
+        )
+        create_audit_event(
+            db,
+            event_type=AuditEventType.EXECUTION_CANCELLED,
+            actor_id=cancelled_by,
+            project_id=request.project_id,
+            resource_type="execution_request",
+            resource_id=request.id,
+            metadata={"reason": request.cancellation_reason or ""},
+        )
+        db.commit()
+        logger.info("Request %s \u2192 cancelled (by %s)", request.id, cancelled_by)
         return
     except Exception as e:
         exec_end = _timestamp()
@@ -572,6 +677,12 @@ def execute_request(db: Session, request: ExecutionRequest) -> None:
             f"exit code {exit_code}",
         )
         return
+
+    db.refresh(request)
+    if request.status == ExecutionRequestStatus.CANCELLING:
+        request.cancelled_by_id = None
+        request.cancellation_reason = None
+        db.commit()
 
     output_set = ensure_output_set(db, request.id)
     output_count = 0
@@ -632,7 +743,7 @@ def _emit_validation_event(
 
 def process_validation(db: Session, request: ValidationRequest) -> None:
     ts = _timestamp()
-    bundle = db.query(AnalysisBundle).get(request.analysis_bundle_id)
+    bundle = db.get(AnalysisBundle, request.analysis_bundle_id)
     if bundle is None:
         request.log = f"[{ts}] VALIDATION FAILED: bundle not found"
         db.commit()
@@ -664,7 +775,7 @@ def process_validation(db: Session, request: ValidationRequest) -> None:
         )
         return
 
-    env = db.query(ExecutionEnvironment).get(bundle.execution_environment_id)
+    env = db.get(ExecutionEnvironment, bundle.execution_environment_id)
     if env is None:
         request.log = f"[{ts}] VALIDATION FAILED: environment not found"
         db.commit()
@@ -765,7 +876,8 @@ def process_validation(db: Session, request: ValidationRequest) -> None:
         cmd_str = " ".join(shlex.quote(str(c)) for c in base_command)
         setup = " ".join(env.validation_setup_command.splitlines()).strip()
         command = [
-            "sh", "-c",
+            "sh",
+            "-c",
             f"{setup} && exec {cmd_str}",
         ]
     else:
@@ -773,7 +885,7 @@ def process_validation(db: Session, request: ValidationRequest) -> None:
 
     output_dir = OUTPUT_ROOT / "validation" / str(request.id)
     data_mounts = resolve_mounts(bundle, db, representative=True)
-    timeout = request.timeout_seconds
+    timeout = get_setting_int(db, SettingKey.MAX_TASK_DURATION_SECONDS, default=3600)
 
     exec_start = _timestamp()
     preamble = (
@@ -939,6 +1051,22 @@ def main():
                     break
                 logger.info("Processing build %s", build.id)
                 process_build(db, build)
+
+            if _shutdown_requested:
+                continue
+
+            for bundle in get_bundles_ready_for_execution(db):
+                if _shutdown_requested:
+                    break
+                logger.info(
+                    "Auto-executing ready bundle %s: %s", bundle.id, bundle.name
+                )
+                try:
+                    _auto_create_execution_request(db, bundle)
+                except ValueError as e:
+                    logger.warning(
+                        "Auto-execution: bundle %s not eligible: %s", bundle.id, e
+                    )
 
             if _shutdown_requested:
                 continue

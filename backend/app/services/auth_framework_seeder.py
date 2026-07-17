@@ -22,21 +22,27 @@ _ROLE_CAPABILITY_MAP: dict[UserRole, set[str]] = {
     UserRole.MODERATOR: {
         Capability.BUNDLE_REVIEW,
         Capability.OUTPUT_REVIEW,
+        Capability.OUTPUT_RELEASE,
     },
     UserRole.MAINTAINER: {
         Capability.PROJECT_MANAGE,
         Capability.PROJECT_MEMBERS_MANAGE,
         Capability.PROJECT_RESOURCES_MANAGE,
-        Capability.OUTPUT_RELEASE,
         Capability.ENVIRONMENT_MANAGE,
         Capability.DATA_MANAGE,
         Capability.USER_READ,
+        Capability.EXECUTION_CANCEL,
     },
     UserRole.ADMIN: {
         Capability.USER_MANAGE,
         Capability.USER_READ,
         Capability.TERMS_MANAGE,
         Capability.SETTINGS_MANAGE,
+        Capability.EXECUTION_CANCEL,
+        Capability.EXECUTION_READ,
+        Capability.AUDIT_READ,
+        Capability.ENVIRONMENT_MANAGE,
+        Capability.DATA_MANAGE,
     },
 }
 

@@ -105,7 +105,7 @@ async function loadModerator(): Promise<SectionData> {
     const items: SectionItem[] = [];
     if (submittedCount > 0) {
       items.push({
-        label: "Submissions Awaiting Review",
+        label: "Analyses Awaiting Review",
         href: "/admin/bundles",
         value: submittedCount,
       });

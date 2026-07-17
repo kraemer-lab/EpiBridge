@@ -94,7 +94,7 @@ print(f"requests {v}")
   ).toBeVisible({ timeout: 180_000 });
 
   // === OUTPUT RELEASE (API: admin context, no session conflict) ===
-  await approveAndReleaseOutputSetForBundle(bundleId);
+  await approveAndReleaseOutputSetForBundle(bundleId, project.id);
 
   // === DOWNLOAD (UI) ===
   await page.goto(`/projects/${project.id}`);

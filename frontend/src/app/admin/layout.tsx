@@ -14,11 +14,9 @@ interface AdminTab {
 const adminTabs: AdminTab[] = [
   { href: "/admin", label: "Data Resources", requiredCapability: "data.manage" },
   { href: "/admin/environments", label: "Environments", requiredCapability: "environment.manage" },
-  { href: "/admin/bundles", label: "Submissions", requiredCapability: "bundle.review" },
-  { href: "/admin/executions", label: "Executions", requiredCapability: "bundle.review" },
-  { href: "/admin/outputs", label: "Outputs", requiredCapability: "output.review" },
+  { href: "/admin/executions", label: "Executions", requiredCapability: "execution.read" },
   { href: "/admin/terms", label: "Terms", requiredCapability: "terms.manage" },
-  { href: "/admin/audit", label: "Audit Log", requiredCapability: "bundle.review" },
+  { href: "/admin/audit", label: "Audit Log", requiredCapability: "audit.read" },
   { href: "/admin/users", label: "Users", requiredCapability: "user.manage" },
   { href: "/admin/settings", label: "Settings", requiredCapability: "settings.manage" },
 ];

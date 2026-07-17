@@ -92,6 +92,11 @@ async def lifespan(app: FastAPI):
         finally:
             db.close()
 
+    from app.events.governance_dispatch import register_governance_handler
+    from app.services.ai_review_service import request_and_perform_output_set_review
+
+    register_governance_handler(request_and_perform_output_set_review)
+
     yield
 
 

@@ -254,8 +254,8 @@ class TestAdminUsers:
         caps = response.json()["capabilities"]
         assert "bundle.review" in caps
         assert "output.review" in caps
+        assert "output.release" in caps
         assert "project.manage" not in caps
-        assert "output.release" not in caps
 
     def test_create_user_maintainer(self, client):
         response = client.post(
@@ -270,7 +270,6 @@ class TestAdminUsers:
         assert response.status_code == 201
         caps = response.json()["capabilities"]
         assert "project.manage" in caps
-        assert "output.release" in caps
         assert "data.manage" in caps
         assert "user.manage" not in caps
 
@@ -288,4 +287,4 @@ class TestAdminUsers:
         caps = response.json()["capabilities"]
         assert "user.manage" in caps
         assert "terms.manage" in caps
-        assert "data.manage" not in caps
+        assert "data.manage" in caps

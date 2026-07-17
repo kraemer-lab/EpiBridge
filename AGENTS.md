@@ -126,14 +126,16 @@ The Makefile is the supported administration interface. Public targets describe 
 ```text
 make install       Full installation (target-specific)
 make uninstall     Stop and remove the environment
-make up            Start all services
-make down          Stop all services
+make restart       Stop then start services; preserve state
+make start         Start all services
+make stop          Stop all services
 make logs          Tail container logs
 make shell         Interactive session on the platform host
 make certs         Regenerate TLS certificates
-make ai            Enable AI assistance
-make demo          Seed evaluation personas
-make dev           Rebuild and restart development services
+make enable-ai     Enable AI assistance
+make seed-demo     Seed evaluation personas
+make dev           Restart + seed development data
+make dev-drop-db   Drop and recreate database schema (development only; destructive)
 make test          Run unit, integration, and smoke tests
 ```
 
@@ -309,14 +311,20 @@ Capability vocabulary (defined in `app.models.capability.Capability` enum):
 | `bundle.submit` | Submit bundles for review |
 | `bundle.review` | Approve/reject/supersede bundles |
 | `execution.run` | Request execution of approved bundles |
+| `execution.read` | View execution requests and their status (admin) |
+| `execution.cancel` | Cancel pending or running executions |
 | `output.review` | Approve/reject output sets |
 | `output.release` | Release output sets to researchers |
 | `environment.manage` | Manage execution environments |
 | `data.manage` | Manage data resources |
-| `user.manage` | Manage user accounts |
+| `user.manage` | Manage user accounts (create, update, delete) |
+| `user.read` | List and view user accounts (read-only) |
 | `terms.manage` | Publish and manage terms of service |
+| `settings.manage` | View and update platform settings |
+| `audit.read` | Query the audit ledger |
 | `validation.run` | Run validation against representative datasets |
 | `build.customize` | Use Custom Build strategy for analysis bundles |
+| `governance.self_regulate` | Bypass self-moderation prevention |
 
 The `capabilities` table is materialised from the enum during seeding (the enum is authoritative). `UserCapability` records are copied from role templates at user creation and become independent thereafter.
 
@@ -328,6 +336,31 @@ ProjectMembership answers one question only: does this User participate in this 
 - No roles, capabilities, or permissions are stored on membership.
 - The project creator becomes the first member automatically.
 - Access requires: (1) membership in the project, (2) the required capability.
+
+### Governance Provenance
+
+Governance state is stored directly on governed entities (AnalysisBundle, OutputSet)
+as explicit provenance, not inferred from audit history. The audit trail records
+*that* a governance action occurred; the governed entity records the current
+state and *why*.
+
+Explicit provenance is added to a governed entity where it contributes state that
+downstream behaviour depends on. At present:
+
+- **Submission provenance** (`submitted_by_id`, `submitted_at`) — governance
+  independence (self-moderation guard) checks who submitted.
+- **Rejection provenance** (`rejection_reason`, `rejected_by_id`, `rejected_at`) —
+  the rejection reason is part of the current governance state and must be
+  visible to researchers without an audit join.
+- **Execution provenance** (`requested_by` on ExecutionRequest) — truthfully
+  records who initiated execution.
+
+Approval currently introduces no additional domain state beyond the approval
+event itself — no explanatory payload is needed, and no downstream behaviour
+depends on knowing the approver without consulting the audit trail. The audit
+record is therefore sufficient. If a future requirement demands querying "who
+approved this entity" without an audit join, explicit approval provenance can
+be added following the same pattern.
 
 ### Audit Event Model
 
@@ -369,7 +402,7 @@ Supports pagination via `limit` (max 200) and `offset`, and ordering via `order`
 
 Returns actor details (display name, email) alongside each event via a join to the `users` table.
 
-Access requires one of: `bundle.review`, `output.review`, or `user.manage` capability.
+Access requires the `audit.read` capability.
 
 Defined in `app.api.routes.admin` and `app.services.audit_service`.
 
@@ -468,8 +501,9 @@ Every `/api/admin/*` endpoint enforces a capability check. The requirements are:
 | `GET /admin/output-sets`, `GET /admin/output-sets/{id}` | `output.review` |
 | `GET /admin/execution-requests/{id}/outputs` | `output.review` |
 | `GET /admin/outputs/{id}` | `output.review` |
-| `GET /admin/users`, `GET /admin/users/{id}`, `POST /admin/users` | `user.manage` |
-| `GET /admin/audit-events` | Tiered: `bundle.review` / `output.review` / `user.manage` |
+| `GET /admin/users`, `GET /admin/users/{id}` | `user.manage` or `user.read` |
+| `POST /admin/users`, `PUT /admin/users/{id}` | `user.manage` |
+| `GET /admin/audit-events` | `audit.read` |
 | `POST /admin/terms/platform` | `terms.manage` |
 | `POST /admin/resources/{id}/terms/publish` | `terms.manage` |
 | `GET /admin/terms/status` | `terms.manage` |
@@ -492,7 +526,7 @@ Alembic is the single authoritative mechanism for database schema management.
 
 > **Migration history reset (Milestone 24.4):** The development migration chain was
 > squashed to a single baseline. Existing local development databases created
-> before this squash must be recreated. Run `make clean-db` or `make install` to
+> before this squash must be recreated. Run `make dev-drop-db` or `make install` to
 > initialise a fresh database using the new baseline.
 
 **Developer workflow for schema changes:**
@@ -754,7 +788,8 @@ All three are created idempotently — re-running bootstrap does not duplicate t
 The standard development workflow:
 
 ```bash
-make dev          # rebuild and restart development services (current backend)
+make restart      # rebuild and restart development services (current backend)
+make dev          # restart + seed development data (after schema reset)
 make format       # auto-format code
 make lint         # static analysis
 make test         # run tests
@@ -784,8 +819,8 @@ make test         # run tests
 **Makefile targets** (portable, delegates execution to `platform.sh`):
 - `make deploy` — production install (SSH)
 - `make install` — local installation (defaults to Multipass VM)
-- `make up` — docker compose up -d
-- `make down` — docker compose down
+- `make start` — bring an existing installation online
+- `make stop` — shut down gracefully
 - `make upgrade` — run upgrade.sh
 - `make backup` — run backup.sh
 - `make restore FILE=<file>` — restore from backup
@@ -800,7 +835,7 @@ make test         # run tests
   natively for speed.  Integration and smoke tests execute through the
   current execution backend so they always target the active platform.
   Execution-environment transparent (Native, OrbStack, Multipass, Remote).
-- `make dev-test` — run full suite inside the backend container (useful
+- `make test-backend` — run full suite inside the backend container (useful
   for debugging without native Python setup).
 - `make playwright` — run acceptance tests through Playwright.  The target
   URL is derived from the standard resolution hierarchy:
@@ -848,15 +883,16 @@ createdb epibridge_test
 
 **Makefile dev targets** (Multipass/OrbStack-specific, uses `scripts/platform.sh` under the hood):
 - `make install` — first-run: create VM, mount repo, bootstrap, seed
-- `make dev` — incremental: rebuild code containers, restart services (no seeding)
-- `make dev-ai` — start the optional Ollama service on an already-running stack
-- `make dev-up` — start services (individual step)
-- `make dev-down` — stop services (individual step)
-- `make dev-shell` — interactive VM shell (individual step)
-- `make dev-logs` — tail container logs (individual step)
+- `make restart` — rebuild and restart code containers (backend, frontend, worker); preserves all state
+- `make dev` — restart + re-seed development data (idempotent seeding, safe to run repeatedly)
+- `make enable-ai` — enable AI assistance
+- `make start` — bring an existing installation online (individual step)
+- `make stop` — shut down gracefully (individual step)
+- `make shell` — interactive VM shell (individual step)
+- `make logs` — tail container logs (individual step)
 - `make dev-destroy` — factory reset (remove containers, volumes, VM, .env)
-- `make clean-db` — reset database (all researcher artefacts dropped, schema recreated on next startup)
-- `make dev-build SVC=frontend` — rebuild and restart a single service (fastest iteration)
+- `make dev-drop-db` — reset database (all researcher artefacts dropped, schema recreated on next startup)
+- `make build SVC=frontend` — rebuild and restart a single service (fastest iteration)
 
 **VM / Dev environment** (see `vm/runtime.md`):
 - `scripts/orbstack.sh` — OrbStack-specific helpers (create, mount, ssh, ip)

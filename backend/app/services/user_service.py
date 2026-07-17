@@ -156,7 +156,7 @@ def _sync_advanced_capabilities(db: Session, user: User, caps: list[str]) -> Non
     Only capabilities NOT covered by any role template are stored
     in user_capabilities. Role-derived capabilities are computed
     at runtime and are not written here."""
-    existing = {c.capability_name for c in user.advanced_capabilities}
+    existing = {c.capability_name.value for c in user.advanced_capabilities}
     to_add = set(caps) - existing
     to_remove = existing - set(caps)
     for cap_name in to_add:

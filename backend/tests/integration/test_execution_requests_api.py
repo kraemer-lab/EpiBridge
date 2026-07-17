@@ -87,14 +87,12 @@ class TestCreateExecutionRequest:
             json={
                 "analysis_bundle_id": str(bundle.id),
                 "name": "Baseline run",
-                "timeout_seconds": 7200,
             },
         )
         assert response.status_code == 201
         data = response.json()
         assert data["name"] == "Baseline run"
         assert data["analysis_name"] == "Survival Analysis"
-        assert data["timeout_seconds"] == 7200
         assert data["status"] == "pending"
         assert data["analysis_bundle_id"] == str(bundle.id)
         assert data["runtime"] == "python-3.13"
@@ -141,16 +139,6 @@ class TestCreateExecutionRequest:
             f"/api/projects/{project.id}/execution-requests",
             json={
                 "analysis_bundle_id": str(uuid.uuid4()),
-            },
-        )
-        assert response.status_code == 422
-
-    def test_invalid_timeout_returns_422(self, client, project, bundle):
-        response = client.post(
-            f"/api/projects/{project.id}/execution-requests",
-            json={
-                "analysis_bundle_id": str(bundle.id),
-                "timeout_seconds": 30,
             },
         )
         assert response.status_code == 422

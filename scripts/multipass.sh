@@ -15,9 +15,11 @@ CLOUD_INIT="vm/cloud-init.yaml"
 # frontend, worker, Caddy, BuildKit, and optionally Ollama
 # simultaneously.  These defaults provide comfortable headroom
 # for the full stack plus Docker image builds.
+# 60G disk accommodates the Docker image cache plus the Ollama
+# model (~4GB) with room to spare.
 MULTIPASS_CPUS="${MULTIPASS_CPUS:-2}"
 MULTIPASS_MEMORY="${MULTIPASS_MEMORY:-4G}"
-MULTIPASS_DISK="${MULTIPASS_DISK:-20G}"
+MULTIPASS_DISK="${MULTIPASS_DISK:-60G}"
 
 # Validate that the required runtime is available before any operation.
 if ! command -v multipass &>/dev/null; then
@@ -103,6 +105,23 @@ case "${1:-help}" in
     echo "Docker Engine is running."
     echo "Mounted $(pwd) at /opt/epibridge (native 9p)"
     ;;
+  start)
+    shift
+    echo "Starting VM $MACHINE..."
+    multipass start "$MACHINE"
+    echo "Waiting for cloud-init to complete..."
+    rc=0
+    multipass exec "$MACHINE" -- cloud-init status --wait || rc=$?
+    if [ "$rc" -ne 0 ] && [ "$rc" -ne 2 ]; then
+        echo "cloud-init completed with warnings (exit $rc)."
+    fi
+    echo "Cloud-init finished."
+    echo "Verifying Docker is available..."
+    multipass exec "$MACHINE" -- sh -c 'sudo -u epibridge docker info >/dev/null 2>&1'
+    echo "Docker Engine is running."
+    echo "VM $MACHINE ready."
+    ;;
+
   exec)
     shift
     multipass exec "$MACHINE" -- sudo -u epibridge "$@"
@@ -122,7 +141,8 @@ case "${1:-help}" in
     echo ""
     echo "Commands:"
     echo "  create           Create the installation VM"
-    echo "  delete           Delete the installation VM"
+    echo "  delete           Delete the installation VM
+  start            Start the installation VM"
     echo "  mount            Mount repo into /opt/epibridge (native 9p)"
     echo "  exec <cmd>       Run command inside the VM (as epibridge user)"
     echo "  shell            Interactive shell inside the VM (as epibridge user)"

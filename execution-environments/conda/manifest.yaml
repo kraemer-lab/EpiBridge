@@ -3,6 +3,9 @@ name: Conda (Micromamba 2.x)
 runtime: conda
 description: "Conda environment builder via Micromamba 2.8.1 — language and packages defined by researcher's environment.yml"
 status: active
+# Institution-specified runtime image. During development, build locally from
+# the Dockerfile in this directory. In production, build and publish to a
+# registry chosen by the institution.
 image_reference: "epibridge/conda:latest"
 validation:
   setup_command: >

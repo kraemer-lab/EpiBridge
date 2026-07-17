@@ -50,7 +50,7 @@ make install TARGET=native    # native Docker deployment
 ### Evaluation
 
 ```bash
-make demo
+make seed-demo
 ```
 
 This creates evaluation accounts (researcher, moderator, maintainer) and prints a welcome message with credentials and next steps.
@@ -82,7 +82,7 @@ To regenerate all secrets, delete `.env` and run `make install` again.
 | Command | Purpose |
 |---------|---------|
 | `make install` | Install EpiBridge (default: OrbStack; use `TARGET=native` for Docker-native deployment) |
-| `make demo` | Prepare an evaluation environment |
+| `make seed-demo` | Seed evaluation personas and print welcome message |
 | `make dev` | Daily development workflow |
 | `make uninstall` | Remove the local EpiBridge installation |
 

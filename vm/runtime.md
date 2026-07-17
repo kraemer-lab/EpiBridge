@@ -25,7 +25,7 @@
 
 ```
 /opt/epibridge              # application repository
-/var/lib/epibridge/data     # persistent database volume
+/var/lib/epibridge/data     # institutional data mount point (NFS, cloud storage)
 /var/lib/epibridge/outputs  # job output storage
 /var/log/epibridge          # audit and application logs
 ```
@@ -174,6 +174,41 @@ In production, the system administrator ensures the institution's data
 resources are placed at `/read-only-data` or otherwise reachable through the
 configured provider endpoints.
 
+The exact mechanism depends on your infrastructure. Examples:
+
+**NFS mount:**
+
+```yaml
+# /etc/fstab
+nfs-server:/data/institutional  /var/lib/epibridge/data  nfs  ro,noexec  0  0
+```
+
+```yaml
+# docker-compose override
+volumes:
+  - /var/lib/epibridge/data:/read-only-data:ro
+```
+
+**Local disk:**
+
+```yaml
+volumes:
+  - /srv/institutional-data:/read-only-data:ro
+```
+
+**Cloud object storage (via S3 FUSE):**
+
+```bash
+s3fs my-data-bucket /var/lib/epibridge/data -o ro,allow_other
+```
+
+```yaml
+volumes:
+  - /var/lib/epibridge/data:/read-only-data:ro
+```
+
+The platform never knows the host path. It only sees `/read-only-data`.
+
 ## Standard Ports
 
 | Port | Service       |
@@ -284,7 +319,7 @@ make dev-logs       # tail all container logs
 
 ```bash
 make test           # Run tests on the host (unit + integration + smoke)
-make dev-test       # Run full suite inside the container (requires dev stack)
+make test-backend   # Run full suite inside the container (requires dev stack)
 ```
 
 Unit tests work anywhere. Integration tests require running services. Smoke tests auto-skip if the full stack isn't available.
@@ -295,8 +330,8 @@ The same Makefile supports production VMs and other hypervisors via SSH:
 
 ```bash
 make deploy SSH="ssh -i key.pem ubuntu@192.168.1.100"
-make up    SSH="ssh -i key.pem ubuntu@192.168.1.100"
-make down  SSH="ssh -i key.pem ubuntu@192.168.1.100"
+make start SSH="ssh -i key.pem ubuntu@192.168.1.100"
+make stop  SSH="ssh -i key.pem ubuntu@192.168.1.100"
 ```
 
 Provider-specific setup examples:
@@ -340,13 +375,13 @@ MULTIPASS_CPUS=4 MULTIPASS_MEMORY=8G make install TARGET=multipass
 Individual lifecycle commands work identically to the OrbStack target:
 
 ```bash
-make up       # start services
-make down     # stop services
+make start    # start services
+make stop     # stop services
 make logs     # tail container logs
 make shell    # interactive session inside the VM (as epibridge user)
 make certs    # regenerate TLS certificates
-make ai       # enable AI assistance
-make demo     # seed evaluation personas
+make enable-ai    # enable AI assistance
+make seed-demo    # seed evaluation personas
 make uninstall  # stop services and delete the VM
 ```
 

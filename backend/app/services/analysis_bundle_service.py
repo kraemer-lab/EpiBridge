@@ -114,7 +114,7 @@ def validate_build_strategy(
 
     dockerfile = bundle_path / "Dockerfile"
 
-    if bundle.build_strategy == BuildStrategy.CUSTOM.value:
+    if bundle.build_strategy == BuildStrategy.CUSTOM:
         if not dockerfile.exists() or not dockerfile.is_file():
             return (
                 "Custom Build Strategy requires a Dockerfile "
@@ -135,6 +135,21 @@ def validate_execution_environment(
     if env is None:
         raise ValueError(f"Execution environment not found: {execution_environment_id}")
     return env
+
+
+def list_bundles_for_member(db: Session, user_id: uuid.UUID) -> list[AnalysisBundle]:
+    from app.models.project_membership import ProjectMembership
+
+    return (
+        db.query(AnalysisBundle)
+        .join(
+            ProjectMembership,
+            AnalysisBundle.project_id == ProjectMembership.project_id,
+        )
+        .filter(ProjectMembership.user_id == user_id)
+        .order_by(AnalysisBundle.name)
+        .all()
+    )
 
 
 def create_bundle(
@@ -169,7 +184,7 @@ def create_bundle(
         description=data.get("description", ""),
         outputs=data.get("outputs", []),
         parameters=data.get("parameters", {}),
-        build_strategy=data.get("build_strategy", BuildStrategy.INSTITUTIONAL.value),
+        build_strategy=data.get("build_strategy", BuildStrategy.INSTITUTIONAL),
     )
     db.add(bundle)
     db.flush()
@@ -274,10 +289,10 @@ def update_bundle(db: Session, bundle_id: uuid.UUID, data: dict) -> AnalysisBund
 
     if "build_strategy" in update_data:
         strategy = update_data["build_strategy"]
-        valid = {BuildStrategy.INSTITUTIONAL.value, BuildStrategy.CUSTOM.value}
-        if strategy not in valid:
+        try:
+            bundle.build_strategy = BuildStrategy(strategy)
+        except ValueError:
             raise ValueError(f"Invalid build strategy: {strategy}")
-        bundle.build_strategy = strategy
 
     if "resource_identifiers" in update_data:
         resources = validate_resources(

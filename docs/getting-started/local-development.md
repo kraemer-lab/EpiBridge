@@ -10,21 +10,21 @@ After installation, the standard edit–build–run cycle is:
 make dev
 ```
 
-This rebuilds and restarts application services without reseeding users or institutional state. It is faster than re-installing and preserves your working data.
+This restarts application services and reseeds development data (users, terms). It is faster than re-installing and preserves your working data.
 
 ## Iteration speed
 
 For faster iteration on a single service:
 
 ```bash
-make dev-build SVC=frontend   # rebuild and restart the frontend only
-make dev-build SVC=backend    # rebuild and restart the backend only
+make build SVC=frontend   # rebuild and restart the frontend only
+make build SVC=backend    # rebuild and restart the backend only
 ```
 
 The stack runs in an OrbStack VM. Logs are available via:
 
 ```bash
-make dev-logs                 # tail all container logs
+make logs                     # tail all container logs
 ```
 
 ## Code quality
@@ -47,7 +47,7 @@ make dev-logs                 # tail all container logs
 For testing inside the running stack:
 
 ```bash
-make dev-test                 # run all tests inside the container
+make test-backend             # run all backend tests inside the container
 ```
 
 See [Testing](../architecture-and-reference/testing.md) for the full testing reference.

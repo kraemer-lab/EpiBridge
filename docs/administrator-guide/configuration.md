@@ -43,13 +43,14 @@ Email notifications are optional. Without SMTP configuration, the platform funct
 |----------|---------|-------------|
 | `SMTP_HOST` | — | SMTP relay hostname |
 | `SMTP_PORT` | 587 | SMTP relay port |
-| `SMTP_USER` | — | SMTP authentication username |
+| `SMTP_USERNAME` | — | SMTP authentication username |
 | `SMTP_PASSWORD` | — | SMTP authentication password |
-| `SMTP_USE_TLS` | `true` | Enable STARTTLS |
+| `SMTP_TLS` | `true` | Enable STARTTLS |
+| `SMTP_FROM` | `noreply@example.org` | Notification sender address |
+| `SMTP_FROM_NAME` | `EpiBridge` | Notification sender display name |
 
 When configuring SMTP:
 
-- The `From` address is derived from the SMTP username and the `PUBLIC_URL` domain.
 - Email is sent asynchronously via `BackgroundTasks` — it never blocks API responses.
 - If the SMTP relay is unreachable, notification failures are logged but do not affect platform operation.
 
@@ -79,12 +80,10 @@ In production, configure TLS at the reverse proxy level. The Docker Compose depl
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `execution_mem_limit` | — | Maximum memory per analysis container (e.g., `2g`) |
-| `execution_cpu_limit` | — | Maximum CPU cores per analysis container (e.g., `1.5`) |
-| `execution_pids_limit` | — | Maximum process count per analysis container |
-| `max_output_size_mb` | — | Maximum total output size before the execution is terminated |
-
-If not set, the platform uses Docker Engine defaults.
+| `execution_mem_limit` | `4g` | Maximum memory per analysis container |
+| `execution_cpu_limit` | `2.0` | Maximum CPU cores per analysis container |
+| `execution_pids_limit` | `256` | Maximum process count per analysis container |
+| `max_output_size_mb` | `1024` | Maximum total output size before the execution is terminated |
 
 ### Logging
 
@@ -98,9 +97,10 @@ Logs are written to stderr in a structured format with UTC timestamps. Module lo
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `AI_ASSIST_ENABLED` | `false` | Enable AI-assisted analysis summaries |
 | `OLLAMA_BASE_URL` | `http://ollama:11434` | URL of the Ollama API endpoint |
 | `OLLAMA_MODEL` | `llama3.2` | AI model to use for analysis summaries |
+
+AI-assisted review is controlled through the admin settings page (Admin → Settings → Enable AI-assisted bundle review), not by an environment variable.
 
 The Ollama service runs behind a Docker Compose profile and must be started separately:
 
@@ -114,10 +114,25 @@ See [AI Assistance](../architecture-and-reference/ai-assistance.md) for setup in
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `RESOURCE_MANIFEST_DIR` | (deployment-specific) | Directory containing data resource YAML manifests |
-| `ENVIRONMENT_MANIFEST_DIR` | (deployment-specific) | Directory containing execution environment YAML manifests |
+| `RESOURCE_MANIFEST_DIR` | (deployment-specific) | Container-side path to data resource manifest directory |
+| `HOST_RESOURCE_MANIFEST_DIR` | (deployment-specific) | Host-side equivalent for Docker-outside-of-Docker bind mounts |
+| `ENVIRONMENT_MANIFEST_DIR` | (deployment-specific) | Container-side path to execution environment manifest directory |
+| `AUTO_REGISTER_RESOURCES` | `true` | Automatically register resource manifests on startup. Set to `false` to require explicit `make register-resources` calls. |
 
-In development, these point to `resources/` and `execution-environments/` in the repository. In production, they may point to external directories managed by the institution.
+In development, `RESOURCE_MANIFEST_DIR` points to `/resources` (mapped from
+`./resources/` in the repository). `HOST_RESOURCE_MANIFEST_DIR` is the same
+path on the host filesystem — used by the worker's Docker executor when
+mounting resources into analysis containers.
+
+In production, both should point to the same host directory:
+
+```
+RESOURCE_MANIFEST_DIR: /resources
+HOST_RESOURCE_MANIFEST_DIR: /var/lib/epibridge/resources
+```
+
+The `HOST_RESOURCE_MANIFEST_DIR` must match the path on the host running
+Docker Engine, not the container-internal path.
 
 ## Next steps
 

@@ -1,6 +1,9 @@
 """initial_schema
 
 Single baseline migration replacing the accumulated development chain.
+Includes ORM contract fix: all lifecycle enums use proper PostgreSQL ENUM
+types (with lowercase values matching Python enum values) instead of String
+columns.
 """
 
 from typing import Sequence, Union
@@ -91,6 +94,11 @@ def upgrade() -> None:
             "dependency_hash",
             name="uq_execution_image_env_hash",
         ),
+    )
+    op.create_table(
+        "platform_settings",
+        sa.Column("key", sa.String(100), nullable=False, primary_key=True),
+        sa.Column("value", sa.Text(), nullable=False, server_default=""),
     )
     op.create_table(
         "roles",
@@ -257,7 +265,18 @@ def upgrade() -> None:
         ),
         sa.Column("name", sa.String(255), nullable=False),
         sa.Column("source_path", sa.Text(), nullable=False),
-        sa.Column("status", sa.String(64), nullable=False),
+        sa.Column(
+            "status",
+            sa.Enum(
+                "draft",
+                "submitted",
+                "approved_for_execution",
+                "rejected",
+                "superseded",
+                name="analysis_bundle_status",
+            ),
+            nullable=False,
+        ),
         sa.Column("version", sa.String(50), nullable=False),
         sa.Column("entrypoint", sa.String(255), nullable=False),
         sa.Column("interpreter", sa.String(20), nullable=False),
@@ -267,17 +286,42 @@ def upgrade() -> None:
         sa.Column("parameters", sa.JSON(), nullable=False),
         sa.Column(
             "build_strategy",
-            sa.String(20),
+            sa.Enum("institutional", "custom", name="build_strategy"),
             nullable=False,
             server_default=sa.text("'institutional'"),
         ),
-        sa.Column("build_status", sa.String(64), nullable=False),
+        sa.Column(
+            "build_status",
+            sa.Enum(
+                "environment_not_built",
+                "environment_building",
+                "environment_ready",
+                "environment_build_failed",
+                name="analysis_bundle_build_status",
+            ),
+            nullable=False,
+        ),
         sa.Column("build_error", sa.Text(), nullable=False),
         sa.Column(
             "execution_image_id",
             postgresql.UUID(),
             sa.ForeignKey("execution_images.id"),
         ),
+        sa.Column(
+            "submitted_by_id",
+            postgresql.UUID(),
+            sa.ForeignKey("users.id"),
+            nullable=True,
+        ),
+        sa.Column("submitted_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("rejection_reason", sa.Text(), nullable=True),
+        sa.Column(
+            "rejected_by_id",
+            postgresql.UUID(),
+            sa.ForeignKey("users.id"),
+            nullable=True,
+        ),
+        sa.Column("rejected_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -294,7 +338,39 @@ def upgrade() -> None:
     op.create_table(
         "audit_events",
         sa.Column("id", postgresql.UUID(), nullable=False, primary_key=True),
-        sa.Column("event_type", sa.String(100), nullable=False),
+        sa.Column(
+            "event_type",
+            sa.Enum(
+                "project.created",
+                "project.member.added",
+                "project.member.removed",
+                "project.resource.allocated",
+                "project.resource.deallocated",
+                "bundle.created",
+                "bundle.submitted",
+                "bundle.approved",
+                "bundle.rejected",
+                "bundle.superseded",
+                "execution.requested",
+                "execution.started",
+                "execution.completed",
+                "execution.failed",
+                "execution.cancelled",
+                "output_set.created",
+                "output_set.approved",
+                "output_set.rejected",
+                "output_set.released",
+                "user.created",
+                "platform_terms.published",
+                "dataset_terms.published",
+                "platform_terms.accepted",
+                "dataset_terms.accepted",
+                "validation.completed",
+                "validation.failed",
+                name="audit_event_type",
+            ),
+            nullable=False,
+        ),
         sa.Column(
             "actor_id", postgresql.UUID(), sa.ForeignKey("users.id"), nullable=False
         ),
@@ -403,7 +479,17 @@ def upgrade() -> None:
             sa.ForeignKey("analysis_bundles.id"),
             nullable=False,
         ),
-        sa.Column("status", sa.String(64), nullable=False),
+        sa.Column(
+            "status",
+            sa.Enum(
+                "pending",
+                "completed",
+                "failed",
+                "unavailable",
+                name="ai_bundle_review_status",
+            ),
+            nullable=False,
+        ),
         sa.Column("summary", sa.Text()),
         sa.Column("assessment", sa.Text()),
         sa.Column("assessment_confidence", sa.String(10)),
@@ -456,7 +542,23 @@ def upgrade() -> None:
         ),
         sa.Column("dependency_hash", sa.String(64), nullable=False),
         sa.Column("builder_type", sa.String(50), nullable=False),
-        sa.Column("status", sa.String(64), nullable=False),
+        sa.Column(
+            "timeout_seconds",
+            sa.Integer(),
+            nullable=False,
+            server_default=sa.text("3600"),
+        ),
+        sa.Column(
+            "status",
+            sa.Enum(
+                "pending",
+                "building",
+                "completed",
+                "failed",
+                name="build_request_status",
+            ),
+            nullable=False,
+        ),
         sa.Column(
             "execution_image_id",
             postgresql.UUID(),
@@ -493,9 +595,26 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.Column("name", sa.String(255), nullable=False),
-        sa.Column("timeout_seconds", sa.Integer(), nullable=False),
+        sa.Column(
+            "timeout_seconds",
+            sa.Integer(),
+            nullable=False,
+            server_default=sa.text("3600"),
+        ),
         sa.Column("parameter_overrides", sa.JSON(), nullable=False),
-        sa.Column("status", sa.String(64), nullable=False),
+        sa.Column(
+            "status",
+            sa.Enum(
+                "pending",
+                "running",
+                "completed",
+                "failed",
+                "cancelling",
+                "cancelled",
+                name="execution_request_status",
+            ),
+            nullable=False,
+        ),
         sa.Column("log", sa.Text(), nullable=False),
         sa.Column(
             "requested_by_id",
@@ -503,6 +622,14 @@ def upgrade() -> None:
             sa.ForeignKey("users.id"),
             nullable=False,
         ),
+        sa.Column(
+            "cancelled_by_id",
+            postgresql.UUID(),
+            sa.ForeignKey("users.id"),
+            nullable=True,
+        ),
+        sa.Column("cancelled_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("cancellation_reason", sa.Text(), nullable=True),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -545,7 +672,17 @@ def upgrade() -> None:
             server_default=sa.text("'{}'::json"),
         ),
         sa.Column(
-            "status", sa.String(64), nullable=False, server_default=sa.text("'pending'")
+            "status",
+            sa.Enum(
+                "pending",
+                "running",
+                "completed",
+                "failed",
+                "cancelled",
+                name="validation_request_status",
+            ),
+            nullable=False,
+            server_default=sa.text("'pending'"),
         ),
         sa.Column("log", sa.Text(), nullable=False, server_default=sa.text("''")),
         sa.Column(
@@ -588,9 +725,27 @@ def upgrade() -> None:
             sa.ForeignKey("execution_requests.id"),
             nullable=False,
         ),
-        sa.Column("status", sa.String(64), nullable=False),
+        sa.Column(
+            "status",
+            sa.Enum(
+                "pending_review",
+                "approved",
+                "rejected",
+                "released",
+                name="output_set_status",
+            ),
+            nullable=False,
+        ),
         sa.Column("release_package_path", sa.String(512)),
         sa.Column("release_package_size", sa.Integer()),
+        sa.Column("rejection_reason", sa.Text(), nullable=True),
+        sa.Column(
+            "rejected_by_id",
+            postgresql.UUID(),
+            sa.ForeignKey("users.id"),
+            nullable=True,
+        ),
+        sa.Column("rejected_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -623,6 +778,48 @@ def upgrade() -> None:
             server_default=sa.text("now()"),
         ),
     )
+    op.create_table(
+        "ai_output_set_reviews",
+        sa.Column("id", postgresql.UUID(), nullable=False, primary_key=True),
+        sa.Column(
+            "output_set_id",
+            postgresql.UUID(),
+            sa.ForeignKey("output_sets.id"),
+            nullable=False,
+        ),
+        sa.Column(
+            "status",
+            sa.Enum(
+                "pending",
+                "completed",
+                "failed",
+                "unavailable",
+                name="ai_output_set_review_status",
+            ),
+            nullable=False,
+        ),
+        sa.Column("summary", sa.Text(), nullable=True),
+        sa.Column("assessment", sa.Text(), nullable=True),
+        sa.Column("assessment_confidence", sa.String(10), nullable=True),
+        sa.Column("reviewer_notes", sa.Text(), nullable=True),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
+        sa.ForeignKeyConstraint(
+            ["output_set_id"],
+            ["output_sets.id"],
+        ),
+        sa.UniqueConstraint("output_set_id"),
+    )
     op.create_index(
         "ix_terms_of_service_terms_type", "terms_of_service", ["terms_type"]
     )
@@ -651,12 +848,22 @@ def upgrade() -> None:
         "ix_validation_requests_project_id", "validation_requests", ["project_id"]
     )
     op.create_index("ix_validation_requests_status", "validation_requests", ["status"])
+    op.create_index(
+        "ix_ai_output_set_reviews_output_set_id",
+        "ai_output_set_reviews",
+        ["output_set_id"],
+    )
 
 
 def downgrade() -> None:
+    op.drop_index(
+        "ix_ai_output_set_reviews_output_set_id",
+        table_name="ai_output_set_reviews",
+    )
     op.drop_index("ix_validation_requests_status", table_name="validation_requests")
     op.drop_index("ix_validation_requests_bundle_id", table_name="validation_requests")
     op.drop_index("ix_validation_requests_project_id", table_name="validation_requests")
+    op.drop_table("ai_output_set_reviews")
     op.drop_table("outputs")
     op.drop_table("output_sets")
     op.drop_table("validation_requests")
@@ -677,7 +884,21 @@ def downgrade() -> None:
     op.drop_table("projects")
     op.drop_table("users")
     op.drop_table("roles")
+    op.drop_table("platform_settings")
     op.drop_table("execution_images")
     op.drop_table("execution_environments")
     op.drop_table("data_resources")
     op.drop_table("capabilities")
+
+    # Drop custom ENUM types (PostgreSQL-specific)
+    op.execute("DROP TYPE IF EXISTS analysis_bundle_status")
+    op.execute("DROP TYPE IF EXISTS analysis_bundle_build_status")
+    op.execute("DROP TYPE IF EXISTS build_strategy")
+    op.execute("DROP TYPE IF EXISTS execution_request_status")
+    op.execute("DROP TYPE IF EXISTS output_set_status")
+    op.execute("DROP TYPE IF EXISTS build_request_status")
+    op.execute("DROP TYPE IF EXISTS validation_request_status")
+    op.execute("DROP TYPE IF EXISTS ai_bundle_review_status")
+    op.execute("DROP TYPE IF EXISTS ai_output_set_review_status")
+    op.execute("DROP TYPE IF EXISTS audit_event_type")
+    op.execute("DROP TYPE IF EXISTS user_role")

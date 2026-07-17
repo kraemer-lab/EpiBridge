@@ -1,7 +1,7 @@
 import uuid
 from unittest.mock import MagicMock, patch
 
-from app.models.ai_bundle_review import AIBundleReview
+from app.models.ai_bundle_review import AIBundleReview, AIBundleReviewStatus
 from app.models.analysis_bundle import AnalysisBundle
 from app.services.ai_review_service import get_review, perform_review, request_review
 
@@ -24,7 +24,7 @@ class TestRequestReview:
         review = mock_db.add.call_args[0][0]
         assert isinstance(review, AIBundleReview)
         assert review.bundle_id == bundle_id
-        assert review.status == "pending"
+        assert review.status == AIBundleReviewStatus.PENDING
         mock_db.commit.assert_called_once()
         mock_db.close.assert_called_once()
 
@@ -32,7 +32,7 @@ class TestRequestReview:
         bundle_id = uuid.uuid4()
         existing = AIBundleReview(
             bundle_id=bundle_id,
-            status="completed",
+            status=AIBundleReviewStatus.COMPLETED,
             summary="Old summary",
             assessment="Old assessment",
             assessment_confidence="High",
@@ -46,7 +46,7 @@ class TestRequestReview:
             request_review(bundle_id)
 
         mock_db.add.assert_not_called()
-        assert existing.status == "pending"
+        assert existing.status == AIBundleReviewStatus.PENDING
         assert existing.summary is None
         assert existing.assessment is None
         assert existing.assessment_confidence is None
@@ -92,7 +92,9 @@ class TestPerformReview:
 
     def test_completed_status_on_success(self):
         bundle_id = uuid.uuid4()
-        review = AIBundleReview(bundle_id=bundle_id, status="pending")
+        review = AIBundleReview(
+            bundle_id=bundle_id, status=AIBundleReviewStatus.PENDING
+        )
 
         mock_db = MagicMock()
         mock_db.query.return_value.filter.return_value.first.side_effect = [
@@ -127,7 +129,7 @@ class TestPerformReview:
         for p in patchers:
             p.stop()
 
-        assert review.status == "completed"
+        assert review.status == AIBundleReviewStatus.COMPLETED
         assert review.summary == "Test summary"
         assert review.assessment == "Appears appropriate"
         assert review.assessment_confidence == "High"
@@ -137,7 +139,9 @@ class TestPerformReview:
 
     def test_unavailable_when_provider_returns_unavailable(self):
         bundle_id = uuid.uuid4()
-        review = AIBundleReview(bundle_id=bundle_id, status="pending")
+        review = AIBundleReview(
+            bundle_id=bundle_id, status=AIBundleReviewStatus.PENDING
+        )
 
         mock_db = MagicMock()
         mock_db.query.return_value.filter.return_value.first.side_effect = [
@@ -169,14 +173,16 @@ class TestPerformReview:
         for p in patchers:
             p.stop()
 
-        assert review.status == "unavailable"
+        assert review.status == AIBundleReviewStatus.UNAVAILABLE
         assert review.summary is None
         mock_db.commit.assert_called_once()
         mock_db.close.assert_called_once()
 
     def test_unavailable_when_review_disabled(self):
         bundle_id = uuid.uuid4()
-        review = AIBundleReview(bundle_id=bundle_id, status="pending")
+        review = AIBundleReview(
+            bundle_id=bundle_id, status=AIBundleReviewStatus.PENDING
+        )
 
         mock_db = MagicMock()
         mock_db.query.return_value.filter.return_value.first.return_value = review
@@ -190,13 +196,15 @@ class TestPerformReview:
         ):
             perform_review(bundle_id)
 
-        assert review.status == "unavailable"
+        assert review.status == AIBundleReviewStatus.UNAVAILABLE
         mock_db.commit.assert_called_once()
         mock_db.close.assert_called_once()
 
     def test_failed_on_exception(self):
         bundle_id = uuid.uuid4()
-        review = AIBundleReview(bundle_id=bundle_id, status="pending")
+        review = AIBundleReview(
+            bundle_id=bundle_id, status=AIBundleReviewStatus.PENDING
+        )
 
         mock_db = MagicMock()
         mock_db.query.return_value.filter.return_value.first.side_effect = [
@@ -217,7 +225,7 @@ class TestPerformReview:
         ):
             perform_review(bundle_id)
 
-        assert review.status == "failed"
+        assert review.status == AIBundleReviewStatus.FAILED
         mock_db.close.assert_called_once()
 
     def test_handles_missing_review(self):
@@ -236,7 +244,9 @@ class TestPerformReview:
 class TestGetReview:
     def test_returns_review(self):
         bundle_id = uuid.uuid4()
-        review = AIBundleReview(bundle_id=bundle_id, status="completed")
+        review = AIBundleReview(
+            bundle_id=bundle_id, status=AIBundleReviewStatus.COMPLETED
+        )
 
         mock_db = MagicMock()
         mock_db.query.return_value.filter.return_value.first.return_value = review

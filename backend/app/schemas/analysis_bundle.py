@@ -2,7 +2,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, computed_field
+from pydantic import BaseModel, Field, computed_field, field_validator
 
 from app.models.analysis_bundle import AnalysisBundleBuildStatus, AnalysisBundleStatus
 from app.schemas.ai_bundle_review import AIBundleReviewRead
@@ -42,10 +42,21 @@ class AnalysisBundleCreate(BaseModel):
     build_strategy: str = "institutional"
 
 
+class RejectBundleRequest(BaseModel):
+    reason: str = Field(..., min_length=1, max_length=2000)
+
+    @field_validator("reason")
+    @classmethod
+    def strip_whitespace(cls, v: str) -> str:
+        return v.strip()
+
+
 class AnalysisBundleRead(BaseModel):
     id: uuid.UUID
     project_id: uuid.UUID
     created_by_id: uuid.UUID
+    submitted_by_id: uuid.UUID | None = None
+    rejection_reason: str | None = None
     execution_environment_id: uuid.UUID | None = None
     name: str
     source_path: str
@@ -67,6 +78,7 @@ class AnalysisBundleRead(BaseModel):
     parameters: dict = {}
     created_at: datetime
     updated_at: datetime
+    project_name: str = ""
     ai_review: AIBundleReviewRead | None = None
 
     @computed_field

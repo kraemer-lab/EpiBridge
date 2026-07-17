@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, usePathname } from "next/navigation";
+import { useAuth } from "@/lib/AuthContext";
 import { Project, getProject } from "@/lib/api";
 
 const tabs = [
@@ -11,10 +12,11 @@ const tabs = [
   { href: "/analysis", label: "Analysis" },
   { href: "/jobs", label: "Jobs" },
   { href: "/outputs", label: "Outputs" },
-  { href: "/members", label: "Members" },
+  { href: "/members", label: "Members", requiredCapability: "project.members.manage" },
 ];
 
 export default function ProjectLayout({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
   const params = useParams();
   const pathname = usePathname();
   const projectId = params.id as string;
@@ -49,7 +51,10 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
           marginBottom: "var(--spacing-lg)",
         }}
       >
-        {tabs.map((tab) => {
+        {tabs.filter((tab) => {
+          if (!tab.requiredCapability) return true;
+          return user?.capabilities.includes(tab.requiredCapability);
+        }).map((tab) => {
           const tabHref = tab.href === "" ? basePath : `${basePath}${tab.href}`;
           const isActive = pathname === tabHref || (tab.href !== "" && pathname.startsWith(tabHref));
           return (

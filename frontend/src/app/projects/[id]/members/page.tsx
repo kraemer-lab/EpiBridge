@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
+import { useAuth } from "@/lib/AuthContext";
 import {
   ProjectMember,
   User,
@@ -12,6 +13,7 @@ import {
 } from "@/lib/api";
 
 export default function ProjectMembersPage() {
+  const { user } = useAuth();
   const { id } = useParams<{ id: string }>();
   const [members, setMembers] = useState<ProjectMember[]>([]);
   const [allUsers, setAllUsers] = useState<User[]>([]);
@@ -39,6 +41,10 @@ export default function ProjectMembersPage() {
           u.email.toLowerCase().includes(lower)),
     );
   }, [allUsers, memberEmails, query]);
+
+  if (!user?.capabilities.includes("project.members.manage")) {
+    return <div className="card empty-state">Access denied.</div>;
+  }
 
   const load = () => {
     setLoading(true);

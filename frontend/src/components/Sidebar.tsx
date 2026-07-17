@@ -6,16 +6,27 @@ import { useAuth } from "@/lib/AuthContext";
 import styles from "./Sidebar.module.css";
 
 const adminCapabilities = [
-  "bundle.review",
-  "output.review",
-  "output.release",
   "user.manage",
   "data.manage",
   "environment.manage",
+  "terms.manage",
+  "settings.manage",
+  "execution.read",
+  "audit.read",
+];
+
+const reviewCapabilities = [
+  "bundle.review",
+  "output.review",
+  "output.release",
 ];
 
 function hasAdminAccess(capabilities: string[]): boolean {
   return capabilities.some((c) => adminCapabilities.includes(c));
+}
+
+function hasReviewAccess(capabilities: string[]): boolean {
+  return capabilities.some((c) => reviewCapabilities.includes(c));
 }
 
 const links = [
@@ -48,6 +59,14 @@ export default function Sidebar() {
             {link.label}
           </Link>
         ))}
+        {user !== null && hasReviewAccess(user.capabilities) && (
+          <Link
+            href="/review"
+            className={`${styles.link} ${pathname.startsWith("/review") ? styles.active : ""}`}
+          >
+            Review
+          </Link>
+        )}
         {showAdmin && (
           <Link
             href="/admin"

@@ -3,12 +3,13 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import JSON
 
 from app.db.base import Base
+from app.db.enum_utils import enum_values
 
 if TYPE_CHECKING:
     from app.models.analysis_bundle import AnalysisBundle
@@ -22,6 +23,7 @@ class ExecutionRequestStatus(str, enum.Enum):
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
+    CANCELLING = "cancelling"
     CANCELLED = "cancelled"
 
 
@@ -43,12 +45,25 @@ class ExecutionRequest(Base):
         JSON, nullable=False, default=dict
     )
     status: Mapped[ExecutionRequestStatus] = mapped_column(
-        String(64), nullable=False, default=ExecutionRequestStatus.PENDING
+        Enum(
+            ExecutionRequestStatus,
+            name="execution_request_status",
+            values_callable=enum_values,
+        ),
+        nullable=False,
+        default=ExecutionRequestStatus.PENDING,
     )
     log: Mapped[str] = mapped_column(Text, nullable=False, default="")
     requested_by_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
     )
+    cancelled_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
+    )
+    cancelled_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    cancellation_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -58,7 +73,10 @@ class ExecutionRequest(Base):
 
     project: Mapped["Project"] = relationship()
     analysis_bundle: Mapped["AnalysisBundle"] = relationship()
-    requested_by: Mapped["User"] = relationship()
+    requested_by: Mapped["User"] = relationship(foreign_keys=[requested_by_id])
+    cancelled_by: Mapped[Optional["User"]] = relationship(
+        foreign_keys=[cancelled_by_id]
+    )
     output_set: Mapped[Optional["OutputSet"]] = relationship(
         back_populates="execution_request", uselist=False
     )

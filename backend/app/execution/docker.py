@@ -1,13 +1,15 @@
 import io
 import os
 import tarfile
+import time
+from collections.abc import Callable
 from pathlib import Path
 
 import docker
 from docker.errors import ImageNotFound
 
 from app.core.config import settings
-from app.execution.base import ExecutionResult, Executor
+from app.execution.base import CancelledError, ExecutionResult, Executor
 from app.execution.util import parse_exit_code
 
 NONROOT_USER = "nobody"
@@ -32,6 +34,8 @@ class DockerExecutor(Executor):
                 return replacement + source[len(prefix) :]
         return source
 
+    POLL_INTERVAL = 5
+
     def run(
         self,
         *,
@@ -43,6 +47,7 @@ class DockerExecutor(Executor):
         timeout: int,
         env: dict[str, str],
         network_enabled: bool = False,
+        cancel_check: Callable[[], bool] | None = None,
     ) -> ExecutionResult:
         try:
             self._client.images.get(image)
@@ -92,12 +97,15 @@ class DockerExecutor(Executor):
         container.start()
 
         try:
-            wait_result = container.wait(timeout=timeout)
-            exit_code = parse_exit_code(wait_result)
-        except docker.errors.TimeoutError:
+            exit_code = self._poll_container(container, timeout, cancel_check)
+        except TimeoutError:
             container.stop()
             container.remove()
-            raise TimeoutError(f"Execution timed out after {timeout} seconds")
+            raise
+        except CancelledError:
+            container.stop()
+            container.remove()
+            raise
 
         stdout = (container.logs(stdout=True, stderr=False) or b"").decode()
         stderr = (container.logs(stdout=False, stderr=True) or b"").decode()
@@ -111,6 +119,29 @@ class DockerExecutor(Executor):
             stdout=stdout,
             stderr=stderr,
         )
+
+    @staticmethod
+    def _poll_container(
+        container: docker.models.containers.Container,
+        timeout: int,
+        cancel_check: Callable[[], bool] | None = None,
+    ) -> int:
+        start = time.monotonic()
+        while True:
+            elapsed = time.monotonic() - start
+            if elapsed >= timeout:
+                raise TimeoutError(f"Execution timed out after {timeout} seconds")
+
+            container.reload()
+
+            if container.status == "exited":
+                wait_result = container.wait(timeout=30)
+                return parse_exit_code(wait_result)
+
+            if cancel_check is not None and cancel_check():
+                raise CancelledError("Execution cancelled administratively")
+
+            time.sleep(DockerExecutor.POLL_INTERVAL)
 
     def _put_directory(self, container, source_dir: Path, target: str) -> None:
         buf = io.BytesIO()

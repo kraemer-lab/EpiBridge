@@ -247,14 +247,14 @@ class TestMaintainerCapabilities:
     """A Maintainer should be able to perform all governance actions except
     user management."""
 
-    def test_can_release_output_set(
+    def test_release_nonexistent_output_set_returns_404(
         self, maintainer_client, maintainer_user, project, db_session
     ):
         _add_to_project(db_session, project, maintainer_user, project.owner_id)
         response = maintainer_client.post(
             f"/api/admin/output-sets/{uuid.uuid4()}/release"
         )
-        assert response.status_code == 404  # not found, but not 403
+        assert response.status_code == 404
 
     def test_can_read_users(self, maintainer_client):
         """Maintainers can list users with user.read capability."""

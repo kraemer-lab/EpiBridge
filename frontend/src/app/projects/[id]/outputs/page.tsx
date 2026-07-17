@@ -85,10 +85,16 @@ export default function ProjectOutputsPage() {
           >
             {requests.map((r) => (
               <option key={r.id} value={r.id}>
-                {r.analysis_name} — {r.status}
+                {r.name} — {r.status}
               </option>
             ))}
           </select>
+        </div>
+      )}
+
+      {selectedRequest && selectedRequest.status !== "completed" && !outputSet && (
+        <div className="card empty-state">
+          Outputs will appear here once the execution completes.
         </div>
       )}
 
@@ -98,13 +104,30 @@ export default function ProjectOutputsPage() {
         </div>
       )}
 
-      {selectedRequest && selectedRequest.status !== "completed" && (
+      {outputSet && outputSet.status === "pending_review" && (
         <div className="card empty-state">
-          Outputs will appear here once the execution completes.
+          Outputs are pending review. They will appear here once released.
         </div>
       )}
 
-      {outputSet && (
+      {outputSet && outputSet.status === "rejected" && (
+        <div className="card" style={{ background: "#f8d7da", padding: "var(--spacing-lg)", marginBottom: "var(--spacing-md)" }}>
+          <strong style={{ fontSize: "1rem" }}>Outputs rejected</strong>
+          {outputSet.rejection_reason && (
+            <p style={{ marginTop: "var(--spacing-sm)", fontSize: "0.9rem", lineHeight: 1.5 }}>
+              {outputSet.rejection_reason}
+            </p>
+          )}
+        </div>
+      )}
+
+      {outputSet && outputSet.status === "approved" && (
+        <div className="card empty-state">
+          Outputs have been approved and are awaiting release.
+        </div>
+      )}
+
+      {outputSet && outputSet.status === "released" && (
         <div>
           <div className="card" style={{ marginBottom: "var(--spacing-md)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>

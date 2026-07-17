@@ -81,6 +81,24 @@ case "${1:-help}" in
         _compose "$@"
         ;;
 
+    start)
+        case "$EPIBRIDGE_TARGET" in
+            native|remote)
+                echo "No VM to start for $EPIBRIDGE_TARGET target."
+                ;;
+            orbstack)
+                "$SCRIPT_DIR/orbstack.sh" start
+                ;;
+            multipass)
+                "$SCRIPT_DIR/multipass.sh" start
+                ;;
+            *)
+                echo "Don't know how to start $EPIBRIDGE_TARGET environment." >&2
+                exit 1
+                ;;
+        esac
+        ;;
+
     exec)
         shift
         _compose exec -T "$@"
@@ -175,6 +193,7 @@ case "${1:-help}" in
         echo "Commands:"
         echo "  compose <args>    Run docker compose on the platform host"
         echo "  destroy           Teardown the execution environment (VM, etc.)"
+        echo "  start             Start the execution environment (VM, etc.)"
         echo "  exec <svc> <cmd>  Run a command in a container (non-TTY)"
         echo "  logs [args]       Tail container logs"
         echo "  shell             Interactive session on the platform host"

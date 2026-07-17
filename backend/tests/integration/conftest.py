@@ -22,11 +22,30 @@ from app.services.session_service import create_session
 @pytest.fixture(scope="session", autouse=True)
 def _setup_database():
     ensure_migrated()
+    session = SessionLocal()
+    try:
+        for table in reversed(Base.metadata.sorted_tables):
+            session.execute(table.delete())
+        session.commit()
+    finally:
+        session.close()
     yield
     Base.metadata.drop_all(bind=engine)
     with engine.begin() as conn:
         conn.execute(text("DROP TABLE IF EXISTS alembic_version CASCADE"))
         conn.execute(text("DROP TYPE IF EXISTS user_role"))
+        conn.execute(text("DROP TYPE IF EXISTS analysis_bundle_status"))
+        conn.execute(text("DROP TYPE IF EXISTS analysis_bundle_build_status"))
+        conn.execute(text("DROP TYPE IF EXISTS build_strategy"))
+        conn.execute(text("DROP TYPE IF EXISTS execution_request_status"))
+        conn.execute(text("DROP TYPE IF EXISTS output_set_status"))
+        conn.execute(text("DROP TYPE IF EXISTS build_request_status"))
+        conn.execute(text("DROP TYPE IF EXISTS validation_request_status"))
+        conn.execute(text("DROP TYPE IF EXISTS ai_bundle_review_status"))
+        conn.execute(text("DROP TYPE IF EXISTS ai_output_set_review_status"))
+        conn.execute(text("DROP TYPE IF EXISTS audit_event_type"))
+        conn.execute(text("DROP TYPE IF EXISTS platform_setting_key"))
+        conn.execute(text("DROP TYPE IF EXISTS capability"))
 
 
 @pytest.fixture(autouse=True)

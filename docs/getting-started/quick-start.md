@@ -8,17 +8,21 @@ This tutorial walks through the complete lifecycle of an analysis: from installa
 
 1. [Install EpiBridge](installation.md).
 2. Verify the platform is running and accessible at `https://localhost`.
-3. Create evaluation persona accounts:
+3. Ensure at least one data resource is registered. The [Data Resources
+   administrator guide](../administrator-guide/data-resources.md) covers the
+   full workflow. For evaluation, the `demo-surveillance` resource is
+   registered automatically during installation.
+4. Create evaluation persona accounts:
 
 ```bash
-make demo
+make seed-demo
 ```
 
 This creates three accounts and prints their credentials. You will need all three to complete the tutorial.
 
 ## Step 1 — Log in as the Researcher
 
-Open `https://localhost` in your browser and log in with the **Researcher** credentials printed by `make demo`.
+Open `https://localhost` in your browser and log in with the **Researcher** credentials printed by `make seed-demo`.
 
 The Researcher is the person who creates analyses. A researcher does not have the authority to approve bundles, release outputs, or manage the platform — they can create projects, build analysis bundles, run validation, and submit work for review.
 

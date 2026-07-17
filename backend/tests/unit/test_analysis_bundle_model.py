@@ -1,6 +1,10 @@
 import uuid
 
-from app.models.analysis_bundle import AnalysisBundle, AnalysisBundleDataResource
+from app.models.analysis_bundle import (
+    AnalysisBundle,
+    AnalysisBundleBuildStatus,
+    AnalysisBundleDataResource,
+)
 from app.models.data_resource import DataResource
 from app.models.execution_environment import ExecutionEnvironment
 from app.models.project import Project
@@ -138,9 +142,9 @@ class TestAnalysisBundleModel:
             name="Test",
             version="1.0.0",
             entrypoint="run.py",
-            build_status="environment_ready",
+            build_status=AnalysisBundleBuildStatus.ENVIRONMENT_READY,
         )
-        assert bundle.build_status == "environment_ready"
+        assert bundle.build_status == AnalysisBundleBuildStatus.ENVIRONMENT_READY
 
     def test_can_set_execution_image_id(self):
         img_id = uuid.uuid4()

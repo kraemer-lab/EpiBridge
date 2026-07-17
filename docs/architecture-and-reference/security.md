@@ -103,13 +103,15 @@ Access requires both:
 1. membership in the project
 2. the relevant capability for the action
 
-The capability vocabulary includes 14 capabilities defined in
+The capability vocabulary includes 21 capabilities defined in
 `app.models.capability.Capability`:
 
 `project.manage`, `project.members.manage`, `project.resources.manage`,
 `bundle.create`, `bundle.submit`, `bundle.review`, `execution.run`,
-`output.review`, `output.release`, `environment.manage`, `data.manage`,
-`user.manage`, `terms.manage`, `validation.run`, `build.customize`
+`execution.read`, `execution.cancel`, `output.review`, `output.release`,
+`environment.manage`, `data.manage`, `user.manage`, `user.read`,
+`terms.manage`, `settings.manage`, `audit.read`, `validation.run`,
+`build.customize`, `governance.self_regulate`
 
 ---
 

@@ -1,5 +1,16 @@
+"""
+Authoritative ORM model registration point.
+
+Every application entry point (backend, worker, Alembic) MUST import
+this module before using the ORM, ensuring all models are registered
+with ``Base`` and mapper configuration is deterministic.
+
+If you add a new model module under ``app.models``, import it here.
+"""
+
 from app.db.base import Base
 from app.models.ai_bundle_review import AIBundleReview, AIBundleReviewStatus
+from app.models.ai_output_set_review import AIOutputSetReview, AIOutputSetReviewStatus
 from app.models.analysis_bundle import (
     AnalysisBundle,
     AnalysisBundleBuildStatus,
@@ -36,6 +47,8 @@ from app.models.validation_request import ValidationRequest, ValidationRequestSt
 __all__ = [
     "AIBundleReview",
     "AIBundleReviewStatus",
+    "AIOutputSetReview",
+    "AIOutputSetReviewStatus",
     "AuditEvent",
     "AuditEventType",
     "SYSTEM_USER_ID",

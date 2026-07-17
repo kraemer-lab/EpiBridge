@@ -23,7 +23,6 @@ from app.auth.policy import (
     require_project_membership,
 )
 from app.db.session import get_db
-from app.models.ai_bundle_review import AIBundleReview, AIBundleReviewStatus
 from app.models.analysis_bundle import (
     AnalysisBundle,
     AnalysisBundleStatus,
@@ -57,7 +56,7 @@ from app.schemas.project import (
     ProjectMemberRead,
     ProjectRead,
 )
-from app.services.ai_review_service import perform_review
+from app.services.ai_review_service import perform_review, request_review
 from app.services.analysis_bundle_service import (
     create_bundle,
     get_environment_runtime,
@@ -75,6 +74,7 @@ from app.services.execution_request_service import (
 )
 from app.services.notification_triggers import trigger_bundle_submitted_notifications
 from app.services.output_set_service import (
+    get_output_set_by_execution,
     get_released_output_set,
     list_outputs_by_set,
     stream_release_package,
@@ -132,6 +132,8 @@ def _bundle_to_read(bundle: AnalysisBundle, build_log: str = "") -> AnalysisBund
         id=bundle.id,
         project_id=bundle.project_id,
         created_by_id=bundle.created_by_id,
+        submitted_by_id=bundle.submitted_by_id,
+        rejection_reason=bundle.rejection_reason,
         execution_environment_id=bundle.execution_environment_id,
         name=bundle.name,
         source_path=bundle.source_path,
@@ -388,13 +390,13 @@ def put_project_bundle(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Forbidden",
         )
-    if bundle.status != AnalysisBundleStatus.DRAFT.value:
+    if bundle.status != AnalysisBundleStatus.DRAFT:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Cannot edit bundle in state: {bundle.status}",
+            detail=f"Cannot edit bundle in state: {bundle.status.value}",
         )
 
-    if data.build_strategy == BuildStrategy.CUSTOM.value:
+    if data.build_strategy == BuildStrategy.CUSTOM:
         _require_capability(current_user, Capability.BUILD_CUSTOMIZE)
 
     try:
@@ -430,7 +432,7 @@ def post_project_bundle(
 ):
     require_project_membership(db, current_user, project_id)
     _require_capability(current_user, Capability.BUNDLE_CREATE)
-    if data.build_strategy == BuildStrategy.CUSTOM.value:
+    if data.build_strategy == BuildStrategy.CUSTOM:
         _require_capability(current_user, Capability.BUILD_CUSTOMIZE)
     bundle = create_bundle(db, data.model_dump(), project_id, current_user.id)
     return _bundle_to_read(bundle)
@@ -462,7 +464,7 @@ async def post_project_bundle_upload(
     require_project_membership(db, current_user, project_id)
     _require_capability(current_user, Capability.BUNDLE_CREATE)
 
-    if build_strategy == BuildStrategy.CUSTOM.value:
+    if build_strategy == BuildStrategy.CUSTOM:
         _require_capability(current_user, Capability.BUILD_CUSTOMIZE)
 
     if not file.filename or not file.filename.endswith(".zip"):
@@ -520,26 +522,6 @@ async def post_project_bundle_upload(
 
     update_bundle(db, bundle.id, {"source_path": store_path})
 
-    if get_setting_bool(db, SettingKey.AI_REVIEW_ENABLED):
-        review = (
-            db.query(AIBundleReview)
-            .filter(AIBundleReview.bundle_id == bundle.id)
-            .first()
-        )
-        if review is None:
-            review = AIBundleReview(
-                bundle_id=bundle.id, status=AIBundleReviewStatus.PENDING
-            )
-            db.add(review)
-        else:
-            review.status = AIBundleReviewStatus.PENDING
-            review.summary = None
-            review.assessment = None
-            review.assessment_confidence = None
-            review.reviewer_notes = None
-        db.commit()
-        background_tasks.add_task(perform_review, bundle.id)
-
     db.refresh(bundle)
     return _bundle_to_read(bundle)
 
@@ -579,7 +561,7 @@ def post_submit_bundle(
             detail="Forbidden",
         )
 
-    if bundle.build_strategy == BuildStrategy.CUSTOM.value:
+    if bundle.build_strategy == BuildStrategy.CUSTOM:
         _require_capability(current_user, Capability.BUILD_CUSTOMIZE)
 
     _require_resource_terms_accepted(db, current_user, bundle.data_resources)
@@ -593,7 +575,7 @@ def post_submit_bundle(
         )
 
     try:
-        submit_bundle(db, bundle)
+        submit_bundle(db, bundle, submitted_by_id=current_user.id)
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -611,6 +593,10 @@ def post_submit_bundle(
     )
     db.commit()
     db.refresh(bundle)
+
+    if get_setting_bool(db, SettingKey.AI_REVIEW_ENABLED):
+        request_review(bundle.id)
+        background_tasks.add_task(perform_review, bundle.id)
 
     trigger_bundle_submitted_notifications(
         db,
@@ -651,21 +637,7 @@ def post_bundle_ai_review(
             detail="Analysis bundle not found",
         )
 
-    review = (
-        db.query(AIBundleReview).filter(AIBundleReview.bundle_id == bundle.id).first()
-    )
-    if review is None:
-        review = AIBundleReview(
-            bundle_id=bundle.id, status=AIBundleReviewStatus.PENDING
-        )
-        db.add(review)
-    else:
-        review.status = AIBundleReviewStatus.PENDING
-        review.summary = None
-        review.assessment = None
-        review.assessment_confidence = None
-        review.reviewer_notes = None
-    db.commit()
+    request_review(bundle.id)
     background_tasks.add_task(perform_review, bundle.id)
 
     db.refresh(bundle)
@@ -783,11 +755,11 @@ def get_execution_request_outputs(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Execution request not found",
         )
-    output_set = get_released_output_set(db, request_id)
+    output_set = get_output_set_by_execution(db, request_id)
     if output_set is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="No released outputs found for this execution request",
+            detail="No outputs found for this execution request",
         )
     outputs = list_outputs_by_set(db, output_set.id)
     return OutputSetRead(
@@ -796,6 +768,7 @@ def get_execution_request_outputs(
         execution_request_name=request.name,
         status=output_set.status,
         release_package_size=output_set.release_package_size,
+        rejection_reason=output_set.rejection_reason,
         outputs=[
             OutputRead(
                 id=o.id,
@@ -847,6 +820,7 @@ def get_project_members(
     current_user: User = Depends(get_current_user),
 ):
     require_project_membership(db, current_user, project_id)
+    _require_capability(current_user, Capability.PROJECT_MEMBERS_MANAGE)
     return list_members(db, project_id)
 
 
@@ -902,10 +876,10 @@ def delete_project_member(
 
 
 def _require_draft_status(bundle: AnalysisBundle) -> None:
-    if bundle.status != AnalysisBundleStatus.DRAFT.value:
+    if bundle.status != AnalysisBundleStatus.DRAFT:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Cannot modify bundle in state: {bundle.status}",
+            detail=f"Cannot modify bundle in state: {bundle.status.value}",
         )
 
 

@@ -3,11 +3,12 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, String, Text, func
+from sqlalchemy import DateTime, Enum, ForeignKey, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.db.enum_utils import enum_values
 
 if TYPE_CHECKING:
     from app.models.analysis_bundle import AnalysisBundle
@@ -33,7 +34,13 @@ class AIBundleReview(Base):
         nullable=False,
     )
     status: Mapped[AIBundleReviewStatus] = mapped_column(
-        String(64), nullable=False, default=AIBundleReviewStatus.PENDING
+        Enum(
+            AIBundleReviewStatus,
+            name="ai_bundle_review_status",
+            values_callable=enum_values,
+        ),
+        nullable=False,
+        default=AIBundleReviewStatus.PENDING,
     )
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     assessment: Mapped[str | None] = mapped_column(Text, nullable=True)

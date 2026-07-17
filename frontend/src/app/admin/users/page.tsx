@@ -20,7 +20,7 @@ const ROLE_OPTIONS = [
   {
     value: "moderator",
     label: "Moderator",
-    description: "Review submissions and outputs.",
+    description: "Review analyses and outputs.",
   },
   {
     value: "maintainer",
@@ -182,7 +182,7 @@ export default function AdminUsersPage() {
     setEditingUserId(u.id);
     setEditRoles(u.roles && u.roles.length > 0 ? u.roles : [u.role]);
     setEditAdvanced(u.capabilities.filter(c =>
-      ["build.customize"].includes(c),
+      ["build.customize", "governance.self_regulate"].includes(c),
     ));
   };
 
@@ -469,6 +469,46 @@ export default function AdminUsersPage() {
                           >
                             Build custom Docker images from
                             user-provided Dockerfiles.
+                          </div>
+                          <label
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "var(--spacing-sm)",
+                              cursor: "pointer",
+                              fontSize: "0.85rem",
+                              marginTop: "var(--spacing-xs)",
+                            }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={editAdvanced.includes("governance.self_regulate")}
+                              onChange={() => {
+                                if (editAdvanced.includes("governance.self_regulate")) {
+                                  setEditAdvanced(
+                                    editAdvanced.filter(
+                                      (c) => c !== "governance.self_regulate",
+                                    ),
+                                  );
+                                } else {
+                                  setEditAdvanced([
+                                    ...editAdvanced,
+                                    "governance.self_regulate",
+                                  ]);
+                                }
+                              }}
+                            />
+                            <span>Self-Regulation Exception</span>
+                          </label>
+                          <div
+                            style={{
+                              fontSize: "0.75rem",
+                              color: "var(--color-text-secondary)",
+                              marginLeft: "28px",
+                            }}
+                          >
+                            Allows the user to bypass governance independence
+                            and moderate their own workflow stages.
                           </div>
                         </div>
 

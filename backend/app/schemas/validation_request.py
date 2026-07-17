@@ -9,7 +9,6 @@ from app.models.validation_request import ValidationRequestStatus
 class ValidationRequestCreate(BaseModel):
     analysis_bundle_id: uuid.UUID
     name: str | None = None
-    timeout_seconds: int = 3600
     parameter_overrides: dict = {}
 
 

@@ -1,6 +1,11 @@
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+
+
+class CancelledError(Exception):
+    """Raised when an execution is cancelled by an administrator."""
 
 
 @dataclass
@@ -23,4 +28,5 @@ class Executor(ABC):
         timeout: int,
         env: dict[str, str],
         network_enabled: bool = False,
+        cancel_check: Callable[[], bool] | None = None,
     ) -> ExecutionResult: ...

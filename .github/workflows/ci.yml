@@ -46,6 +46,9 @@ jobs:
         docker compose exec -T backend \
           python -m pytest tests/integration -v --no-header -q
 
+    - name: Apply rate limit override for acceptance tests
+      run: docker compose -f docker-compose.yml -f docker-compose.playwright.yml up -d backend
+
     - name: Run acceptance test suite
       run: |
         cd frontend

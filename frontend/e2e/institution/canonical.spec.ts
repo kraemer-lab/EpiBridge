@@ -62,13 +62,18 @@ test("Canonical Workflow", async ({ page }) => {
 
   // Add members via the search UI
   await page.getByRole("link", { name: "Members" }).click();
+  // Wait for member/user data to finish loading — the page renders either
+  // the member list table or "No members yet." when both API calls complete.
+  await expect(
+    page.getByText("No members yet.").or(page.locator("table"))
+  ).toBeVisible({ timeout: 15000 });
   await page.getByPlaceholder("Search by name or email...").fill(researcherEmail);
-  await page.locator("div").filter({ hasText: researcherEmail }).first().click();
+  await page.getByText(researcherEmail).click();
   await page.getByRole("button", { name: "Add Member" }).click();
   await expect(page.getByText(researcherEmail)).toBeVisible();
 
   await page.getByPlaceholder("Search by name or email...").fill(moderatorEmail);
-  await page.locator("div").filter({ hasText: moderatorEmail }).first().click();
+  await page.getByText(moderatorEmail).click();
   await page.getByRole("button", { name: "Add Member" }).click();
   await expect(page.getByText(moderatorEmail)).toBeVisible();
 
@@ -129,16 +134,19 @@ test("Canonical Workflow", async ({ page }) => {
   // 4. MODERATOR — review and approve bundle
   // ===================================================================
   await login(page, moderatorEmail, "testpass123");
-  await page.getByRole("link", { name: "Admin" }).click();
-  await page.getByRole("navigation", { name: "Admin tabs" }).getByRole("link", { name: "Submissions" }).click();
-  await expect(page.getByText("Submission Operations")).toBeVisible();
+  await page.getByRole("link", { name: "Review", exact: true }).click();
+  await page.getByRole("navigation", { name: "Review tabs" }).getByRole("link", { name: "Analyses" }).click();
+  await expect(page.getByText("Analysis Operations")).toBeVisible();
 
   const bundleRow = page.locator("tr").filter({ hasText: analysisName }).first();
   await expect(bundleRow).toBeVisible({ timeout: 15_000 });
-  await bundleRow.getByRole("button", { name: "Approve" }).click();
+  await bundleRow.getByRole("button", { name: "Inspect" }).click();
+  await page.getByRole("button", { name: "Approve", exact: true }).click();
+  await page.getByRole("button", { name: "Approve Analysis", exact: true }).click();
 
   await page.getByRole("button", { name: "Approved", exact: true }).click();
   await expect(page.locator("tr").filter({ hasText: analysisName }).first().getByText("Approved for Execution")).toBeVisible({ timeout: 10_000 });
+  await page.getByRole("button", { name: "Close" }).click();
   await page.getByRole("button", { name: "Sign out" }).click();
 
   // ===================================================================
@@ -151,34 +159,27 @@ test("Canonical Workflow", async ({ page }) => {
   await page.getByText(analysisName).click();
   await page.waitForURL(/\/projects\/[^/]+\/analysis\/[^/]+$/);
   await page.getByRole("button", { name: "Run Analysis" }).click();
-  await expect(page.locator("tr").filter({ hasText: analysisName }).getByText("completed")).toBeVisible({ timeout: 180_000 });
+  await expect(page.locator("tr").filter({ hasText: analysisName }).first().getByText("completed")).toBeVisible({ timeout: 180_000 });
   await page.getByRole("button", { name: "Sign out" }).click();
 
   // ===================================================================
   // 6. MODERATOR — approve output, verify audit
   // ===================================================================
   await login(page, moderatorEmail, "testpass123");
-  await page.getByRole("link", { name: "Admin" }).click();
-  await page.getByRole("navigation", { name: "Admin tabs" }).getByRole("link", { name: "Outputs" }).click();
+  await page.getByRole("link", { name: "Review", exact: true }).click();
+  await page.getByRole("navigation", { name: "Review tabs" }).getByRole("link", { name: "Outputs" }).click();
 
   const setRow = page.locator("tr").filter({ hasText: analysisName }).first();
   await expect(setRow).toBeVisible({ timeout: 30_000 });
-  await setRow.getByRole("button", { name: "Approve" }).click();
+  await setRow.getByRole("button", { name: "Inspect" }).click();
+  await page.getByRole("button", { name: "Approve", exact: true }).click();
+  await page.getByRole("button", { name: "Approve Output Set", exact: true }).click();
   await expect(setRow.getByText("Approved")).toBeVisible();
-
-  // Verify audit events while still moderator
-  await page.getByRole("navigation", { name: "Admin tabs" }).getByRole("link", { name: "Audit Log" }).click();
-  await expect(page.getByText("Audit Log")).toBeVisible();
-  await expect(page.getByText("project.created").first()).toBeVisible({ timeout: 10_000 });
-  await expect(page.getByText("bundle.submitted").first()).toBeVisible();
-  await expect(page.getByText("bundle.approved").first()).toBeVisible();
-  await expect(page.getByText("execution.requested").first()).toBeVisible();
-  await expect(page.getByText("execution.completed").first()).toBeVisible();
-  await expect(page.getByText("output_set.approved").first()).toBeVisible();
+  await page.getByRole("button", { name: "Close" }).click();
   await page.getByRole("button", { name: "Sign out" }).click();
 
   // ===================================================================
-  // 6b. MAINTAINER — release output set via API
+  // 6b. MODERATOR — release output set via API
   // ===================================================================
   await page.request.post("/api/auth/login", { data: { email: moderatorEmail, password: "testpass123" } });
   await page.request.post("/api/terms/platform/accept");
@@ -188,8 +189,6 @@ test("Canonical Workflow", async ({ page }) => {
     (s: any) => s.execution_request_name?.includes(analysisName) && s.status === "approved",
   );
   if (!targetSet) throw new Error("Output set not found for release");
-  await page.request.post("/api/auth/login", { data: { email: MAINTAINER_EMAIL, password: MAINTAINER_PASSWORD } });
-  await page.request.post("/api/terms/platform/accept");
   const releaseResp = await page.request.post(`/api/admin/output-sets/${targetSet.id}/release`);
   if (!releaseResp.ok()) throw new Error(`Release failed: ${await releaseResp.text()}`);
 

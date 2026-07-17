@@ -231,14 +231,20 @@ Capability vocabulary:
 | `bundle.submit` | Submit bundles for review |
 | `bundle.review` | Approve/reject/supersede bundles |
 | `execution.run` | Request execution of approved bundles |
+| `execution.read` | View execution requests and their status (admin) |
+| `execution.cancel` | Cancel pending or running executions |
 | `output.review` | Approve/reject output sets |
 | `output.release` | Release output sets to researchers |
 | `environment.manage` | Manage execution environments |
 | `data.manage` | Manage data resources |
-| `user.manage` | Manage user accounts |
+| `user.manage` | Manage user accounts (create, update, delete) |
+| `user.read` | List and view user accounts (read-only) |
 | `terms.manage` | Publish and manage terms of service |
+| `settings.manage` | View and update platform settings |
+| `audit.read` | Query the audit ledger |
 | `validation.run` | Run validation against representative datasets |
 | `build.customize` | Use Custom Build strategy for analysis bundles |
+| `governance.self_regulate` | Bypass self-moderation prevention |
 
 The `capabilities` table is materialised from the enum during seeding (the enum is authoritative). `UserCapability` records are copied from role templates at user creation and become independent thereafter.
 
@@ -508,7 +514,9 @@ The registration service reconciles resources using `identifier` — it is the c
 
 ### Registration Process
 
-Data Resources are registered from YAML manifests. The database is a runtime index; the manifest is the source of truth.
+Data Resources are registered from YAML manifests. The manifest is used to
+register the resource; after registration, operational management occurs within
+EpiBridge through the admin API and UI.
 
 ```
 Load all manifests
@@ -517,14 +525,10 @@ Validate all manifests (required fields, provider type, endpoint shape)
   ↓
 If any manifest is invalid → abort startup
   ↓
-Begin transaction
-  ↓
 For each entry:
   Lookup DataResource by identifier
-    ├── Found → update name, alias, endpoint, version, status
+    ├── Found → skip (never overwrite existing records)
     └── Not found → create new record
-  ↓
-Commit (atomic — all or nothing)
 ```
 
 ### Project Resource Allocation
@@ -591,12 +595,12 @@ Researchers can discover available execution environments through the applicatio
 - **Detail page** — full environment details including the curated Dockerfile, local development commands, and published artefact downloads
 - **During bundle creation** — environment selector with display names and linked detail pages
 
-This enables researchers to prepare their analysis locally against the institutional runtime before uploading a bundle. The environment detail page provides concrete guidance:
+This enables researchers to prepare their analysis locally against the institutional runtime before uploading a bundle. The environment detail page shows the configured runtime image and how to build it locally from the Dockerfile.
 
-```
-docker pull {image_reference}
-docker run --rm -it {image_reference} /bin/bash
-```
+The `image_reference` is an institution-specified runtime image. During
+development it may be built locally from the execution environment's Dockerfile;
+in production it refers to an image published to a registry chosen by the
+institution.
 
 ### Currently Supported Environments
 
@@ -772,6 +776,48 @@ APPROVED_FOR_EXECUTION
 Transitions are enforced by `backend/app/workflow/bundle.py`.
 
 Only bundles in `APPROVED_FOR_EXECUTION` status can be used to create Execution Requests.
+
+### Operational Lifecycle
+
+After governance approval, the platform proceeds through an operational lifecycle to prepare and execute the analysis.
+
+When the institutional setting **Automatically execute approved analysis bundles** is enabled (the default):
+
+```
+APPROVED_FOR_EXECUTION
+    │
+    ▼
+Build execution environment  (worker picks up PENDING BuildRequest)
+    │
+    ├─── Build succeeded → Platform creates initial Execution Request
+    │       │
+    │       ▼
+    │    Worker executes (same poll cycle, identical to manual requests)
+    │       │
+    │       ▼
+    │    Execution completed → Output Set created (PENDING_REVIEW)
+    │
+    └─── Build failed → No execution request created
+```
+
+If the institutional setting is disabled, the workflow pauses after approval and a researcher must manually create an Execution Request via the **Run Analysis** action.
+
+#### Automatic vs Manual Creation
+
+Automatically created Execution Requests are **ordinary Execution Requests**. They share the same service, validation rules, worker processing, and lifecycle as manually created requests. The only difference is their execution provenance:
+
+| Creation Method | `requested_by_id` |
+|----------------|-------------------|
+| Automatic (platform) | `WORKER_USER_ID` |
+| Manual (researcher) | The authenticated researcher |
+
+#### Researcher-Initiated Subsequent Executions
+
+Researchers remain free to create additional Execution Requests for the same approved bundle at any time by using the existing **Run Analysis** action. This supports re-running analyses as datasets evolve. The manual action is not disabled or replaced when automatic execution is enabled — automatic execution simply removes the need for the first manual request.
+
+#### Design
+
+Automatic execution is not a separate execution model. It is the automatic creation of the initial Execution Request following successful approval and environment preparation. Manual execution remains available for creating subsequent execution requests. There is no distinction between automatically and manually created execution requests beyond their execution provenance.
 
 ### AI Analysis Summaries
 
@@ -1017,6 +1063,73 @@ The working artefacts on disk (produced by the executor) and the Release Package
 
 For task-oriented guidance on output governance, see the [Researcher Guide](../user-guides/researcher.md#outputs) and [Moderator Guide](../user-guides/moderator.md#reviewing-output-sets).
 
+---
+
+## Governance Provenance vs Execution Provenance
+
+An important architectural distinction emerged during the implementation of governance independence.
+
+### The Principle
+
+> **Governance decisions are derived from governance provenance, not execution provenance.**
+
+Execution mechanics must never influence governance independence.
+
+### The Provenance Model
+
+Three distinct provenance concepts exist within EpiBridge:
+
+| Concept | Question Answered | Field | Set When |
+|---------|-------------------|-------|----------|
+| **Authorship** | Who created this work? | `AnalysisBundle.created_by_id` | Bundle creation |
+| **Governance** | Who accepted responsibility for this version entering institutional review? | `AnalysisBundle.submitted_by_id` | Bundle submission |
+| **Execution** | Who requested this execution? | `ExecutionRequest.requested_by_id` | Execution request creation |
+
+These are independent facts. None should be inferred from another.
+
+### Governance Independence
+
+The governance independence rule for Output Sets is based on the originating Analysis Bundle's **submission provenance**, not on who requested execution.
+
+> The actor who submitted an Analysis Bundle for institutional review cannot approve, reject, or release the Output Sets generated from that bundle, unless explicitly granted the `governance.self_regulate` capability.
+
+This rule is independent of:
+- who requested execution
+- whether execution was manual or automatic
+- retries
+- scheduling
+- worker execution
+
+### Why Not Execution Provenance?
+
+Initially, Output Set governance independence was implemented using `ExecutionRequest.requested_by_id`. This appeared to work because, in the original model, execution requests were always created manually by the bundle submitter — the same person fulfilled both roles.
+
+This relationship was **accidental rather than architectural**. The two concepts happen to coincide in the current implementation, but they represent different responsibilities:
+
+- **Execution provenance** answers "Who caused execution to happen?"
+- **Governance provenance** answers "Whose work is being governed?"
+
+Those questions intentionally have different answers. Future execution may be automatically triggered, scheduled, retried, or initiated by the system — in all of those cases, the execution requester is no longer the correct actor for governance independence.
+
+The implementation therefore derives the governance instigator from `AnalysisBundle.submitted_by_id` (the person who accepted responsibility for entering the institutional governance workflow), regardless of who requested execution.
+
+### Architectural Rationale
+
+The separation preserves:
+
+- **Truthful audit records**: `ExecutionRequest.requested_by_id` always records who actually caused execution, even when execution is auto-triggered by the system.
+- **Explicit lifecycle provenance**: Each provenance field records a distinct lifecycle moment — creation (`created_by`), governance entry (`submitted_by`), and execution (`requested_by`).
+- **Future support for automatic execution**: Auto-triggered, scheduled, or retried execution does not introduce an audit anomaly or require special-case governance logic.
+- **Consistent governance regardless of execution backend**: Whether execution is handled by Docker, Kubernetes, or a future backend, the governance rule remains unchanged.
+
+### Lessons Learned
+
+One of the recurring design lessons throughout EpiBridge has been:
+
+> When two concepts happen to coincide in the current implementation, do not model them as the same thing unless they are genuinely the same domain concept.
+
+The bundle submitter and execution requester were usually the same person in early development. Future automatic execution exposed that these represent different responsibilities. Separating them improves both audit integrity and long-term architectural correctness.
+
 ### Storage
 
 Output files are written to the execution container's local `/output` directory during analysis. After execution completes, the worker:
@@ -1077,6 +1190,8 @@ Each analysis executes inside an isolated container with:
 
 The **Worker** is a standalone service that polls for Pending requests and processes them sequentially in priority order: ValidationRequests first (fast feedback for researchers), then BuildRequests (image construction), then ExecutionRequests (institutional execution).
 
+The worker does not make governance decisions. It performs operational actions that are consequences of previously completed governance decisions.
+
 ### Polling
 
 ```
@@ -1087,10 +1202,22 @@ Worker Poll Loop
   │
   ├── 2. Poll: db → Pending BuildRequest
   │         process_build(request)
+  │         │
+  │         └── On successful build completion:
+  │               If AUTO_EXECUTE is enabled:
+  │                 create_execution_request(requested_by_id=WORKER_USER_ID)
   │
   └── 3. Poll: db → Pending ExecutionRequest
             execute_request(request)
 ```
+
+When **Automatic execution** is enabled, the worker is responsible for:
+
+- Completing environment builds (as before)
+- Automatically creating the initial Execution Request after a successful build (new)
+- Executing pending execution requests (as before)
+
+The worker reuses the same `create_execution_request()` service for both automatic and manual execution, ensuring identical validation rules and lifecycle semantics. If the bundle is no longer eligible for execution (e.g., superseded before the build completed), the ValueError from `create_execution_request()` is caught and the build still completes successfully — no execution request is created.
 
 ### Institutional Execution
 
@@ -1467,6 +1594,8 @@ For operational guidance on configuration, logging, and health checks, see [Conf
 23. **Execution Environments define execution contracts validated by dedicated acceptance tests.**
 24. **Email notifications are responsibility-transfer alerts, not status updates. They inform the right people at governance transition points, not on every data change.**
 25. **The three execution workflows (Validation, Build, Governed Execution) are architecturally distinct. Each has its own governance requirements and lifecycle.**
+26. **Governance provenance and execution provenance are separate concerns. Governance decisions derive from submission provenance (`submitted_by`), not from who requested execution (`requested_by`).**
+27. **Automatic execution is not a separate execution model. It is the automatic creation of the initial Execution Request after a successful build. Subsequent execution requests continue to use the existing manual workflow unchanged. The worker reuses `create_execution_request()` for both automatic and manual creation, ensuring identical validation rules and lifecycle semantics.**
 
 ---
 
