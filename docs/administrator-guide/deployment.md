@@ -32,7 +32,7 @@ For production deployment, EpiBridge runs on a Linux server with Docker Engine. 
 - Docker Compose for service orchestration
 - Caddy as the reverse proxy (TLS termination, security headers, request size limits)
 - PostgreSQL for the application database
-- Redis for the work queue
+- Redis for cache and rate limiting
 - Docker Engine for analysis container execution
 
 Production deployment is not automated by `make install`. You will need to:

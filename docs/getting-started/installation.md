@@ -7,9 +7,8 @@ How to install EpiBridge for evaluation or production use.
 | Requirement | Version | Purpose |
 |-------------|---------|---------|
 | Git | any | Clone the repository |
-| OrbStack | latest | Linux VM for EpiBridge services (recommended on macOS) |
-| Multipass | latest | Alternative VM provider (macOS, Linux, Windows) |
-| Docker | 24+ | Alternative: native Docker without VM |
+| Multipass | latest | Linux VM for EpiBridge services (recommended on macOS) |
+| OrbStack | latest | Alternative VM provider (macOS only) |
 | Make | any | Convenience wrapper for installation commands |
 | mkcert | latest | Trusted local HTTPS certificates |
 
@@ -23,41 +22,33 @@ No other host dependencies are required. Python, Node.js, PostgreSQL, and Redis 
 
 ## Installation targets
 
-EpiBridge supports three installation modes:
+EpiBridge supports two installation modes:
 
-### OrbStack VM (recommended on macOS)
+### Multipass VM (recommended on macOS)
 
-The default installation mode. Creates a dedicated Linux virtual machine, mounts the repository, and runs all services inside it. The VM provides a clean, isolated environment that mirrors a production deployment.
+The default installation mode. Creates a dedicated Linux virtual machine via Multipass, mounts the repository, and runs all services inside it. The VM provides a clean, isolated environment that mirrors a production deployment.
+
+Prerequisites: [Multipass](https://multipass.run) must be installed.
 
 ```bash
 make install
 ```
 
-### Multipass VM (alternative)
+### OrbStack VM (alternative)
 
-Uses Canonical Multipass to create a Linux VM. Available on macOS, Linux, and
-Windows. Use this target when OrbStack is not available or when you prefer
-Multipass.
+Uses OrbStack to create a Linux VM. Available on macOS only. Use this target when you prefer OrbStack over Multipass.
 
-Prerequisites: [Multipass](https://multipass.run) must be installed.
+Prerequisites: [OrbStack](https://orbstack.dev) must be installed.
 
 ```bash
-make install TARGET=multipass
-```
-
-### Native Docker
-
-Runs services directly on the host using Docker Compose without a dedicated VM. Useful when a VM is not an option or for CI environments.
-
-```bash
-make install TARGET=native
+make install TARGET=orbstack
 ```
 
 ## The installation lifecycle
 
 `make install` performs these steps:
 
-1. **Create VM** (OrbStack or Multipass mode only) — provisions the Linux VM if it does not already exist.
+1. **Create VM** — provisions the Linux VM if it does not already exist.
 2. **Generate `.env`** — creates the configuration file with secure defaults if one does not exist. Existing `.env` is preserved across re-installation.
 3. **Build images** — builds the Docker images for frontend, backend, worker, and supporting services.
 4. **Start services** — starts all containers: reverse proxy, frontend, backend, PostgreSQL, Redis, worker.
