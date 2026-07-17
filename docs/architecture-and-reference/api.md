@@ -9,7 +9,7 @@ Sessions are maintained via HTTP-only secure cookies.
 
 - `POST /api/auth/login` — authenticate with email and password
 - `POST /api/auth/logout` — destroy the current session
-- `GET /api/auth/session` — verify the current session and return user info
+- `GET /api/me` — get current user info and terms acceptance status
 
 Session configuration (TTL, rate limiting) is managed through environment
 variables documented in `.env.example`.
@@ -21,15 +21,14 @@ variables documented in `.env.example`.
 ### Users
 
 - `POST /api/admin/users` — create a user (requires `user.manage`)
-- `GET /api/admin/users` — list all users (requires `user.manage`)
-- `GET /api/admin/users/{id}` — get user details (requires `user.manage`)
+- `GET /api/admin/users` — list all users (requires `user.manage` or `user.read`)
+- `GET /api/admin/users/{id}` — get user details (requires `user.manage` or `user.read`)
 
 ### Projects
 
 - `POST /api/projects` — create a project
 - `GET /api/projects` — list projects for the current user
 - `GET /api/projects/{project_id}` — get project details
-- `PATCH /api/projects/{project_id}` — update project metadata
 
 #### Project Members
 
@@ -78,8 +77,9 @@ Outputs are governed as a collection (Output Set), not individually. The Output 
 
 Validation runs execute an Analysis Bundle against representative datasets before submission. They use the same execution pipeline as governed execution but produce transient, researcher-visible outputs.
 
-- `POST /api/projects/{project_id}/bundles/{id}/validate` — create a validation request
-- `GET /api/projects/{project_id}/bundles/{id}/validation` — get the latest validation status and results
+- `POST /api/projects/{project_id}/bundles/{id}/validations` — create a validation request
+- `GET /api/projects/{project_id}/bundles/{id}/validations` — list validation requests for a bundle
+- `GET /api/projects/{project_id}/bundles/{id}/validations/{validation_id}` — get a specific validation request
 - `GET /api/projects/{project_id}/bundles/{id}/validation-status` — get bundle consistency indicator (validated vs changed)
 
 ### Terms of Service
