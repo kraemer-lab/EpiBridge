@@ -294,10 +294,9 @@ export default function AdminExecutionsPage() {
                         fontSize: "0.85rem",
                         padding: 0,
                         color: "var(--color-primary, #1976d2)",
-                        textDecoration: expandedId === r.id ? "underline" : "none",
                       }}
                     >
-                      {expandedId === r.id ? "Hide" : "Inspect"}
+                      Inspect
                     </button>
                   </td>
                 </tr>
@@ -308,129 +307,177 @@ export default function AdminExecutionsPage() {
 
         {expandedId && expandedData[expandedId] && (() => {
           const detail = expandedData[expandedId];
+          const close = () => setExpandedId(null);
           return (
             <div
-              className="card"
               style={{
-                marginTop: "var(--spacing-md)",
-                padding: "var(--spacing-lg)",
-                borderTop: "3px solid var(--color-primary, #1976d2)",
-                fontSize: "0.85rem",
+                position: "fixed",
+                inset: 0,
+                background: "rgba(0,0,0,0.4)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                zIndex: 1000,
               }}
+              onClick={close}
             >
-              {/* Overview */}
-              <section aria-label="Execution Overview">
-                <h3 style={sectionHeader}>Overview</h3>
-                <div style={detailRow}>
-                  <span style={detailLabel}>Status</span>
-                  <span
+              <div
+                className="card"
+                style={{
+                  maxWidth: "720px",
+                  width: "90%",
+                  maxHeight: "80vh",
+                  overflowY: "auto",
+                  padding: 0,
+                  fontSize: "0.85rem",
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    padding: "var(--spacing-md) var(--spacing-lg)",
+                    borderBottom: "1px solid var(--color-border)",
+                  }}
+                >
+                  <h3 style={{ margin: 0, fontSize: "1rem", fontWeight: 600 }}>
+                    Execution Detail
+                  </h3>
+                  <button
+                    onClick={close}
                     style={{
-                      display: "inline-block",
-                      padding: "2px 8px",
-                      borderRadius: "4px",
-                      fontSize: "0.8rem",
-                      fontWeight: 600,
-                      ...statusStyle(detail.status),
+                      background: "none",
+                      border: "none",
+                      cursor: "pointer",
+                      fontSize: "1.2rem",
+                      color: "var(--color-text-secondary)",
+                      padding: "4px",
+                      lineHeight: 1,
                     }}
+                    aria-label="Close"
                   >
-                    {detail.status.charAt(0).toUpperCase() + detail.status.slice(1)}
-                  </span>
+                    ×
+                  </button>
                 </div>
-                <div style={detailRow}>
-                  <span style={detailLabel}>Analysis</span>
-                  <span style={detailValue}>{detail.name}</span>
-                </div>
-                <div style={detailRow}>
-                  <span style={detailLabel}>Runtime</span>
-                  <span style={detailValue}>{detail.runtime}</span>
-                </div>
-                <div style={detailRow}>
-                  <span style={detailLabel}>Timeout</span>
-                  <span style={detailValue}>{detail.timeout_seconds}s</span>
-                </div>
-                <div style={detailRow}>
-                  <span style={detailLabel}>Created</span>
-                  <span style={detailValue}>{formatTime(detail.created_at)}</span>
-                </div>
-                <div style={detailRow}>
-                  <span style={detailLabel}>Updated</span>
-                  <span style={detailValue}>{formatTime(detail.updated_at)}</span>
-                </div>
-              </section>
 
-              {/* Cancellation provenance */}
-              {(detail.status === "cancelled" || detail.status === "cancelling") && (
-                <section aria-label="Cancellation Details">
-                  <h3 style={sectionHeader}>Cancellation</h3>
-                  {detail.cancelled_by_id && (
+                <div style={{ padding: "var(--spacing-lg)" }}>
+                  {/* Overview */}
+                  <section aria-label="Execution Overview">
+                    <h3 style={sectionHeader}>Overview</h3>
                     <div style={detailRow}>
-                      <span style={detailLabel}>Cancelled by</span>
-                      <span style={detailValue}>
-                        {detail.cancelled_by_display_name || detail.cancelled_by_id}
-                        {detail.cancelled_by_email ? ` (${detail.cancelled_by_email})` : ""}
+                      <span style={detailLabel}>Status</span>
+                      <span
+                        style={{
+                          display: "inline-block",
+                          padding: "2px 8px",
+                          borderRadius: "4px",
+                          fontSize: "0.8rem",
+                          fontWeight: 600,
+                          ...statusStyle(detail.status),
+                        }}
+                      >
+                        {detail.status.charAt(0).toUpperCase() + detail.status.slice(1)}
                       </span>
                     </div>
-                  )}
-                  {detail.cancelled_at && (
                     <div style={detailRow}>
-                      <span style={detailLabel}>Cancelled at</span>
-                      <span style={detailValue}>{formatTime(detail.cancelled_at)}</span>
+                      <span style={detailLabel}>Analysis</span>
+                      <span style={detailValue}>{detail.name}</span>
                     </div>
-                  )}
-                  {detail.cancellation_reason && (
                     <div style={detailRow}>
-                      <span style={detailLabel}>Reason</span>
-                      <span style={detailValue}>{detail.cancellation_reason}</span>
+                      <span style={detailLabel}>Runtime</span>
+                      <span style={detailValue}>{detail.runtime}</span>
                     </div>
+                    <div style={detailRow}>
+                      <span style={detailLabel}>Timeout</span>
+                      <span style={detailValue}>{detail.timeout_seconds}s</span>
+                    </div>
+                    <div style={detailRow}>
+                      <span style={detailLabel}>Created</span>
+                      <span style={detailValue}>{formatTime(detail.created_at)}</span>
+                    </div>
+                    <div style={detailRow}>
+                      <span style={detailLabel}>Updated</span>
+                      <span style={detailValue}>{formatTime(detail.updated_at)}</span>
+                    </div>
+                  </section>
+
+                  {/* Cancellation provenance */}
+                  {(detail.status === "cancelled" || detail.status === "cancelling") && (
+                    <section aria-label="Cancellation Details">
+                      <h3 style={sectionHeader}>Cancellation</h3>
+                      {detail.cancelled_by_id && (
+                        <div style={detailRow}>
+                          <span style={detailLabel}>Cancelled by</span>
+                          <span style={detailValue}>
+                            {detail.cancelled_by_display_name || detail.cancelled_by_id}
+                            {detail.cancelled_by_email ? ` (${detail.cancelled_by_email})` : ""}
+                          </span>
+                        </div>
+                      )}
+                      {detail.cancelled_at && (
+                        <div style={detailRow}>
+                          <span style={detailLabel}>Cancelled at</span>
+                          <span style={detailValue}>{formatTime(detail.cancelled_at)}</span>
+                        </div>
+                      )}
+                      {detail.cancellation_reason && (
+                        <div style={detailRow}>
+                          <span style={detailLabel}>Reason</span>
+                          <span style={detailValue}>{detail.cancellation_reason}</span>
+                        </div>
+                      )}
+                    </section>
                   )}
-                </section>
-              )}
 
-              {/* Cancel action */}
-              {(detail.status === "pending" || detail.status === "running") && (
-                <section aria-label="Cancel Action" style={{ marginTop: "var(--spacing-md)" }}>
-                  <button
-                    onClick={() => setCancelTarget(detail.id)}
-                    style={{
-                      padding: "6px 16px",
-                      fontSize: "0.85rem",
-                      background: "#c62828",
-                      color: "#fff",
-                      border: "none",
-                      borderRadius: "4px",
-                      cursor: "pointer",
-                      fontWeight: 600,
-                    }}
-                  >
-                    Cancel Execution
-                  </button>
-                </section>
-              )}
+                  {/* Cancel action */}
+                  {(detail.status === "pending" || detail.status === "running") && (
+                    <section aria-label="Cancel Action" style={{ marginTop: "var(--spacing-md)" }}>
+                      <button
+                        onClick={() => setCancelTarget(detail.id)}
+                        style={{
+                          padding: "6px 16px",
+                          fontSize: "0.85rem",
+                          background: "#c62828",
+                          color: "#fff",
+                          border: "none",
+                          borderRadius: "4px",
+                          cursor: "pointer",
+                          fontWeight: 600,
+                        }}
+                      >
+                        Cancel Execution
+                      </button>
+                    </section>
+                  )}
 
-              {/* Error */}
-              {detail.status === "failed" && (
-                <section aria-label="Execution Error">
-                  <h3 style={sectionHeader}>Error</h3>
-                  <div style={{
-                    padding: "8px 12px",
-                    background: "#f8d7da",
-                    borderRadius: "4px",
-                    fontSize: "0.85rem",
-                    lineHeight: 1.5,
-                    color: "#721c24",
-                  }}>
-                    {detail.log || "Execution failed with no log output."}
-                  </div>
-                </section>
-              )}
+                  {/* Error */}
+                  {detail.status === "failed" && (
+                    <section aria-label="Execution Error">
+                      <h3 style={sectionHeader}>Error</h3>
+                      <div style={{
+                        padding: "8px 12px",
+                        background: "#f8d7da",
+                        borderRadius: "4px",
+                        fontSize: "0.85rem",
+                        lineHeight: 1.5,
+                        color: "#721c24",
+                      }}>
+                        {detail.log || "Execution failed with no log output."}
+                      </div>
+                    </section>
+                  )}
 
-              {/* Execution Log */}
-              {detail.log && detail.status !== "failed" && (
-                <section aria-label="Execution Log">
-                  <h3 style={sectionHeader}>Execution Log</h3>
-                  <LogViewer log={detail.log} title="Execution Log" maxHeight="300px" />
-                </section>
-              )}
+                  {/* Execution Log */}
+                  {detail.log && detail.status !== "failed" && (
+                    <section aria-label="Execution Log">
+                      <h3 style={sectionHeader}>Execution Log</h3>
+                      <LogViewer log={detail.log} title="Execution Log" maxHeight="300px" />
+                    </section>
+                  )}
+                </div>
+              </div>
             </div>
           );
         })()}

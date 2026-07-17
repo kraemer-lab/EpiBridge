@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 
 interface ConfirmationDialogProps {
   title: string;
-  message: string;
+  message: string | ReactNode;
   confirmLabel: string;
   onConfirm: (reason?: string) => void;
   onCancel: () => void;
@@ -42,7 +42,7 @@ export function ConfirmationDialog({
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        zIndex: 1000,
+        zIndex: 1100,
       }}
     >
       <div

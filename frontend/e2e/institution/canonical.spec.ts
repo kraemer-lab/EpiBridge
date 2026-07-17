@@ -146,6 +146,7 @@ test("Canonical Workflow", async ({ page }) => {
 
   await page.getByRole("button", { name: "Approved", exact: true }).click();
   await expect(page.locator("tr").filter({ hasText: analysisName }).first().getByText("Approved for Execution")).toBeVisible({ timeout: 10_000 });
+  await page.getByRole("button", { name: "Close" }).click();
   await page.getByRole("button", { name: "Sign out" }).click();
 
   // ===================================================================
@@ -174,6 +175,7 @@ test("Canonical Workflow", async ({ page }) => {
   await page.getByRole("button", { name: "Approve", exact: true }).click();
   await page.getByRole("button", { name: "Approve Output Set", exact: true }).click();
   await expect(setRow.getByText("Approved")).toBeVisible();
+  await page.getByRole("button", { name: "Close" }).click();
   await page.getByRole("button", { name: "Sign out" }).click();
 
   // ===================================================================

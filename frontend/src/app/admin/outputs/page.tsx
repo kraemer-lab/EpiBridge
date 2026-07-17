@@ -299,69 +299,6 @@ export default function AdminOutputsPage() {
         Execution Outputs
       </h2>
 
-      {rejectTarget && (
-        <RejectDialog
-          title="Output Set"
-          onConfirm={async (reason) => {
-            setActionError(null);
-            setActionLoading(true);
-            try {
-              await rejectOutputSet(rejectTarget, reason);
-              const rejectedId = rejectTarget;
-              setRejectTarget(null);
-              await load();
-              if (expandedId === rejectedId) {
-                const updated = await getAdminOutputSet(rejectedId);
-                setExpandedData((prev) => ({ ...prev, [rejectedId]: updated }));
-                setAiStatus((prev) => ({
-                  ...prev,
-                  [rejectedId]: updated.ai_review ?? null,
-                }));
-              }
-            } catch (e) {
-              setActionError(e instanceof Error ? e.message : "Rejection failed");
-            } finally {
-              setActionLoading(false);
-            }
-          }}
-          onCancel={() => setRejectTarget(null)}
-        />
-      )}
-
-      {approveTarget && (
-        <ConfirmationDialog
-          title="Approve Output Set?"
-          message={
-            "This Output Set will be approved for release.\n\n" +
-            "Confirm that you are satisfied the reviewed outputs " +
-            "are ready to proceed to the release stage.\n\n" +
-            "*You are making an institutional governance decision.*"
-          }
-          confirmLabel="Approve Output Set"
-          onConfirm={() => {
-            const id = approveTarget;
-            setApproveTarget(null);
-            handleAction(id, approveOutputSet);
-          }}
-          onCancel={() => setApproveTarget(null)}
-        />
-      )}
-
-      {actionError && (
-        <div
-          style={{
-            padding: "8px 12px",
-            marginBottom: "var(--spacing-md)",
-            background: "#f8d7da",
-            color: "#721c24",
-            borderRadius: "4px",
-            fontSize: "0.85rem",
-          }}
-        >
-          {actionError}
-        </div>
-      )}
-
       {!loading && !error && allSets.length > 0 && (
         <div style={{ display: "flex", gap: "var(--spacing-xs)", marginBottom: "var(--spacing-md)", flexWrap: "wrap" }}>
           {STATUS_FILTERS.map((f) => (
@@ -434,7 +371,6 @@ export default function AdminOutputsPage() {
                           fontSize: "0.9rem",
                           padding: 0,
                           color: "var(--color-text)",
-                          textDecoration: expandedId === s.id ? "underline" : "none",
                         }}
                       >
                         {s.execution_request_name || s.execution_request_id.slice(0, 8)}
@@ -468,11 +404,9 @@ export default function AdminOutputsPage() {
                           fontSize: "0.85rem",
                           padding: 0,
                           color: "var(--color-primary, #1976d2)",
-                          textDecoration:
-                            expandedId === s.id ? "underline" : "none",
                         }}
                       >
-                        {expandedId === s.id ? "Hide" : "Inspect"}
+                        Inspect
                       </button>
                     </td>
                   </tr>
@@ -483,24 +417,85 @@ export default function AdminOutputsPage() {
         </div>
       )}
 
-      {expandedId && expandedData[expandedId] && (
-        <div
-          className="card"
-          style={{
-            marginTop: "var(--spacing-md)",
-            padding: "var(--spacing-lg)",
-            borderTop: "3px solid var(--color-primary, #1976d2)",
-          }}
-        >
-          {(() => {
-            const os = expandedData[expandedId];
-            const osId = expandedId;
-            const outputs = os?.outputs || [];
+      {expandedId && expandedData[expandedId] && (() => {
+        const os = expandedData[expandedId];
+        const osId = expandedId;
+        const outputs = os?.outputs || [];
 
-            const hasBinary = outputs.some((o) => isBinaryFile(o.filename));
+        const hasBinary = outputs.some((o) => isBinaryFile(o.filename));
+        const close = () => setExpandedId(null);
 
-            return (
-              <>
+        return (
+          <div
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(0,0,0,0.4)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 1000,
+            }}
+            onClick={close}
+          >
+            <div
+              className="card"
+              style={{
+                maxWidth: "720px",
+                width: "90%",
+                maxHeight: "80vh",
+                overflowY: "auto",
+                padding: 0,
+                fontSize: "0.85rem",
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  padding: "var(--spacing-md) var(--spacing-lg)",
+                  borderBottom: "1px solid var(--color-border)",
+                }}
+              >
+                <h3 style={{ margin: 0, fontSize: "1rem", fontWeight: 600 }}>
+                  Output Set Detail
+                </h3>
+                <button
+                  onClick={close}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    fontSize: "1.2rem",
+                    color: "var(--color-text-secondary)",
+                    padding: "4px",
+                    lineHeight: 1,
+                  }}
+                  aria-label="Close"
+                >
+                  ×
+                </button>
+              </div>
+
+              <div style={{ padding: "var(--spacing-lg)" }}>
+                  {os?.status === "pending_review" && user?.capabilities.includes("output.review") && govStatus?.prevent_self_moderation === true && os.requested_by_id === user?.id && !user?.capabilities.includes("governance.self_regulate") && (
+                    <div style={{
+                      padding: "12px 16px",
+                      marginBottom: "var(--spacing-lg)",
+                      background: "#fff3cd",
+                      border: "1px solid #ffc107",
+                      borderRadius: "4px",
+                      color: "#856404",
+                      fontSize: "0.85rem",
+                      lineHeight: 1.6,
+                    }}>
+                      <strong>Independent moderation required.</strong><br />
+                      You requested this execution. Another authorised moderator
+                      must review its outputs.
+                    </div>
+                  )}
                 {/* Rejection reason */}
                 {os?.rejection_reason && (
                   <div
@@ -709,36 +704,26 @@ export default function AdminOutputsPage() {
 
                 {/* Governance Actions */}
                 <section aria-label="Governance Actions">
-                  {os?.status === "pending_review" && user?.capabilities.includes("output.review") && (
+                  {os?.status === "pending_review" && user?.capabilities.includes("output.review") && !(govStatus?.prevent_self_moderation === true && os.requested_by_id === user?.id && !user?.capabilities.includes("governance.self_regulate")) && (
                     <div style={{ paddingTop: "var(--spacing-md)" }}>
-                      {govStatus?.prevent_self_moderation === true
-                        && os.requested_by_id === user?.id
-                        && !user?.capabilities.includes("governance.self_regulate") ? (
-                        <span style={{ color: "var(--color-text-secondary)", fontSize: "0.85rem", fontStyle: "italic" }}>
-                          Independent moderation required. You requested
-                          this execution. Another authorised moderator
-                          must review its outputs.
-                        </span>
-                      ) : (
-                        <div style={{ display: "flex", gap: "var(--spacing-sm)" }}>
-                          <button
-                            className="btn btn-sm"
-                            style={{ background: "var(--color-success, #2e7d32)", color: "#fff", border: "none" }}
-                            onClick={() => setApproveTarget(osId)}
-                            disabled={actionLoading}
-                          >
-                            {actionLoading ? "Processing…" : "Approve"}
-                          </button>
-                          <button
-                            className="btn btn-sm"
-                            style={{ background: "var(--color-danger, #c62828)", color: "#fff", border: "none" }}
-                            onClick={() => setRejectTarget(osId)}
-                            disabled={actionLoading}
-                          >
-                            {actionLoading ? "Processing…" : "Reject"}
-                          </button>
-                        </div>
-                      )}
+                      <div style={{ display: "flex", gap: "var(--spacing-sm)" }}>
+                        <button
+                          className="btn btn-sm"
+                          style={{ background: "var(--color-success, #2e7d32)", color: "#fff", border: "none" }}
+                          onClick={() => setApproveTarget(osId)}
+                          disabled={actionLoading}
+                        >
+                          {actionLoading ? "Processing…" : "Approve"}
+                        </button>
+                        <button
+                          className="btn btn-sm"
+                          style={{ background: "var(--color-danger, #c62828)", color: "#fff", border: "none" }}
+                          onClick={() => setRejectTarget(osId)}
+                          disabled={actionLoading}
+                        >
+                          {actionLoading ? "Processing…" : "Reject"}
+                        </button>
+                      </div>
                     </div>
                   )}
                   {os?.status === "approved" && user?.capabilities.includes("output.release") && (
@@ -764,9 +749,76 @@ export default function AdminOutputsPage() {
                     </div>
                   )}
                 </section>
-              </>
-            );
-          })()}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {rejectTarget && (
+        <RejectDialog
+          title="Output Set"
+          onConfirm={async (reason) => {
+            setActionError(null);
+            setActionLoading(true);
+            try {
+              await rejectOutputSet(rejectTarget, reason);
+              const rejectedId = rejectTarget;
+              setRejectTarget(null);
+              await load();
+              if (expandedId === rejectedId) {
+                const updated = await getAdminOutputSet(rejectedId);
+                setExpandedData((prev) => ({ ...prev, [rejectedId]: updated }));
+                setAiStatus((prev) => ({
+                  ...prev,
+                  [rejectedId]: updated.ai_review ?? null,
+                }));
+              }
+            } catch (e) {
+              setActionError(e instanceof Error ? e.message : "Rejection failed");
+            } finally {
+              setActionLoading(false);
+            }
+          }}
+          onCancel={() => setRejectTarget(null)}
+        />
+      )}
+
+      {approveTarget && (
+        <ConfirmationDialog
+          title="Approve Output Set?"
+          message={
+            <span>
+              This Output Set will be approved for release.
+              <br /><br />
+              Confirm that you are satisfied the reviewed outputs
+              are ready to proceed to the release stage.
+              <br /><br />
+              <strong>You are making an institutional governance decision.</strong>
+            </span>
+          }
+          confirmLabel="Approve Output Set"
+          onConfirm={() => {
+            const id = approveTarget;
+            setApproveTarget(null);
+            handleAction(id, approveOutputSet);
+          }}
+          onCancel={() => setApproveTarget(null)}
+        />
+      )}
+
+      {actionError && (
+        <div
+          style={{
+            padding: "8px 12px",
+            marginBottom: "var(--spacing-md)",
+            background: "#f8d7da",
+            color: "#721c24",
+            borderRadius: "4px",
+            fontSize: "0.85rem",
+          }}
+        >
+          {actionError}
         </div>
       )}
     </>

@@ -39,7 +39,7 @@ export function RejectDialog({ title, onConfirm, onCancel }: RejectDialogProps) 
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        zIndex: 1000,
+        zIndex: 1100,
       }}
     >
       <div

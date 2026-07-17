@@ -54,5 +54,6 @@ test("Moderator Acceptance", async ({ page }) => {
     page.locator("tr").filter({ hasText: analysisName }).first().getByText("Approved for Execution"),
   ).toBeVisible({ timeout: 10_000 });
 
+  await page.getByRole("button", { name: "Close" }).click();
   await page.getByRole("button", { name: "Sign out" }).click();
 });
