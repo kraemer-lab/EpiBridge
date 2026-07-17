@@ -25,7 +25,7 @@
 
 ```
 /opt/epibridge              # application repository
-/var/lib/epibridge/data     # persistent database volume
+/var/lib/epibridge/data     # institutional data mount point (NFS, cloud storage)
 /var/lib/epibridge/outputs  # job output storage
 /var/log/epibridge          # audit and application logs
 ```
