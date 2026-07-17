@@ -43,13 +43,14 @@ Email notifications are optional. Without SMTP configuration, the platform funct
 |----------|---------|-------------|
 | `SMTP_HOST` | — | SMTP relay hostname |
 | `SMTP_PORT` | 587 | SMTP relay port |
-| `SMTP_USER` | — | SMTP authentication username |
+| `SMTP_USERNAME` | — | SMTP authentication username |
 | `SMTP_PASSWORD` | — | SMTP authentication password |
-| `SMTP_USE_TLS` | `true` | Enable STARTTLS |
+| `SMTP_TLS` | `true` | Enable STARTTLS |
+| `SMTP_FROM` | `noreply@example.org` | Notification sender address |
+| `SMTP_FROM_NAME` | `EpiBridge` | Notification sender display name |
 
 When configuring SMTP:
 
-- The `From` address is derived from the SMTP username and the `PUBLIC_URL` domain.
 - Email is sent asynchronously via `BackgroundTasks` — it never blocks API responses.
 - If the SMTP relay is unreachable, notification failures are logged but do not affect platform operation.
 
@@ -79,12 +80,10 @@ In production, configure TLS at the reverse proxy level. The Docker Compose depl
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `execution_mem_limit` | — | Maximum memory per analysis container (e.g., `2g`) |
-| `execution_cpu_limit` | — | Maximum CPU cores per analysis container (e.g., `1.5`) |
-| `execution_pids_limit` | — | Maximum process count per analysis container |
-| `max_output_size_mb` | — | Maximum total output size before the execution is terminated |
-
-If not set, the platform uses Docker Engine defaults.
+| `execution_mem_limit` | `4g` | Maximum memory per analysis container |
+| `execution_cpu_limit` | `2.0` | Maximum CPU cores per analysis container |
+| `execution_pids_limit` | `256` | Maximum process count per analysis container |
+| `max_output_size_mb` | `1024` | Maximum total output size before the execution is terminated |
 
 ### Logging
 
