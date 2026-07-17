@@ -27,7 +27,7 @@ fi
 
 # Check each service container
 for SERVICE in reverse-proxy frontend backend postgres redis worker; do
-  STATUS=$(docker compose -f "$COMPOSE_FILE" ps --format json "$SERVICE" 2>/dev/null | grep -c '"State":"running"' || true)
+  STATUS=$(docker compose -f "$COMPOSE_FILE" ps --format json "$SERVICE" 2>/dev/null | grep -c '"State":"healthy"' || true)
   if [ "$STATUS" -ge 1 ]; then
     echo "  [PASS] $SERVICE"
   else
