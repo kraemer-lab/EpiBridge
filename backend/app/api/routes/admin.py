@@ -17,7 +17,7 @@ from app.auth.policy import PolicyError, require_capability, require_project_mem
 from app.core.config import settings
 from app.db.session import get_db
 from app.models.analysis_bundle import AnalysisBundle
-from app.models.audit_event import AuditEventType
+from app.models.audit_event import PLATFORM_SETTINGS_ID, AuditEventType
 from app.models.build_request import BuildRequest
 from app.models.capability import Capability
 from app.models.data_resource import DataResource
@@ -76,6 +76,7 @@ from app.services.output_set_service import (
 )
 from app.services.platform_settings_service import (
     get_all_settings,
+    get_setting,
     get_setting_bool,
     set_setting,
 )
@@ -1229,6 +1230,33 @@ def put_admin_user(
 ):
     _require_capability(current_user, Capability.USER_MANAGE)
 
+    # Build audit metadata describing what changed
+    changed_fields = []
+    if data.display_name is not None:
+        changed_fields.append("display_name")
+    if data.password is not None:
+        changed_fields.append("password")
+    if data.roles is not None:
+        changed_fields.append("roles")
+    if data.advanced_capabilities is not None:
+        changed_fields.append("advanced_capabilities")
+
+    metadata: dict[str, object] = {"changed_fields": changed_fields}
+    if data.roles is not None:
+        metadata["roles"] = [r.value for r in data.roles]
+    if data.advanced_capabilities is not None:
+        metadata["advanced_capabilities"] = data.advanced_capabilities
+
+    create_audit_event(
+        db,
+        event_type=AuditEventType.USER_UPDATED,
+        actor_id=current_user.id,
+        project_id=None,
+        resource_type="user",
+        resource_id=user_id,
+        metadata=metadata,
+    )
+
     updated = update_user(
         db,
         user_id=user_id,
@@ -1494,6 +1522,22 @@ def put_admin_setting(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="Value must be between 60 and 86400 seconds",
             )
+
+    old_value = get_setting(db, key)
+    create_audit_event(
+        db,
+        event_type=AuditEventType.SETTING_CHANGED,
+        actor_id=current_user.id,
+        project_id=None,
+        resource_type="platform_setting",
+        resource_id=PLATFORM_SETTINGS_ID,
+        metadata={
+            "key": key.value,
+            "old_value": old_value,
+            "new_value": body.value,
+        },
+    )
+
     return set_setting(db, key, body.value)
 
 

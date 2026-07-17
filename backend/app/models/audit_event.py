@@ -12,6 +12,13 @@ from app.db.enum_utils import enum_values
 SYSTEM_USER_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
 WORKER_USER_ID = uuid.UUID("00000000-0000-0000-0000-000000000002")
 
+# Fixed resource ID for the singleton platform settings resource.
+# Platform settings use a string enum (SettingKey) as their primary key
+# and have no natural UUID, so all settings.changed audit events share
+# this well-known identifier. The specific setting key is recorded in
+# event_metadata.
+PLATFORM_SETTINGS_ID = uuid.UUID(int=0)
+
 
 class AuditEventType(str, enum.Enum):
     PROJECT_CREATED = "project.created"
@@ -38,11 +45,14 @@ class AuditEventType(str, enum.Enum):
     OUTPUT_SET_RELEASED = "output_set.released"
 
     USER_CREATED = "user.created"
+    USER_UPDATED = "user.updated"
 
     PLATFORM_TERMS_PUBLISHED = "platform_terms.published"
     DATASET_TERMS_PUBLISHED = "dataset_terms.published"
     PLATFORM_TERMS_ACCEPTED = "platform_terms.accepted"
     DATASET_TERMS_ACCEPTED = "dataset_terms.accepted"
+
+    SETTING_CHANGED = "settings.changed"
 
     VALIDATION_COMPLETED = "validation.completed"
     VALIDATION_FAILED = "validation.failed"
