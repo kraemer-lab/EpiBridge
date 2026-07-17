@@ -3,12 +3,13 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, String, Text, func
+from sqlalchemy import DateTime, Enum, ForeignKey, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import JSON
 
 from app.db.base import Base
+from app.db.enum_utils import enum_values
 
 if TYPE_CHECKING:
     from app.models.ai_bundle_review import AIBundleReview
@@ -59,7 +60,13 @@ class AnalysisBundle(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     source_path: Mapped[str] = mapped_column(Text, nullable=False, default="")
     status: Mapped[AnalysisBundleStatus] = mapped_column(
-        String(64), nullable=False, default=AnalysisBundleStatus.DRAFT
+        Enum(
+            AnalysisBundleStatus,
+            name="analysis_bundle_status",
+            values_callable=enum_values,
+        ),
+        nullable=False,
+        default=AnalysisBundleStatus.DRAFT,
     )
     version: Mapped[str] = mapped_column(String(50), nullable=False)
     entrypoint: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -70,8 +77,10 @@ class AnalysisBundle(Base):
     description: Mapped[str] = mapped_column(Text, nullable=False, default="")
     outputs: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
     parameters: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
-    build_strategy: Mapped[str] = mapped_column(
-        String(20), nullable=False, default=BuildStrategy.INSTITUTIONAL
+    build_strategy: Mapped[BuildStrategy] = mapped_column(
+        Enum(BuildStrategy, name="build_strategy", values_callable=enum_values),
+        nullable=False,
+        default=BuildStrategy.INSTITUTIONAL,
     )
     # NOTE:
     # This field mirrors the BuildRequest lifecycle for historical reasons.
@@ -79,7 +88,11 @@ class AnalysisBundle(Base):
     # This field is retained for backwards compatibility and is expected
     # to be removed in a future governance refactor.
     build_status: Mapped[AnalysisBundleBuildStatus] = mapped_column(
-        String(64),
+        Enum(
+            AnalysisBundleBuildStatus,
+            name="analysis_bundle_build_status",
+            values_callable=enum_values,
+        ),
         nullable=False,
         default=AnalysisBundleBuildStatus.ENVIRONMENT_NOT_BUILT,
     )

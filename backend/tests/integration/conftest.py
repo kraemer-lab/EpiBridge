@@ -34,6 +34,18 @@ def _setup_database():
     with engine.begin() as conn:
         conn.execute(text("DROP TABLE IF EXISTS alembic_version CASCADE"))
         conn.execute(text("DROP TYPE IF EXISTS user_role"))
+        conn.execute(text("DROP TYPE IF EXISTS analysis_bundle_status"))
+        conn.execute(text("DROP TYPE IF EXISTS analysis_bundle_build_status"))
+        conn.execute(text("DROP TYPE IF EXISTS build_strategy"))
+        conn.execute(text("DROP TYPE IF EXISTS execution_request_status"))
+        conn.execute(text("DROP TYPE IF EXISTS output_set_status"))
+        conn.execute(text("DROP TYPE IF EXISTS build_request_status"))
+        conn.execute(text("DROP TYPE IF EXISTS validation_request_status"))
+        conn.execute(text("DROP TYPE IF EXISTS ai_bundle_review_status"))
+        conn.execute(text("DROP TYPE IF EXISTS ai_output_set_review_status"))
+        conn.execute(text("DROP TYPE IF EXISTS audit_event_type"))
+        conn.execute(text("DROP TYPE IF EXISTS platform_setting_key"))
+        conn.execute(text("DROP TYPE IF EXISTS capability"))
 
 
 @pytest.fixture(autouse=True)

@@ -287,4 +287,4 @@ class TestAdminUsers:
         caps = response.json()["capabilities"]
         assert "user.manage" in caps
         assert "terms.manage" in caps
-        assert "data.manage" not in caps
+        assert "data.manage" in caps

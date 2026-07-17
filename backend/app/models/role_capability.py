@@ -1,11 +1,13 @@
 import uuid
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ForeignKey, String
+from sqlalchemy import Enum, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.db.enum_utils import enum_values
+from app.models.capability import Capability
 
 if TYPE_CHECKING:
     from app.models.capability import CapabilityRecord
@@ -20,8 +22,8 @@ class RoleCapability(Base):
         ForeignKey("roles.id", ondelete="CASCADE"),
         primary_key=True,
     )
-    capability_name: Mapped[str] = mapped_column(
-        String(100),
+    capability_name: Mapped[Capability] = mapped_column(
+        Enum(Capability, name="capability", values_callable=enum_values),
         ForeignKey("capabilities.name", ondelete="CASCADE"),
         primary_key=True,
     )

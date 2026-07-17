@@ -1,8 +1,10 @@
 from pydantic import BaseModel
 
+from app.models.platform_setting import SettingKey
+
 
 class PlatformSettingRead(BaseModel):
-    key: str
+    key: SettingKey
     value: str
 
 

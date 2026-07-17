@@ -3,12 +3,13 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import JSON
 
 from app.db.base import Base
+from app.db.enum_utils import enum_values
 
 if TYPE_CHECKING:
     from app.models.analysis_bundle import AnalysisBundle
@@ -44,7 +45,13 @@ class ExecutionRequest(Base):
         JSON, nullable=False, default=dict
     )
     status: Mapped[ExecutionRequestStatus] = mapped_column(
-        String(64), nullable=False, default=ExecutionRequestStatus.PENDING
+        Enum(
+            ExecutionRequestStatus,
+            name="execution_request_status",
+            values_callable=enum_values,
+        ),
+        nullable=False,
+        default=ExecutionRequestStatus.PENDING,
     )
     log: Mapped[str] = mapped_column(Text, nullable=False, default="")
     requested_by_id: Mapped[uuid.UUID] = mapped_column(

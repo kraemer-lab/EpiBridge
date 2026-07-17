@@ -114,7 +114,7 @@ def validate_build_strategy(
 
     dockerfile = bundle_path / "Dockerfile"
 
-    if bundle.build_strategy == BuildStrategy.CUSTOM.value:
+    if bundle.build_strategy == BuildStrategy.CUSTOM:
         if not dockerfile.exists() or not dockerfile.is_file():
             return (
                 "Custom Build Strategy requires a Dockerfile "
@@ -184,7 +184,7 @@ def create_bundle(
         description=data.get("description", ""),
         outputs=data.get("outputs", []),
         parameters=data.get("parameters", {}),
-        build_strategy=data.get("build_strategy", BuildStrategy.INSTITUTIONAL.value),
+        build_strategy=data.get("build_strategy", BuildStrategy.INSTITUTIONAL),
     )
     db.add(bundle)
     db.flush()
@@ -289,10 +289,10 @@ def update_bundle(db: Session, bundle_id: uuid.UUID, data: dict) -> AnalysisBund
 
     if "build_strategy" in update_data:
         strategy = update_data["build_strategy"]
-        valid = {BuildStrategy.INSTITUTIONAL.value, BuildStrategy.CUSTOM.value}
-        if strategy not in valid:
+        try:
+            bundle.build_strategy = BuildStrategy(strategy)
+        except ValueError:
             raise ValueError(f"Invalid build strategy: {strategy}")
-        bundle.build_strategy = strategy
 
     if "resource_identifiers" in update_data:
         resources = validate_resources(

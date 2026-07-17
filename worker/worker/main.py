@@ -228,9 +228,9 @@ def get_bundles_ready_for_execution(db: Session) -> list[AnalysisBundle]:
     return (
         db.query(AnalysisBundle)
         .filter(
-            AnalysisBundle.status == AnalysisBundleStatus.APPROVED_FOR_EXECUTION.value,
+            AnalysisBundle.status == AnalysisBundleStatus.APPROVED_FOR_EXECUTION,
             AnalysisBundle.build_status
-            == AnalysisBundleBuildStatus.ENVIRONMENT_READY.value,
+            == AnalysisBundleBuildStatus.ENVIRONMENT_READY,
             AnalysisBundle.execution_image_id.isnot(None),
             ~AnalysisBundle.id.in_(worker_executed_subq),
         )
@@ -327,7 +327,7 @@ def process_build(db: Session, build: BuildRequest) -> None:
     bundle.build_status = AnalysisBundleBuildStatus.ENVIRONMENT_BUILDING
     build_transition_to(db, build, BuildRequestStatus.BUILDING)
 
-    if bundle.build_strategy == BuildStrategy.CUSTOM.value:
+    if bundle.build_strategy == BuildStrategy.CUSTOM:
         dockerfile = bundle_path / "Dockerfile"
     else:
         dockerfile = builder.get_template_dockerfile()
@@ -582,7 +582,7 @@ def execute_request(db: Session, request: ExecutionRequest) -> None:
                 .filter(ExecutionRequest.id == request.id)
                 .scalar()
             )
-            return current == ExecutionRequestStatus.CANCELLING.value
+            return current == ExecutionRequestStatus.CANCELLING
         except Exception:
             return False
 

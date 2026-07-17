@@ -3,12 +3,13 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import JSON
 
 from app.db.base import Base
+from app.db.enum_utils import enum_values
 
 if TYPE_CHECKING:
     from app.models.analysis_bundle import AnalysisBundle
@@ -42,7 +43,13 @@ class ValidationRequest(Base):
         JSON, nullable=False, default=dict
     )
     status: Mapped[ValidationRequestStatus] = mapped_column(
-        String(64), nullable=False, default=ValidationRequestStatus.PENDING
+        Enum(
+            ValidationRequestStatus,
+            name="validation_request_status",
+            values_callable=enum_values,
+        ),
+        nullable=False,
+        default=ValidationRequestStatus.PENDING,
     )
     log: Mapped[str] = mapped_column(Text, nullable=False, default="")
     output_files: Mapped[list] = mapped_column(JSON, nullable=False, default=list)

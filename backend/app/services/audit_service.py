@@ -21,7 +21,7 @@ def create_audit_event(
         event_type = AuditEventType(event_type)
 
     event = AuditEvent(
-        event_type=event_type.value,
+        event_type=event_type,
         actor_id=actor_id,
         project_id=project_id,
         resource_type=resource_type,

@@ -3,11 +3,12 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.db.enum_utils import enum_values
 
 if TYPE_CHECKING:
     from app.models.analysis_bundle import AnalysisBundle
@@ -38,7 +39,13 @@ class BuildRequest(Base):
     builder_type: Mapped[str] = mapped_column(String(50), nullable=False)
     timeout_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=3600)
     status: Mapped[BuildRequestStatus] = mapped_column(
-        String(64), nullable=False, default=BuildRequestStatus.PENDING
+        Enum(
+            BuildRequestStatus,
+            name="build_request_status",
+            values_callable=enum_values,
+        ),
+        nullable=False,
+        default=BuildRequestStatus.PENDING,
     )
     execution_image_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("execution_images.id"), nullable=True

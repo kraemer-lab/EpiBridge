@@ -1,9 +1,10 @@
 import enum
 
-from sqlalchemy import String, Text
+from sqlalchemy import Enum, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
+from app.db.enum_utils import enum_values
 
 
 class SettingKey(str, enum.Enum):
@@ -20,5 +21,8 @@ class SettingKey(str, enum.Enum):
 class PlatformSetting(Base):
     __tablename__ = "platform_settings"
 
-    key: Mapped[str] = mapped_column(String(100), primary_key=True)
+    key: Mapped[SettingKey] = mapped_column(
+        Enum(SettingKey, name="platform_setting_key", values_callable=enum_values),
+        primary_key=True,
+    )
     value: Mapped[str] = mapped_column(Text, nullable=False, default="")

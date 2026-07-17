@@ -6,7 +6,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 
 from app.models.analysis_bundle import AnalysisBundle
-from app.models.validation_request import ValidationRequest
+from app.models.validation_request import ValidationRequest, ValidationRequestStatus
 from app.services.bundle_store import get_bundle_store
 
 MIN_TIMEOUT = 60
@@ -159,7 +159,7 @@ def get_bundle_validation_status(db: Session, bundle_id: uuid.UUID) -> dict:
         "last_validation_hash": last.bundle_content_hash,
         "current_bundle_hash": current_fingerprint,
         "is_validated": (
-            last.status == "completed"
+            last.status == ValidationRequestStatus.COMPLETED
             and last.bundle_content_hash == current_fingerprint
         ),
         "has_changed": (last.bundle_content_hash != current_fingerprint),

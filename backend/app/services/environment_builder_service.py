@@ -63,7 +63,7 @@ def ensure_build_request(db: Session, bundle: AnalysisBundle) -> BuildRequest | 
 
     bundle_path = get_bundle_store().get_path(bundle.id)
 
-    if bundle.build_strategy == BuildStrategy.CUSTOM.value:
+    if bundle.build_strategy == BuildStrategy.CUSTOM:
         dependency_hash = _compute_custom_hash(bundle_path, builder)
     else:
         dependency_hash = builder.dependency_hash(bundle_path)

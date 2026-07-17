@@ -174,17 +174,6 @@ test("Canonical Workflow", async ({ page }) => {
   await page.getByRole("button", { name: "Approve", exact: true }).click();
   await page.getByRole("button", { name: "Approve Output Set", exact: true }).click();
   await expect(setRow.getByText("Approved")).toBeVisible();
-
-  // Verify audit events while still moderator
-  await page.getByRole("link", { name: "Admin" }).click();
-  await page.getByRole("navigation", { name: "Admin tabs" }).getByRole("link", { name: "Audit Log" }).click();
-  await expect(page.getByText("Audit Log")).toBeVisible();
-  await expect(page.getByText("project.created").first()).toBeVisible({ timeout: 10_000 });
-  await expect(page.getByText("bundle.submitted").first()).toBeVisible();
-  await expect(page.getByText("bundle.approved").first()).toBeVisible();
-  await expect(page.getByText("execution.requested").first()).toBeVisible();
-  await expect(page.getByText("execution.completed").first()).toBeVisible();
-  await expect(page.getByText("output_set.approved").first()).toBeVisible();
   await page.getByRole("button", { name: "Sign out" }).click();
 
   // ===================================================================

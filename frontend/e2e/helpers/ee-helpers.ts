@@ -214,7 +214,7 @@ export async function approveAndReleaseOutputSetForBundle(
   let execRequestId: string | null = null;
 
   while (Date.now() < execDeadline) {
-    const resp = await modCtx.get("/api/admin/execution-requests");
+    const resp = await modCtx.get(`/api/projects/${projectId}/execution-requests`);
     if (resp.ok()) {
       const requests = await resp.json();
       const match = requests.find(

@@ -47,7 +47,7 @@ class TestRequireCapability:
             role=UserRole.ADMIN,
         )
         user.advanced_capabilities = [
-            UserCapability(capability_name=c.value) for c in Capability
+            UserCapability(capability_name=c) for c in Capability
         ]
         for c in Capability:
             require_capability(user, c.value)

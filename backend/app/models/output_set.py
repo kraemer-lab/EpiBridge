@@ -3,11 +3,12 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.db.enum_utils import enum_values
 
 if TYPE_CHECKING:
     from app.models.ai_output_set_review import AIOutputSetReview
@@ -36,7 +37,9 @@ class OutputSet(Base):
         unique=True,
     )
     status: Mapped[OutputSetStatus] = mapped_column(
-        String(64), nullable=False, default=OutputSetStatus.PENDING_REVIEW
+        Enum(OutputSetStatus, name="output_set_status", values_callable=enum_values),
+        nullable=False,
+        default=OutputSetStatus.PENDING_REVIEW,
     )
     release_package_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
     release_package_size: Mapped[int | None] = mapped_column(Integer, nullable=True)

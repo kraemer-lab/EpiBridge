@@ -527,7 +527,7 @@ class TestBundleSubmissionEnforcement:
             execution_environment_id=env.id,
             name="Test Bundle",
             source_path="test",
-            status=AnalysisBundleStatus.DRAFT.value,
+            status=AnalysisBundleStatus.DRAFT,
             version="1.0.0",
             entrypoint="run.py",
         )
@@ -602,7 +602,7 @@ class TestBundleSubmissionEnforcement:
             execution_environment_id=env.id,
             name="Test Bundle",
             source_path="test",
-            status=AnalysisBundleStatus.DRAFT.value,
+            status=AnalysisBundleStatus.DRAFT,
             version="1.0.0",
             entrypoint="run.py",
         )

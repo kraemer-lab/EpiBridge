@@ -390,13 +390,13 @@ def put_project_bundle(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Forbidden",
         )
-    if bundle.status != AnalysisBundleStatus.DRAFT.value:
+    if bundle.status != AnalysisBundleStatus.DRAFT:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Cannot edit bundle in state: {bundle.status}",
+            detail=f"Cannot edit bundle in state: {bundle.status.value}",
         )
 
-    if data.build_strategy == BuildStrategy.CUSTOM.value:
+    if data.build_strategy == BuildStrategy.CUSTOM:
         _require_capability(current_user, Capability.BUILD_CUSTOMIZE)
 
     try:
@@ -432,7 +432,7 @@ def post_project_bundle(
 ):
     require_project_membership(db, current_user, project_id)
     _require_capability(current_user, Capability.BUNDLE_CREATE)
-    if data.build_strategy == BuildStrategy.CUSTOM.value:
+    if data.build_strategy == BuildStrategy.CUSTOM:
         _require_capability(current_user, Capability.BUILD_CUSTOMIZE)
     bundle = create_bundle(db, data.model_dump(), project_id, current_user.id)
     return _bundle_to_read(bundle)
@@ -464,7 +464,7 @@ async def post_project_bundle_upload(
     require_project_membership(db, current_user, project_id)
     _require_capability(current_user, Capability.BUNDLE_CREATE)
 
-    if build_strategy == BuildStrategy.CUSTOM.value:
+    if build_strategy == BuildStrategy.CUSTOM:
         _require_capability(current_user, Capability.BUILD_CUSTOMIZE)
 
     if not file.filename or not file.filename.endswith(".zip"):
@@ -561,7 +561,7 @@ def post_submit_bundle(
             detail="Forbidden",
         )
 
-    if bundle.build_strategy == BuildStrategy.CUSTOM.value:
+    if bundle.build_strategy == BuildStrategy.CUSTOM:
         _require_capability(current_user, Capability.BUILD_CUSTOMIZE)
 
     _require_resource_terms_accepted(db, current_user, bundle.data_resources)
@@ -876,10 +876,10 @@ def delete_project_member(
 
 
 def _require_draft_status(bundle: AnalysisBundle) -> None:
-    if bundle.status != AnalysisBundleStatus.DRAFT.value:
+    if bundle.status != AnalysisBundleStatus.DRAFT:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Cannot modify bundle in state: {bundle.status}",
+            detail=f"Cannot modify bundle in state: {bundle.status.value}",
         )
 
 

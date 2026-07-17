@@ -2,11 +2,12 @@ import enum
 import uuid
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ForeignKey, String
+from sqlalchemy import Enum, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.db.enum_utils import enum_values
 
 if TYPE_CHECKING:
     from app.models.role_capability import RoleCapability
@@ -46,7 +47,10 @@ ALL_CAPABILITIES: set[str] = Capability.all_values()
 class CapabilityRecord(Base):
     __tablename__ = "capabilities"
 
-    name: Mapped[str] = mapped_column(String(100), primary_key=True)
+    name: Mapped[Capability] = mapped_column(
+        Enum(Capability, name="capability", values_callable=enum_values),
+        primary_key=True,
+    )
 
     role_assignments: Mapped[list["RoleCapability"]] = relationship(
         back_populates="capability", passive_deletes=True
@@ -62,8 +66,8 @@ class UserCapability(Base):
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
     )
-    capability_name: Mapped[str] = mapped_column(
-        String(100),
+    capability_name: Mapped[Capability] = mapped_column(
+        Enum(Capability, name="capability", values_callable=enum_values),
         ForeignKey("capabilities.name", ondelete="CASCADE"),
         primary_key=True,
     )

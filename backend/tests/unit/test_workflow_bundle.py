@@ -22,7 +22,7 @@ def mock_db():
 def draft_bundle():
     b = MagicMock(spec=AnalysisBundle)
     b.id = uuid.uuid4()
-    b.status = AnalysisBundleStatus.DRAFT.value
+    b.status = AnalysisBundleStatus.DRAFT
     b.submitted_by_id = None
     b.submitted_at = None
     b.rejection_reason = None
@@ -35,7 +35,7 @@ def draft_bundle():
 def submitted_bundle():
     b = MagicMock(spec=AnalysisBundle)
     b.id = uuid.uuid4()
-    b.status = AnalysisBundleStatus.SUBMITTED.value
+    b.status = AnalysisBundleStatus.SUBMITTED
     b.submitted_by_id = uuid.uuid4()
     b.submitted_at = datetime.now(timezone.utc)
     b.rejection_reason = None
@@ -48,7 +48,7 @@ def submitted_bundle():
 def approved_bundle():
     b = MagicMock(spec=AnalysisBundle)
     b.id = uuid.uuid4()
-    b.status = AnalysisBundleStatus.APPROVED_FOR_EXECUTION.value
+    b.status = AnalysisBundleStatus.APPROVED_FOR_EXECUTION
     b.rejection_reason = None
     b.rejected_by_id = None
     b.rejected_at = None
@@ -63,7 +63,7 @@ class TestRejectBundle:
             reason="Code uses unsafe external libraries",
             rejected_by_id=uuid.uuid4(),
         )
-        assert result.status == AnalysisBundleStatus.REJECTED.value
+        assert result.status == AnalysisBundleStatus.REJECTED
         assert result.rejection_reason == "Code uses unsafe external libraries"
         assert result.rejected_by_id is not None
         assert result.rejected_at is not None
@@ -122,7 +122,7 @@ class TestSubmitBundle:
     def test_submit_from_draft(self, mock_db, draft_bundle):
         user_id = uuid.uuid4()
         result = submit_bundle(mock_db, draft_bundle, submitted_by_id=user_id)
-        assert result.status == AnalysisBundleStatus.SUBMITTED.value
+        assert result.status == AnalysisBundleStatus.SUBMITTED
         assert result.submitted_by_id == user_id
         assert result.submitted_at is not None
 
@@ -136,7 +136,7 @@ class TestSubmitBundle:
 class TestApproveBundle:
     def test_approve_from_submitted(self, mock_db, submitted_bundle):
         result = approve_bundle(mock_db, submitted_bundle)
-        assert result.status == AnalysisBundleStatus.APPROVED_FOR_EXECUTION.value
+        assert result.status == AnalysisBundleStatus.APPROVED_FOR_EXECUTION
 
     def test_approve_from_draft_fails(self, mock_db, draft_bundle):
         with pytest.raises(ValueError, match="Cannot approve bundle in state: draft"):
@@ -146,7 +146,7 @@ class TestApproveBundle:
 class TestSupersedeBundle:
     def test_supersede_from_approved(self, mock_db, approved_bundle):
         result = supersede_bundle(mock_db, approved_bundle)
-        assert result.status == AnalysisBundleStatus.SUPERSEDED.value
+        assert result.status == AnalysisBundleStatus.SUPERSEDED
 
     def test_supersede_from_submitted_fails(self, mock_db, submitted_bundle):
         with pytest.raises(
