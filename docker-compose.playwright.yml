@@ -1,0 +1,13 @@
+# Playwright acceptance test override.
+#
+# Increases the login rate limit so that 51 sequential API logins
+# across 8 tests do not hit the production default of 10 per 5
+# minutes.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.playwright.yml up -d backend
+#   make playwright
+services:
+  backend:
+    environment:
+      RATE_LIMIT_MAX_ATTEMPTS: "100"

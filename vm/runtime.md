@@ -319,7 +319,7 @@ make dev-logs       # tail all container logs
 
 ```bash
 make test           # Run tests on the host (unit + integration + smoke)
-make dev-test       # Run full suite inside the container (requires dev stack)
+make test-backend   # Run full suite inside the container (requires dev stack)
 ```
 
 Unit tests work anywhere. Integration tests require running services. Smoke tests auto-skip if the full stack isn't available.

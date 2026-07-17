@@ -150,7 +150,7 @@ The following e2e tests continue to run in CI and validate specific feature area
 | `python -m pytest backend/tests/integration -v` | Integration tests | PostgreSQL + Redis + `epibridge_test` |
 | `python -m pytest backend/tests/smoke -v` | Smoke tests | Full running stack |
 | `make test` | Unit + integration + smoke (native) | PostgreSQL + Redis + `epibridge_test` |
-| `make dev-test` | Full suite (in container via SSH) | OrbStack VM + Docker stack |
+| `make test-backend` | Full suite (in container via SSH) | OrbStack VM + Docker stack |
 | `make playwright` | Institutional acceptance | Full running stack |
 | `make playwright CMD=e2e/acceptance/researcher.spec.ts` | Researcher persona acceptance | Full running stack |
 | `make playwright CMD=e2e/acceptance/moderator.spec.ts` | Moderator persona acceptance | Full running stack |

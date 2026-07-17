@@ -47,7 +47,7 @@ make logs                     # tail all container logs
 For testing inside the running stack:
 
 ```bash
-make dev-test                 # run all tests inside the container
+make test-backend             # run all backend tests inside the container
 ```
 
 See [Testing](../architecture-and-reference/testing.md) for the full testing reference.

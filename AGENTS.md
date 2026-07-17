@@ -835,7 +835,7 @@ make test         # run tests
   natively for speed.  Integration and smoke tests execute through the
   current execution backend so they always target the active platform.
   Execution-environment transparent (Native, OrbStack, Multipass, Remote).
-- `make dev-test` — run full suite inside the backend container (useful
+- `make test-backend` — run full suite inside the backend container (useful
   for debugging without native Python setup).
 - `make playwright` — run acceptance tests through Playwright.  The target
   URL is derived from the standard resolution hierarchy:

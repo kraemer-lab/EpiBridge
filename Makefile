@@ -8,7 +8,7 @@ PYTHON       ?= python3
 -include .epibridge-context
 EPIBRIDGE_TARGET ?= native
 
-.PHONY: install uninstall start stop restart build upgrade backup restore certs enable-ai seed-demo logs shell register-resources register-resource dev-prune-resources dev dev-test dev-destroy dev-drop-db deploy deploy-dev ci ci-clean test format lint fix playwright new-data-resource
+.PHONY: install uninstall start stop restart build upgrade backup restore certs enable-ai seed-demo logs shell register-resources register-resource dev-prune-resources dev test-backend test-execution dev-destroy dev-drop-db deploy deploy-dev ci ci-clean test format lint fix playwright new-data-resource
 
 # --- Installation ----------------------------------------------------------------
 # install is the canonical first-run experience.  Accepts an optional TARGET
@@ -301,8 +301,24 @@ dev: restart
 	./scripts/platform.sh run ./scripts/seed-developer.sh
 	./scripts/platform.sh run ./scripts/seed-personas.sh
 
-dev-test:
-	./scripts/platform.sh exec backend python3 -m pytest tests/unit tests/integration tests/smoke -v --no-header -q --tb=short
+# Run backend unit, integration, and smoke tests inside the container.
+# Drops the file-backed cache to avoid stale last-failed artefacts.
+# Depends on a running stack (make restart / make dev).
+test-backend:
+	./scripts/platform.sh exec backend python3 -m pytest tests/unit tests/integration tests/smoke -v --no-header -q --tb=short -p no:cacheprovider
+
+# Run the execution (worker) integration test suite.
+# Worker source and test files are copied into the container at runtime;
+# PYTHONPATH is set so that ``from worker.main import ...`` resolves via
+# normal package lookup.  Depends on a running stack (make restart / make dev).
+test-execution:
+	@echo "Preparing worker test environment..."
+	docker compose exec --user root backend mkdir -p /worker_src /worker_tests 2>/dev/null
+	docker compose cp worker backend:/worker_src/worker 2>/dev/null
+	docker compose cp worker/tests backend:/worker_tests 2>/dev/null
+	@echo "Running worker tests..."
+	docker compose exec -e PYTHONPATH=/worker_src/worker backend \
+		python3 -m pytest /worker_tests/ -v --tb=short -p no:cacheprovider
 
 dev-destroy:
 	./scripts/platform.sh compose down
@@ -335,18 +351,24 @@ ci-clean:
 	rm -f .env
 
 # Run the complete platform test suite.
+# Runs unit tests natively (with coverage), then backend and execution
+# integration tests inside the container.
 test:
 	@failed=0; \
 	echo "=== Running unit tests ==="; \
 	(cd backend && $(PYTHON) -m pytest tests/unit -v --cov=app --cov-report=term-missing --no-header -q) || failed=1; \
 	echo ""; \
-	echo "=== Running integration and smoke tests ==="; \
-	./scripts/platform.sh exec backend python3 -m pytest tests/integration tests/smoke -v --no-header -q --tb=short || failed=1; \
+	$(MAKE) test-backend || failed=1; \
+	echo ""; \
+	$(MAKE) test-execution || failed=1; \
 	echo ""; \
 	if [ $$failed -eq 0 ]; then echo "=== All tests passed ==="; else echo "=== Some tests failed ==="; exit 1; fi
 
 # Run acceptance tests (requires full stack).
+# Uses a compose override to increase the login rate limit for the
+# Playwright suite (51 sequential API logins across 8 tests).
 playwright:
+	docker compose -f docker-compose.yml -f docker-compose.playwright.yml up -d backend
 	@BASE=$${PLAYWRIGHT_BASE_URL:-$$(sed -n 's/^EPIBRIDGE_REACHABLE_URL=//p' .epibridge-context 2>/dev/null || true)}; \
 	if [ -z "$$BASE" ] && [ -f .env ]; then \
 		BASE=$$(sed -n 's/^PUBLIC_URL=//p' .env 2>/dev/null || true); \

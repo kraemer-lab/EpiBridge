@@ -244,7 +244,7 @@ def process_build(db: Session, build: BuildRequest) -> None:
     # The build_status field is retained for backwards compatibility and
     # is expected to be removed in a future governance refactor.
     ts = _timestamp()
-    bundle = db.query(AnalysisBundle).get(build.analysis_bundle_id)
+    bundle = db.get(AnalysisBundle, build.analysis_bundle_id)
     if bundle is None:
         build.log = (
             f"[{ts}] BUILD FAILED: bundle not found (id={build.analysis_bundle_id})"
@@ -252,7 +252,7 @@ def process_build(db: Session, build: BuildRequest) -> None:
         build_transition_to(db, build, BuildRequestStatus.FAILED, "bundle not found")
         return
 
-    env = db.query(ExecutionEnvironment).get(build.execution_environment_id)
+    env = db.get(ExecutionEnvironment, build.execution_environment_id)
     if env is None:
         build.log = (
             f"[{ts}] BUILD FAILED: execution environment not found "
@@ -428,7 +428,7 @@ def _emit_execution_event(
 
 def execute_request(db: Session, request: ExecutionRequest) -> None:
     ts = _timestamp()
-    bundle = db.query(AnalysisBundle).get(request.analysis_bundle_id)
+    bundle = db.get(AnalysisBundle, request.analysis_bundle_id)
     if bundle is None:
         request.log = f"[{ts}] EXECUTION FAILED: bundle not found (id={request.analysis_bundle_id})"
         db.commit()
@@ -458,7 +458,7 @@ def execute_request(db: Session, request: ExecutionRequest) -> None:
         )
         return
 
-    env = db.query(ExecutionEnvironment).get(bundle.execution_environment_id)
+    env = db.get(ExecutionEnvironment, bundle.execution_environment_id)
     if env is None:
         request.log = f"[{ts}] EXECUTION FAILED: environment not found"
         db.commit()
@@ -743,7 +743,7 @@ def _emit_validation_event(
 
 def process_validation(db: Session, request: ValidationRequest) -> None:
     ts = _timestamp()
-    bundle = db.query(AnalysisBundle).get(request.analysis_bundle_id)
+    bundle = db.get(AnalysisBundle, request.analysis_bundle_id)
     if bundle is None:
         request.log = f"[{ts}] VALIDATION FAILED: bundle not found"
         db.commit()
@@ -775,7 +775,7 @@ def process_validation(db: Session, request: ValidationRequest) -> None:
         )
         return
 
-    env = db.query(ExecutionEnvironment).get(bundle.execution_environment_id)
+    env = db.get(ExecutionEnvironment, bundle.execution_environment_id)
     if env is None:
         request.log = f"[{ts}] VALIDATION FAILED: environment not found"
         db.commit()
