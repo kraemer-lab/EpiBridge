@@ -8,7 +8,11 @@ This tutorial walks through the complete lifecycle of an analysis: from installa
 
 1. [Install EpiBridge](installation.md).
 2. Verify the platform is running and accessible at `https://localhost`.
-3. Create evaluation persona accounts:
+3. Ensure at least one data resource is registered. The [Data Resources
+   administrator guide](../administrator-guide/data-resources.md) covers the
+   full workflow. For evaluation, the `demo-surveillance` resource is
+   registered automatically during installation.
+4. Create evaluation persona accounts:
 
 ```bash
 make demo

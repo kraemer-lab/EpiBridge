@@ -114,10 +114,25 @@ See [AI Assistance](../architecture-and-reference/ai-assistance.md) for setup in
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `RESOURCE_MANIFEST_DIR` | (deployment-specific) | Directory containing data resource YAML manifests |
-| `ENVIRONMENT_MANIFEST_DIR` | (deployment-specific) | Directory containing execution environment YAML manifests |
+| `RESOURCE_MANIFEST_DIR` | (deployment-specific) | Container-side path to data resource manifest directory |
+| `HOST_RESOURCE_MANIFEST_DIR` | (deployment-specific) | Host-side equivalent for Docker-outside-of-Docker bind mounts |
+| `ENVIRONMENT_MANIFEST_DIR` | (deployment-specific) | Container-side path to execution environment manifest directory |
+| `AUTO_REGISTER_RESOURCES` | `true` | Automatically register resource manifests on startup. Set to `false` to require explicit `make register-resources` calls. |
 
-In development, these point to `resources/` and `execution-environments/` in the repository. In production, they may point to external directories managed by the institution.
+In development, `RESOURCE_MANIFEST_DIR` points to `/resources` (mapped from
+`./resources/` in the repository). `HOST_RESOURCE_MANIFEST_DIR` is the same
+path on the host filesystem — used by the worker's Docker executor when
+mounting resources into analysis containers.
+
+In production, both should point to the same host directory:
+
+```
+RESOURCE_MANIFEST_DIR: /resources
+HOST_RESOURCE_MANIFEST_DIR: /var/lib/epibridge/resources
+```
+
+The `HOST_RESOURCE_MANIFEST_DIR` must match the path on the host running
+Docker Engine, not the container-internal path.
 
 ## Next steps
 

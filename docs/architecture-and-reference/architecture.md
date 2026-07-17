@@ -508,7 +508,9 @@ The registration service reconciles resources using `identifier` — it is the c
 
 ### Registration Process
 
-Data Resources are registered from YAML manifests. The database is a runtime index; the manifest is the source of truth.
+Data Resources are registered from YAML manifests. The manifest is used to
+register the resource; after registration, operational management occurs within
+EpiBridge through the admin API and UI.
 
 ```
 Load all manifests
@@ -517,14 +519,10 @@ Validate all manifests (required fields, provider type, endpoint shape)
   ↓
 If any manifest is invalid → abort startup
   ↓
-Begin transaction
-  ↓
 For each entry:
   Lookup DataResource by identifier
-    ├── Found → update name, alias, endpoint, version, status
+    ├── Found → skip (never overwrite existing records)
     └── Not found → create new record
-  ↓
-Commit (atomic — all or nothing)
 ```
 
 ### Project Resource Allocation

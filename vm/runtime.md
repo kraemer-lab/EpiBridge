@@ -174,6 +174,41 @@ In production, the system administrator ensures the institution's data
 resources are placed at `/read-only-data` or otherwise reachable through the
 configured provider endpoints.
 
+The exact mechanism depends on your infrastructure. Examples:
+
+**NFS mount:**
+
+```yaml
+# /etc/fstab
+nfs-server:/data/institutional  /var/lib/epibridge/data  nfs  ro,noexec  0  0
+```
+
+```yaml
+# docker-compose override
+volumes:
+  - /var/lib/epibridge/data:/read-only-data:ro
+```
+
+**Local disk:**
+
+```yaml
+volumes:
+  - /srv/institutional-data:/read-only-data:ro
+```
+
+**Cloud object storage (via S3 FUSE):**
+
+```bash
+s3fs my-data-bucket /var/lib/epibridge/data -o ro,allow_other
+```
+
+```yaml
+volumes:
+  - /var/lib/epibridge/data:/read-only-data:ro
+```
+
+The platform never knows the host path. It only sees `/read-only-data`.
+
 ## Standard Ports
 
 | Port | Service       |

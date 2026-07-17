@@ -88,6 +88,23 @@ EpiBridge requires:
 
 All persistent data is managed through Docker volumes. The host paths for institutional data are configured through the deployment context, not through application configuration.
 
+### Data resource provisioning
+
+Data resources are registered from YAML manifests and served from a
+well-known location. Provisioning a new data resource follows the
+four-step workflow:
+
+1. **Provision data** — using your institution's preferred storage approach
+   (NFS, local disk, cloud object storage, etc.)
+2. **Mount at `/read-only-data`** — make the data available at the platform's
+   well-known location
+3. **Register with EpiBridge** — scaffold the resource skeleton and register
+   it through the platform
+4. **Publish terms** — publish dataset terms through the admin UI (optional)
+
+The [Data Resources guide](data-resources.md) covers the full workflow and
+helper commands.
+
 ## Next steps
 
 - [Configuration](configuration.md) — environment settings reference

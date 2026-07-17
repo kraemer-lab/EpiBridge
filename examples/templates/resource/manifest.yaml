@@ -1,0 +1,16 @@
+# EpiBridge Published Data Resource
+#
+# The institutional publication manifest for this Data Resource.
+# The publication directory is derived from the identifier (resources/<identifier>/).
+
+identifier: {{ID}}
+name: {{NAME}}
+alias: {{ALIAS}}
+provider: {{PROVIDER}}
+endpoint:
+  path: {{ALIAS}}/data
+description: >
+  TODO: Describe the dataset — source, scope, intended uses, and
+  any relevant caveats. This description appears in the researcher
+  resource catalogue.
+version: "1.0.0"

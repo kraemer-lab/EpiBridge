@@ -251,7 +251,30 @@ build:
 	./scripts/platform.sh compose build $(SVC)
 	./scripts/platform.sh compose up -d $(SVC)
 
-# --- CI (native Linux) ---------------------------------------------------------
+# --- Data resource management ---------------------------------------------------
+
+# Scaffold a new data resource skeleton from a template.
+# After populating the skeleton with data and customising the manifest,
+# run `make register-resources` to register it with EpiBridge.
+# Usage: make new-resource ID=uk-biobank NAME="UK Biobank Serum" PROVIDER=csv
+new-resource:
+	./scripts/new-resource.sh "$(ID)" "$(NAME)" "$(PROVIDER)"
+
+# Register all resource manifests with EpiBridge.
+# Creates new resources; skips previously registered ones.
+register-resources:
+	./scripts/platform.sh exec backend python -m app.cli resource-register-all
+
+# Register a single resource manifest by identifier.
+register-resource:
+	./scripts/platform.sh exec backend python -m app.cli resource-register "$(ID)"
+
+# Remove stale resource registrations (developer utility only).
+# Removes resources whose manifest directory no longer exists on disk.
+# Resources still referenced by projects or bundles are preserved
+# by database constraints.
+clean-resources:
+	./scripts/platform.sh exec backend python -m app.cli resource-clean
 
 ci:
 	./scripts/init-config.sh
